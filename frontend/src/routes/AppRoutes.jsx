@@ -1,23 +1,16 @@
 import { Routes, Route } from "react-router-dom";
 
-function Login() {
-  return <h1>Login Page</h1>;
-}
-
-function Register() {
-  return <h1>Register Page</h1>;
-}
-
-function Dashboard() {
-  return <h1>Dashboard</h1>;
-}
+import Login from "../pages/auth/Login";
+import Register from "../pages/auth/Register";
+// import Dashboard from "../pages/dashboard/Dashboard";
 
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/dashboard" element={<Dashboard />} />
+      {/* Uncomment this after creating Dashboard.jsx */}
+      {/* <Route path="/dashboard" element={<Dashboard />} /> */}
     </Routes>
   );
 }
