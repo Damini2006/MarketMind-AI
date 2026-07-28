@@ -19,6 +19,7 @@ function RegisterForm() {
 
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  const [role, setRole] = useState("");
 
 
 
@@ -38,13 +39,10 @@ function RegisterForm() {
 
 
 
-
     // Email validation
 
     const emailRule =
       /^[a-zA-Z0-9]+([._-]?[a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-]?[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
-
-
 
 
 
@@ -58,21 +56,15 @@ function RegisterForm() {
 
 
 
-
-
     if (!nameRule.test(name)) {
-
 
       alert(
         "Name should contain only letters and minimum 3 characters"
       );
 
-
       return;
 
-
     }
-
 
 
 
@@ -80,12 +72,9 @@ function RegisterForm() {
 
     if (!emailRule.test(email)) {
 
-
       alert("Please enter a valid email address");
 
-
       return;
-
 
     }
 
@@ -93,10 +82,7 @@ function RegisterForm() {
 
 
 
-
-
     if (!passwordRule.test(password)) {
-
 
       alert(
         "Password must contain:\n\n" +
@@ -108,30 +94,33 @@ function RegisterForm() {
         "✔ No spaces"
       );
 
-
       return;
 
-
     }
-
-
-
 
 
 
 
     if (password !== confirmPassword) {
 
-
       alert("Passwords do not match");
 
-
       return;
-
 
     }
 
 
+
+
+    // Role validation
+
+    if (!role) {
+
+      alert("Please select your role.");
+
+      return;
+
+    }
 
 
 
@@ -147,7 +136,6 @@ function RegisterForm() {
 
 
 
-
     // Check if account already exists
 
     const existingUser = users.find(
@@ -158,21 +146,15 @@ function RegisterForm() {
 
 
 
-
     if (existingUser) {
-
 
       alert(
         "Account already exists. Please login."
       );
 
-
       return;
 
-
     }
-
-
 
 
 
@@ -182,13 +164,13 @@ function RegisterForm() {
 
     const newUser = {
 
+      name: name,
 
-      name:name,
+      email: email,
 
-      email:email,
+      password: password,
 
-      password:password
-
+      role: role
 
     };
 
@@ -196,9 +178,7 @@ function RegisterForm() {
 
 
 
-
     users.push(newUser);
-
 
 
 
@@ -216,11 +196,9 @@ function RegisterForm() {
 
 
 
-
     alert(
       "Account created successfully. Please login."
     );
-
 
 
 
@@ -231,9 +209,7 @@ function RegisterForm() {
     navigate("/");
 
 
-
   };
-
 
 
 
@@ -275,6 +251,7 @@ function RegisterForm() {
 
 
 
+
         {/* Name */}
 
 
@@ -286,27 +263,19 @@ function RegisterForm() {
 
         <input
 
-
           type="text"
-
 
           placeholder="Enter your name"
 
-
           value={name}
-
 
           maxLength="30"
 
-
           onChange={(e)=>setName(e.target.value)}
-
 
           required
 
-
         />
-
 
 
 
@@ -328,27 +297,19 @@ function RegisterForm() {
 
         <input
 
-
           type="email"
-
 
           placeholder="Enter your email"
 
-
           value={email}
-
 
           maxLength="50"
 
-
           onChange={(e)=>setEmail(e.target.value)}
-
 
           required
 
-
         />
-
 
 
 
@@ -437,7 +398,6 @@ function RegisterForm() {
 
 
 
-
         {/* Confirm Password */}
 
 
@@ -477,6 +437,63 @@ function RegisterForm() {
 
 
 
+
+
+        {/* Role Selection */}
+
+
+        <label>
+          Register As
+        </label>
+
+
+        <select
+
+          className="role-select"
+
+          value={role}
+
+          onChange={(e)=>setRole(e.target.value)}
+
+          required
+
+        >
+
+          <option value="">
+            Choose your role
+          </option>
+
+
+          <option value="Business Owner">
+            Business Owner
+          </option>
+
+
+          <option value="Store Manager">
+            Store Manager
+          </option>
+
+
+          <option value="Sales Executive">
+            Sales Executive
+          </option>
+
+
+          <option value="Administrator">
+            Administrator
+          </option>
+
+
+        </select>
+
+
+
+
+
+
+
+
+
         <button
 
           className="auth-btn"
@@ -499,6 +516,7 @@ function RegisterForm() {
 
 
       </form>
+
 
 
 
