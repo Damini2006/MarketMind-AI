@@ -1,0 +1,115 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="tRCE8xzXYoL2N82tQZ9d">
+    <mxGraphModel dx="1187" dy="1291" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="1654" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="grp_users" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="USERS LAYER" vertex="1">
+          <mxGeometry height="130" width="1080" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="u1" parent="grp_users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" value="Business Owner" vertex="1">
+          <mxGeometry height="50" width="220" x="30" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="u2" parent="grp_users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" value="Store Manager" vertex="1">
+          <mxGeometry height="50" width="220" x="290" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="u3" parent="grp_users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" value="Sales Executive" vertex="1">
+          <mxGeometry height="50" width="220" x="550" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="u4" parent="grp_users" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;" value="System Administrator" vertex="1">
+          <mxGeometry height="50" width="220" x="810" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_auth" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="SECURITY &amp; AUTHENTICATION LAYER" vertex="1">
+          <mxGeometry height="160" width="1080" x="40" y="200" as="geometry" />
+        </mxCell>
+        <mxCell id="auth" parent="grp_auth" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;" value="Authentication &amp; Authorization&#xa;• User Registration&#xa;• Login&#xa;• JWT Authentication&#xa;• Role-Based Access Control&#xa;• User Permissions&#xa;• Profile Management" vertex="1">
+          <mxGeometry height="100" width="500" x="290" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_frontend" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="PRESENTATION LAYER (Frontend)" vertex="1">
+          <mxGeometry height="200" width="1080" x="40" y="390" as="geometry" />
+        </mxCell>
+        <mxCell id="fe" parent="grp_frontend" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" value="ReactJS Frontend&#xa;• Login &amp; Registration | • Dashboard | • Sales Module | • Inventory Module&#xa;• Customer Module | • Invoice Module | • Analytics Dashboard | • Reports&#xa;• Profile | • Settings | • Notifications" vertex="1">
+          <mxGeometry height="110" width="700" x="190" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_api" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="API &amp; BACKEND GATEWAY LAYER" vertex="1">
+          <mxGeometry height="180" width="1080" x="40" y="620" as="geometry" />
+        </mxCell>
+        <mxCell id="api" parent="grp_api" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;" value="FastAPI Backend&#xa;• Authentication API | • User Management API | • Sales API&#xa;• Inventory API | • Customer API | • Invoice API&#xa;• Report API | • File Upload API | • AI Integration API" vertex="1">
+          <mxGeometry height="100" width="700" x="190" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_logic" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="BUSINESS LOGIC &amp; CORE PROCESSING LAYER" vertex="1">
+          <mxGeometry height="180" width="530" x="40" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="logic" parent="grp_logic" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;" value="Business Logic Layer&#xa;• Sales Processing&#xa;• Inventory Tracking&#xa;• Revenue Calculation&#xa;• Customer Analytics&#xa;• Invoice Processing&#xa;• Report Generation" vertex="1">
+          <mxGeometry height="110" width="450" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_aiml" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="INTELLIGENCE &amp; MACHINE LEARNING LAYER" vertex="1">
+          <mxGeometry height="180" width="530" x="590" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="aiml" parent="grp_aiml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=left;spacingLeft=10;" value="AI/ML Layer&#xa;• Sales Forecasting&#xa;• Customer Segmentation&#xa;• Churn Prediction&#xa;• Product Recommendation&#xa;• Anomaly Detection" vertex="1">
+          <mxGeometry height="110" width="450" x="40" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_analytics" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="ANALYTICS &amp; REPORTING LAYER" vertex="1">
+          <mxGeometry height="180" width="1080" x="40" y="1040" as="geometry" />
+        </mxCell>
+        <mxCell id="analytics" parent="grp_analytics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" value="Analytics &amp; Reporting&#xa;• KPI Dashboard | • Sales Charts | • Revenue Trends | • Inventory Alerts&#xa;• Forecast Reports | • Customer Insights | • Recommendation Reports&#xa;• Export PDF | • Export CSV" vertex="1">
+          <mxGeometry height="100" width="700" x="190" y="45" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_db" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="DATA PERSISTENCE LAYER" vertex="1">
+          <mxGeometry height="200" width="530" x="40" y="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="db" parent="grp_db" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#e1d5e7;strokeColor=#9673a6;" value="PostgreSQL Database&#xa;• Users | • Roles | • Sales | • Inventory&#xa;• Customers | • Products | • Invoices | • Reports" vertex="1">
+          <mxGeometry height="140" width="310" x="110" y="35" as="geometry" />
+        </mxCell>
+        <mxCell id="grp_storage" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=23;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#ccc;" value="FILE &amp; OBJECT STORAGE LAYER" vertex="1">
+          <mxGeometry height="200" width="530" x="590" y="1250" as="geometry" />
+        </mxCell>
+        <mxCell id="storage" parent="grp_storage" style="shape=folder;fontStyle=1;tabWidth=110;tabHeight=30;tabPosition=left;html=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;" value="File Storage&#xa;• CSV Files&#xa;• Images&#xa;• Reports&#xa;• Invoice PDFs" vertex="1">
+          <mxGeometry height="130" width="310" x="110" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="u1" target="auth">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="u2" target="auth">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="u3" target="auth">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="u4" target="auth">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="auth" target="fe">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="fe" target="api">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="api" target="logic">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="api" target="aiml">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="logic" target="analytics">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" edge="1" parent="1" source="aiml" target="analytics">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" edge="1" parent="1" source="logic" target="db">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" edge="1" parent="1" source="aiml" target="db">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" edge="1" parent="1" source="logic" target="storage">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" edge="1" parent="1" source="analytics" target="storage">
+          <geometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
