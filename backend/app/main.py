@@ -2,8 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.routers import auth, users
+import app.models
 
-Base.metadata.create_all(bind=engine)
+app.models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="MarketMind AI",
