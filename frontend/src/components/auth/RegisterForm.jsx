@@ -11,119 +11,205 @@ function RegisterForm() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] =
-    useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
 
-  const [loading, setLoading] =
-    useState(false);
+  const [password, setPassword] = useState("");
 
-  const [error, setError] =
-    useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const handleSubmit = async (e) => {
+  const [role, setRole] = useState("");
+
+
+
+
+  const handleSubmit = (e) => {
+
+
     e.preventDefault();
 
     setError("");
 
     // Name validation
-    const nameRule =
-      /^[A-Za-z ]{3,30}$/;
+
+    const nameRule = /^[A-Za-z ]{3,30}$/;
+
+
+
 
     // Email validation
     const emailRule =
       /^[a-zA-Z0-9]+([._-]?[a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-]?[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
 
+
+
+
     // Password validation
     const passwordRule =
       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&*!_\-+=])[A-Za-z\d@#$%^&*!_\-+=]{8,}$/;
 
+
+
+
+
     if (!nameRule.test(name)) {
-      setError(
-        "Name should contain only letters and minimum 3 characters."
+
+      alert(
+        "Name should contain only letters and minimum 3 characters"
       );
+
       return;
+
     }
+
+
+
+
 
     if (!emailRule.test(email)) {
-      setError(
-        "Please enter a valid email address."
-      );
+
+      alert("Please enter a valid email address");
+
       return;
+
     }
+
+
+
+
 
     if (!passwordRule.test(password)) {
-      setError(
-        "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character."
+
+      alert(
+        "Password must contain:\n\n" +
+        "✔ Minimum 8 characters\n" +
+        "✔ One uppercase letter\n" +
+        "✔ One lowercase letter\n" +
+        "✔ One number\n" +
+        "✔ One special character\n" +
+        "✔ No spaces"
       );
+
       return;
+
     }
+
+
+
 
     if (password !== confirmPassword) {
-      setError(
-        "Passwords do not match."
-      );
+
+      alert("Passwords do not match");
+
       return;
+
     }
 
-    try {
-      setLoading(true);
 
-      // Send registration request to FastAPI
-      const response = await fetch(
-        `${API_URL}/api/auth/register`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: name,
-            email: email,
-            password: password,
-          }),
-        }
-      );
 
-      const data = await response.json();
 
-      // Handle backend error
-      if (!response.ok) {
-        setError(
-          data.detail ||
-            "Registration failed. Please try again."
-        );
-        return;
-      }
+    // Role validation
 
-      // Registration successful
+    if (!role) {
+
+      alert("Please select your role.");
+
+      return;
+
+    }
+
+
+
+
+
+    // Get existing registered users
+
+    const users = JSON.parse(
+      localStorage.getItem("users")
+    ) || [];
+
+
+
+
+
+    // Check if account already exists
+
+    const existingUser = users.find(
+      (user) => user.email === email
+    );
+
+
+
+
+
+    if (existingUser) {
+
       alert(
-        "Account created successfully. Please login."
+        "Account already exists. Please login."
       );
 
-      // Clear form
-      setName("");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
+      return;
 
-      // Navigate to login
-      navigate("/");
-
-    } catch (error) {
-      console.error(
-        "Registration error:",
-        error
-      );
-
-      setError(
-        "Unable to connect to the server. Please make sure the backend is running."
-      );
-    } finally {
-      setLoading(false);
     }
+
+
+
+
+
+    // Save new user
+
+    const newUser = {
+
+      name: name,
+
+      email: email,
+
+      password: password,
+
+      role: role
+
+    };
+
+
+
+
+
+    users.push(newUser);
+
+
+
+
+
+    localStorage.setItem(
+
+      "users",
+
+      JSON.stringify(users)
+
+    );
+
+
+
+
+
+    alert(
+      "Account created successfully. Please login."
+    );
+
+
+
+
+
+    // Go to login page
+
+    navigate("/");
+
+
   };
+
+
+
+
+
+
 
   return (
     <div className="auth-card">
@@ -145,21 +231,39 @@ function RegisterForm() {
 
       <form onSubmit={handleSubmit}>
 
+
+
+
+
+
+
         {/* Name */}
         <label>
           Name
         </label>
 
         <input
+
           type="text"
+
           placeholder="Enter your name"
+
           value={name}
+
           maxLength="30"
-          onChange={(e) =>
-            setName(e.target.value)
-          }
+
+          onChange={(e) => setName(e.target.value)}
+
           required
+
         />
+
+
+
+
+
+
+
 
         {/* Email */}
         <label>
@@ -167,15 +271,27 @@ function RegisterForm() {
         </label>
 
         <input
+
           type="email"
+
           placeholder="Enter your email"
+
           value={email}
+
           maxLength="50"
-          onChange={(e) =>
-            setEmail(e.target.value)
-          }
+
+          onChange={(e) => setEmail(e.target.value)}
+
           required
+
         />
+
+
+
+
+
+
+
 
         {/* Password */}
         <label>
@@ -216,6 +332,13 @@ function RegisterForm() {
 
         </div>
 
+
+
+
+
+
+
+
         {/* Confirm Password */}
         <label>
           Confirm Password
@@ -231,9 +354,73 @@ function RegisterForm() {
             )
           }
           required
+
+
         />
 
-        {/* Register Button */}
+
+
+
+
+
+
+
+
+        {/* Role Selection */}
+
+
+        <label>
+          Register As
+        </label>
+
+
+        <select
+
+          className="role-select"
+
+          value={role}
+
+          onChange={(e) => setRole(e.target.value)}
+
+          required
+
+        >
+
+          <option value="">
+            Choose your role
+          </option>
+
+
+          <option value="Business Owner">
+            Business Owner
+          </option>
+
+
+          <option value="Store Manager">
+            Store Manager
+          </option>
+
+
+          <option value="Sales Executive">
+            Sales Executive
+          </option>
+
+
+          <option value="Administrator">
+            Administrator
+          </option>
+
+
+        </select>
+
+
+
+
+
+
+
+
+
         <button
           className="auth-btn"
           type="submit"
@@ -245,6 +432,14 @@ function RegisterForm() {
         </button>
 
       </form>
+
+
+
+
+
+
+
+
 
       <p className="bottom-text">
         Already have an account?{" "}

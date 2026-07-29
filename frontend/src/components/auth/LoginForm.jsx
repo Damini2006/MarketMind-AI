@@ -3,8 +3,6 @@ import { useState } from "react";
 import logo from "../../assets/images/logo.png";
 import useAuth from "../../context/useAuth";
 
-const API_URL = "http://127.0.0.1:8000";
-
 function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -12,14 +10,10 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-
-    setError("");
 
     // Email Validation
     const emailRule =
@@ -30,69 +24,57 @@ function LoginForm() {
       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&*!_\-+=])[A-Za-z\d@#$%^&*!_\-+=]{8,}$/;
 
     if (!emailRule.test(email)) {
-      setError("Please enter a valid email address");
+      alert("Please enter a valid email address");
       return;
     }
 
     if (!passwordRule.test(password)) {
-      setError(
-        "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character."
+      alert(
+        "Password must contain:\n\n" +
+        "✔ Minimum 8 characters\n" +
+        "✔ One uppercase letter\n" +
+        "✔ One lowercase letter\n" +
+        "✔ One number\n" +
+        "✔ One special character\n" +
+        "✔ No spaces"
       );
       return;
     }
 
-    try {
-      setLoading(true);
-
-      // Send login request to FastAPI
-      const response = await fetch(
-        `${API_URL}/api/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: email,
-            password: password,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      // Handle backend error
-      if (!response.ok) {
-        setError(
-          data.detail ||
-            "Login failed. Please check your email and password."
-        );
-        return;
-      }
-
-      // Backend returns:
-      // {
-      //   token: "...",
-      //   token_type: "bearer",
-      //   user: {...}
-      // }
-
-      login(data);
-
-      alert("Login Successful");
-
-      // Navigate to dashboard
-      navigate("/dashboard");
-
-    } catch (error) {
-      console.error("Login error:", error);
-
-      setError(
-        "Unable to connect to the server. Please make sure the backend is running."
-      );
-    } finally {
-      setLoading(false);
+    // Role Validation
+    if (!role) {
+      alert("Please select your role.");
+      return;
     }
+
+    // Get registered users
+    const users = JSON.parse(localStorage.getItem("users")) || [];
+
+    // Check account exists
+    const existingUser = users.find(
+      (user) =>
+        user.email === email &&
+        user.password === password
+    );
+
+    if (!existingUser) {
+      alert(
+        "Account not found or incorrect password. Please register first."
+      );
+      return;
+    }
+
+    // Save logged in user
+    login({
+      name: existingUser.name,
+      email: existingUser.email,
+      role: role,
+    });
+
+    alert("Login Successful");
+
+    // Go to dashboard
+    navigate("/dashboard");
   };
 
   return (
@@ -106,13 +88,10 @@ function LoginForm() {
         />
       </div>
 
-      <h1>
-        Welcome Back
-      </h1>
+      <h1>Welcome Back</h1>
 
       <p className="subtitle">
-        Sign in to continue to{" "}
-        <strong>MarketMind AI</strong>
+        Sign in to continue to <strong>MarketMind AI</strong>
       </p>
 
       {/* Error Message */}
@@ -125,28 +104,21 @@ function LoginForm() {
       <form onSubmit={handleSubmit}>
 
         {/* Email */}
-        <label>
-          Email
-        </label>
+        <label>Email</label>
 
         <input
           type="email"
           placeholder="Enter your email"
           value={email}
           maxLength="50"
-          onChange={(e) =>
-            setEmail(e.target.value)
-          }
+          onChange={(e) => setEmail(e.target.value)}
           required
         />
 
         {/* Password */}
-        <label>
-          Password
-        </label>
+        <label>Password</label>
 
         <div className="password-field">
-
           <input
             type={
               showPassword
@@ -157,33 +129,39 @@ function LoginForm() {
             value={password}
             minLength="8"
             maxLength="20"
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
 
           <button
             type="button"
             className="toggle-password"
-            onClick={() =>
-              setShowPassword(!showPassword)
-            }
+            onClick={() => setShowPassword(!showPassword)}
           >
-            {showPassword
-              ? "Hide"
-              : "Show"}
+            {showPassword ? "Hide" : "Show"}
           </button>
-
         </div>
+
+        {/* Role Selection */}
+        <label>Sign in as</label>
+
+        <select
+          className="role-select"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          required
+        >
+          <option value="">Choose your role</option>
+          <option value="Business Owner">Business Owner</option>
+          <option value="Store Manager">Store Manager</option>
+          <option value="Sales Executive">Sales Executive</option>
+          <option value="Administrator">Administrator</option>
+        </select>
 
         {/* Remember Me + Forgot Password */}
         <div className="auth-options">
-
           <label className="remember-me">
-            <input
-              type="checkbox"
-            />
+            <input type="checkbox" />
             Remember Me
           </label>
 
