@@ -1,67 +1,114 @@
-import { createContext, useState } from "react";
+import {
+  createContext,
+  useEffect,
+  useState,
+} from "react";
 
-
-// Create Context
 const AuthContext = createContext();
 
+export function AuthProvider({
+  children,
+}) {
+  const [user, setUser] =
+    useState(null);
 
-export function AuthProvider({children}){
+  const [token, setToken] =
+    useState(null);
 
+  // Load saved authentication
+  // data when application starts
+  useEffect(() => {
+    const savedUser =
+      localStorage.getItem("user");
 
-    const [user,setUser] = useState(null);
+    const savedToken =
+      localStorage.getItem("token");
 
-
-
-    // Login Function
-    const login = (userData)=>{
-
-        setUser(userData);
-
-        localStorage.setItem(
-            "user",
-            JSON.stringify(userData)
+    if (
+      savedUser &&
+      savedToken
+    ) {
+      try {
+        setUser(
+          JSON.parse(savedUser)
         );
 
-    };
+        setToken(savedToken);
 
+      } catch (error) {
+        console.error(
+          "Error loading authentication data:",
+          error
+        );
 
+        localStorage.removeItem(
+          "user"
+        );
 
-    // Logout Function
-    const logout = ()=>{
+        localStorage.removeItem(
+          "token"
+        );
+      }
+    }
+  }, []);
 
-        setUser(null);
+  // Login
+  // Receives response from FastAPI
+  const login = (authData) => {
 
-        localStorage.removeItem("user");
+    const userData =
+      authData.user;
 
-    };
+    const accessToken =
+      authData.token;
 
+    setUser(userData);
 
+    setToken(accessToken);
 
-    const value = {
-
-        user,
-
-        login,
-
-        logout,
-
-        isAuthenticated: !!user
-
-    };
-
-
-
-    return(
-
-        <AuthContext.Provider value={value}>
-
-            {children}
-
-        </AuthContext.Provider>
-
+    localStorage.setItem(
+      "user",
+      JSON.stringify(userData)
     );
 
-}
+    localStorage.setItem(
+      "token",
+      accessToken
+    );
+  };
 
+  // Logout
+  const logout = () => {
+
+    setUser(null);
+
+    setToken(null);
+
+    localStorage.removeItem(
+      "user"
+    );
+
+    localStorage.removeItem(
+      "token"
+    );
+  };
+
+  const value = {
+    user,
+    token,
+    login,
+    logout,
+    isAuthenticated:
+      !!user && !!token,
+  };
+
+  return (
+    <AuthContext.Provider
+      value={value}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
 
 export default AuthContext;
