@@ -22,7 +22,6 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
-    role: RoleEnum
 
 
 class AuthUser(BaseModel):

@@ -14,7 +14,6 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,10 +21,6 @@ function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    if (!role) {
-    setError("Please select your role.");
-    return;
-  }
 
     // Email Validation
     const emailRule =
@@ -58,7 +53,6 @@ function LoginForm() {
         body: JSON.stringify({
           email: email,
           password: password,
-          role: role,
         }),
       });
 
@@ -67,7 +61,10 @@ function LoginForm() {
 
       // Handle backend error
       if (!response.ok) {
-        setError(data.detail || "Login failed. Please check your email and password.");
+        const errorMessage = typeof data.detail === 'string' 
+          ? data.detail 
+          : "Login failed. Please check your email and password.";
+        setError(errorMessage);
         return;
       }
 
@@ -133,21 +130,6 @@ function LoginForm() {
             {showPassword ? "Hide" : "Show"}
           </button>
         </div>
-
-        {/* Role */}
-        <label>Sign in as</label>
-        <select
-          className="role-select"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          required
-        >
-          <option value="">Choose your role</option>
-          <option value="Business Owner">Business Owner</option>
-          <option value="Store Manager">Store Manager</option>
-          <option value="Sales Executive">Sales Executive</option>
-          <option value="Administrator">Administrator</option>
-        </select>
 
         {/* Remember Me + Forgot Password */}
         <div className="auth-options">

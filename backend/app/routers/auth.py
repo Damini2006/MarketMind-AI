@@ -50,12 +50,6 @@ def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
             detail="Incorrect email or password"
         )
 
-    if user.role != payload.role:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect role selected"
-        )
-
     token = create_access_token({"sub": user.username, "role": user.role.value})
     return schemas.AuthResponse(
         token=token,
