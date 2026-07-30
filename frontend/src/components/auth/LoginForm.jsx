@@ -9,10 +9,12 @@ const API_URL = "http://127.0.0.1:8000";
 function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  
 
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState("");
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -20,6 +22,10 @@ function LoginForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    if (!role) {
+    setError("Please select your role.");
+    return;
+  }
 
     // Email Validation
     const emailRule =
@@ -75,7 +81,7 @@ function LoginForm() {
     }
   };
 
-  return (
+    return (
     <div className="auth-card">
       {/* Logo */}
       <div className="logo">
@@ -83,6 +89,7 @@ function LoginForm() {
       </div>
 
       <h1>Welcome Back</h1>
+
       <p className="subtitle">
         Sign in to continue to <strong>MarketMind AI</strong>
       </p>
@@ -104,6 +111,7 @@ function LoginForm() {
 
         {/* Password */}
         <label>Password</label>
+
         <div className="password-field">
           <input
             type={showPassword ? "text" : "password"}
@@ -114,6 +122,7 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
           <button
             type="button"
             className="toggle-password"
@@ -123,23 +132,44 @@ function LoginForm() {
           </button>
         </div>
 
+        {/* Role */}
+        <label>Sign in as</label>
+        <select
+          className="role-select"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          required
+        >
+          <option value="">Choose your role</option>
+          <option value="Business Owner">Business Owner</option>
+          <option value="Store Manager">Store Manager</option>
+          <option value="Sales Executive">Sales Executive</option>
+          <option value="Administrator">Administrator</option>
+        </select>
+
         {/* Remember Me + Forgot Password */}
         <div className="auth-options">
           <label className="remember-me">
             <input type="checkbox" />
             Remember Me
           </label>
+
           <Link to="#">Forgot Password?</Link>
         </div>
 
         {/* Login Button */}
-        <button className="auth-btn" type="submit" disabled={loading}>
+        <button
+          className="auth-btn"
+          type="submit"
+          disabled={loading}
+        >
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
 
       <p className="bottom-text">
-        Don't have an account? <Link to="/register">Create one</Link>
+        Don't have an account?{" "}
+        <Link to="/register">Create one</Link>
       </p>
     </div>
   );

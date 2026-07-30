@@ -12,6 +12,7 @@ function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [role, setRole] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -47,6 +48,10 @@ function RegisterForm() {
 
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
+      return;
+    }
+    if (!role) {
+      setError("Please select your role.");
       return;
     }
 
@@ -139,7 +144,6 @@ function RegisterForm() {
             {showPassword ? "Hide" : "Show"}
           </button>
         </div>
-
         {/* Confirm Password */}
         <label>Confirm Password</label>
         <input
@@ -149,7 +153,21 @@ function RegisterForm() {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
         />
-
+        {/* Role */}
+        <label>Register as</label>
+        <select
+          className="role-select"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          required
+        >
+          <option value="">Choose your role</option>
+          <option value="Business Owner">Business Owner</option>
+          <option value="Store Manager">Store Manager</option>
+          <option value="Sales Executive">Sales Executive</option>
+          <option value="Administrator">Administrator</option>
+        </select>
+        
         <button className="auth-btn" type="submit" disabled={loading}>
           {loading ? "Creating Account..." : "Register"}
         </button>

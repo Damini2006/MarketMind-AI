@@ -33,7 +33,7 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
         email=payload.email,
         full_name=payload.name,
         hashed_password=hash_password(payload.password),
-        role=models.RoleEnum.sales_executive,  # default role; an admin can promote via /api/users
+        role=payload.role,  # default role; an admin can promote via /api/users
     )
     db.add(user)
     db.commit()
@@ -45,9 +45,16 @@ def register(payload: schemas.RegisterRequest, db: Session = Depends(get_db)):
 def login(payload: schemas.LoginRequest, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == payload.email).first()
     if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
-    if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This account has been disabled")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password"
+        )
+
+    if user.role != payload.role:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect role selected"
+        )
 
     token = create_access_token({"sub": user.username, "role": user.role.value})
     return schemas.AuthResponse(
