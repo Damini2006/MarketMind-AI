@@ -68,6 +68,7 @@ function RegisterForm() {
           name: name,
           email: email,
           password: password,
+          role: role,
         }),
       });
 
@@ -162,10 +163,10 @@ function RegisterForm() {
           required
         >
           <option value="">Choose your role</option>
-          <option value="Business Owner">Business Owner</option>
-          <option value="Store Manager">Store Manager</option>
-          <option value="Sales Executive">Sales Executive</option>
-          <option value="Administrator">Administrator</option>
+<option value="business_owner">Business Owner</option>
+<option value="store_manager">Store Manager</option>
+<option value="sales_executive">Sales Executive</option>
+<option value="admin">Administrator</option>
         </select>
         
         <button className="auth-btn" type="submit" disabled={loading}>

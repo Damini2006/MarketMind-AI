@@ -58,10 +58,12 @@ function LoginForm() {
         body: JSON.stringify({
           email: email,
           password: password,
+          role: role,
         }),
       });
 
       const data = await response.json();
+      console.log("Backend response:", data);
 
       // Handle backend error
       if (!response.ok) {
