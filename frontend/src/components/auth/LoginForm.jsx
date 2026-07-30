@@ -135,19 +135,19 @@ function LoginForm() {
         </div>
 
         {/* Role */}
-        <label>Sign in as</label>
+        <label>Role as</label>
         <select
-          className="role-select"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          required
-        >
-          <option value="">Choose your role</option>
-          <option value="Business Owner">Business Owner</option>
-          <option value="Store Manager">Store Manager</option>
-          <option value="Sales Executive">Sales Executive</option>
-          <option value="Administrator">Administrator</option>
-        </select>
+  className="role-select"
+  value={role}
+  onChange={(e) => setRole(e.target.value)}
+  required
+>
+  <option value="">Choose your role</option>
+  <option value="business_owner">Business Owner</option>
+  <option value="store_manager">Store Manager</option>
+  <option value="sales_executive">Sales Executive</option>
+  <option value="admin">Administrator</option>
+</select>
 
         {/* Remember Me + Forgot Password */}
         <div className="auth-options">
