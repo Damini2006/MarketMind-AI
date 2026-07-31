@@ -21,8 +21,8 @@ const Dashboard = () => {
         <div className="stat-card">
           <div className="icon-box blue">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M3 17l6-6 4 4 8-8" stroke="#7C9CF5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M15 7h6v6" stroke="#7C9CF5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M3 17l6-6 4 4 8-8" stroke="#7C9CF5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 7h6v6" stroke="#7C9CF5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <h3>Sales summary</h3>
@@ -35,8 +35,8 @@ const Dashboard = () => {
           <div className="stat-card">
             <div className="icon-box orange">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="#F97316" strokeWidth="2" strokeLinejoin="round"/>
-                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M12 2 2 7l10 5 10-5-10-5Z" stroke="#F97316" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M2 17l10 5 10-5M2 12l10 5 10-5" stroke="#F97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h3>Low Stock Alerts</h3>
@@ -50,7 +50,7 @@ const Dashboard = () => {
           <div className="stat-card">
             <div className="icon-box purple">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" stroke="#A855F7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" stroke="#A855F7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
             <h3>Revenue Forecast</h3>
@@ -64,8 +64,8 @@ const Dashboard = () => {
           <div className="stat-card">
             <div className="icon-box red">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M12 9v4M12 17h.01" stroke="#EF4444" strokeWidth="2.4" strokeLinecap="round"/>
-                <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.3 2.25h17.76a1.5 1.5 0 0 0 1.3-2.25L13.71 3.86a1.5 1.5 0 0 0-2.6 0Z" stroke="#EF4444" strokeWidth="2"/>
+                <path d="M12 9v4M12 17h.01" stroke="#EF4444" strokeWidth="2.4" strokeLinecap="round" />
+                <path d="M10.29 3.86 1.82 18a1.5 1.5 0 0 0 1.3 2.25h17.76a1.5 1.5 0 0 0 1.3-2.25L13.71 3.86a1.5 1.5 0 0 0-2.6 0Z" stroke="#EF4444" strokeWidth="2" />
               </svg>
             </div>
             <h3>High Risk Customers</h3>
