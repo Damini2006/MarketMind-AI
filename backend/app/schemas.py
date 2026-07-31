@@ -24,11 +24,11 @@ class UserOut(BaseModel):
     role: RoleEnum
     is_active: bool
 
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    role: str
-    full_name: str
+    user: UserOut
 
 
 class LoginRequest(BaseModel):

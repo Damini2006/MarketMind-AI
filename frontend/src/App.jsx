@@ -1,3 +1,4 @@
+import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
 import Layout from './components/Layout.jsx'
@@ -17,33 +18,19 @@ import Anomalies from './pages/Anomalies.jsx'
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />
   }
   return children
 }
 
-// Helper to determine home path based on user login status
-function getDefaultRoute(user) {
-  if (!user) return '/login'
-  return '/dashboard'
-}
-
 export default function App() {
   const { user } = useAuth()
-  const homePath = getDefaultRoute(user)
 
   return (
     <Routes>
-      <Route
-        path="/login"
-        element={user ? <Navigate to={homePath} replace /> : <Login />}
-      />
-      <Route
-        path="/register"
-        element={user ? <Navigate to={homePath} replace /> : <Register />}
-      />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
 
       <Route
         path="/"
@@ -53,7 +40,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to={homePath} replace />} />
+        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="sales" element={<Sales />} />
         <Route path="inventory" element={<Inventory />} />
@@ -87,7 +74,7 @@ export default function App() {
         />
       </Route>
 
-      <Route path="*" element={<Navigate to={homePath} replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   )
 }

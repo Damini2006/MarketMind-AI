@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import api from '../services/api'
+import api from '../services/api.js'
 import { StatCard, Loading, PageHeader } from '../components/ui.jsx'
 import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -9,12 +9,28 @@ export default function Dashboard() {
   const { user } = useAuth()
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    api.get('/analytics/kpis').then((res) => setKpis(res.data)).finally(() => setLoading(false))
+    api.get('/analytics/kpis')
+      .then((res) => setKpis(res.data))
+      .catch((err) => {
+        console.error('KPI fetch failed:', err)
+        setError(err.response?.data?.detail || `Failed to load dashboard data (${err.response?.status || 'network error'})`)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   if (loading) return <Loading label="Loading dashboard..." />
+
+  if (error) {
+    return (
+      <div className="p-6 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+        {error}
+      </div>
+    )
+  }
+
   if (!kpis) return null
 
   return (

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react'
+import React, { createContext, useContext, useState, useCallback } from 'react'
 import api from '../services/api'
 
 const AuthContext = createContext(null)
@@ -11,33 +11,23 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const login = useCallback(async (email, password, selectedRole) => {
+  const login = useCallback(async (email, password) => {
     setLoading(true)
     setError(null)
     try {
       const form = new URLSearchParams()
       form.append('username', email)
       form.append('password', password)
-
       const res = await api.post('/auth/login', form, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
-
-      // Combine API user object with selectedRole if backend doesn't provide one
-      const userData = {
-        ...(res.data.user || {}),
-        role: selectedRole || res.data.user?.role || 'sales_executive',
-      }
-
       localStorage.setItem('marketmind_token', res.data.access_token)
-      localStorage.setItem('marketmind_user', JSON.stringify(userData))
-      setUser(userData)
-
-      // Return user data so caller (Login.jsx) has immediate access to role
-      return { success: true, user: userData }
+      localStorage.setItem('marketmind_user', JSON.stringify(res.data.user))
+      setUser(res.data.user)
+      return true
     } catch (err) {
       setError(err.response?.data?.detail || 'Login failed. Please check your credentials.')
-      return { success: false }
+      return false
     } finally {
       setLoading(false)
     }
@@ -75,11 +65,6 @@ export function AuthProvider({ children }) {
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  return useContext(AuthContext)
 }

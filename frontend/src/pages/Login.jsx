@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -23,26 +23,10 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Call login with the selected role
-    const res = await login(email, password, role);
+    const ok = await login(email, password, role);
 
-    if (res?.success) {
-      // Use the resulting user's role to determine navigation route
-      const activeRole = res.user?.role || role;
-
-      switch (activeRole) {
-        case "admin":
-          navigate("/admin-dashboard");
-          break;
-        case "sales_executive":
-          navigate("/sales");
-          break;
-        case "business_owner":
-        case "store_manager":
-        default:
-          navigate("/dashboard");
-          break;
-      }
+    if (ok) {
+      navigate("/dashboard");
     }
   };
 
@@ -52,6 +36,7 @@ export default function Login() {
 
         {/* Left Side */}
         <div className="hidden md:flex flex-col justify-center bg-brand-900 text-white p-12">
+
           <h1 className="text-5xl font-bold mb-6">
             MarketMind AI
           </h1>
@@ -59,7 +44,9 @@ export default function Login() {
           <p className="text-brand-100 text-lg leading-8">
             AI-powered sales intelligence platform designed for
             retail stores, supermarkets and small businesses.
+
             <br /><br />
+
             Manage inventory, customers, invoices, sales,
             analytics and business insights—all from one dashboard.
           </p>
@@ -70,10 +57,13 @@ export default function Login() {
             <div>👥 Customer Management</div>
             <div>📈 Business Insights</div>
           </div>
+
         </div>
+
 
         {/* Right Side */}
         <div className="p-10 flex flex-col justify-center">
+
           <h2 className="text-4xl font-bold text-slate-900 mb-2">
             Welcome back
           </h2>
@@ -84,12 +74,15 @@ export default function Login() {
 
           <ErrorBanner message={error} />
 
+
           <form onSubmit={handleSubmit} className="space-y-5">
+
             {/* Email */}
             <div>
               <label className="block mb-2 text-sm font-semibold text-slate-700">
                 Email
               </label>
+
               <input
                 type="email"
                 required
@@ -100,12 +93,15 @@ export default function Login() {
               />
             </div>
 
+
             {/* Password */}
             <div>
               <label className="block mb-2 text-sm font-semibold text-slate-700">
                 Password
               </label>
+
               <div className="relative">
+
                 <input
                   type={showPassword ? "text" : "password"}
                   required
@@ -126,8 +122,10 @@ export default function Login() {
                     <FiEye size={20} />
                   )}
                 </button>
+
               </div>
             </div>
+
 
             {/* Role Dropdown */}
             <div>
@@ -148,7 +146,8 @@ export default function Login() {
               </select>
             </div>
 
-            {/* Submit Button */}
+
+            {/* Button */}
             <button
               type="submit"
               disabled={loading}
@@ -156,7 +155,10 @@ export default function Login() {
             >
               {loading ? "Signing in..." : "Sign In"}
             </button>
+
+
           </form>
+
 
           <p className="text-center text-slate-500 mt-8">
             New business?{" "}
@@ -167,6 +169,8 @@ export default function Login() {
               Create an account
             </Link>
           </p>
+
+
         </div>
       </div>
     </div>
