@@ -1,3 +1,187 @@
+// import { Link, useNavigate } from "react-router-dom";
+// import { useState } from "react";
+// import "../../styles/auth.css";
+
+// const API_URL = "http://127.0.0.1:8000";
+
+// function RegisterForm() {
+//   const navigate = useNavigate();
+
+//   const [showPassword, setShowPassword] = useState(false);
+//   const [name, setName] = useState("");
+//   const [email, setEmail] = useState("");
+//   const [password, setPassword] = useState("");
+//   const [confirmPassword, setConfirmPassword] = useState("");
+//   const [role, setRole] = useState("");
+
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState("");
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setError("");
+
+//     // Name validation
+//     const nameRule = /^[A-Za-z ]{3,30}$/;
+//     if (!nameRule.test(name)) {
+//       setError("Name should contain only letters and minimum 3 characters.");
+//       return;
+//     }
+
+//     // Email validation
+//     const emailRule =
+//       /^[a-zA-Z0-9]+([._-]?[a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-]?[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+//     if (!emailRule.test(email)) {
+//       setError("Please enter a valid email address.");
+//       return;
+//     }
+
+//     // Password validation
+//     const passwordRule =
+//       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&*!_\-+=])[A-Za-z\d@#$%^&*!_\-+=]{8,}$/;
+//     if (!passwordRule.test(password)) {
+//       setError(
+//         "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character."
+//       );
+//       return;
+//     }
+
+//     if (password !== confirmPassword) {
+//       setError("Passwords do not match.");
+//       return;
+//     }
+//     if (!role) {
+//       setError("Please select your role.");
+//       return;
+//     }
+
+//     try {
+//       setLoading(true);
+
+//       // Send registration request to FastAPI
+//       const response = await fetch(`${API_URL}/api/auth/register`, {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({
+//           name: name,
+//           email: email,
+//           password: password,
+//         }),
+//       });
+
+//       const data = await response.json();
+
+//       // Handle backend error
+//       if (!response.ok) {
+//         setError(data.detail || "Registration failed. Please try again.");
+//         return;
+//       }
+
+//       // Registration successful
+//       alert("Account created successfully. Please login.");
+
+//       // Navigate to login
+//       navigate("/");
+
+//     } catch (err) {
+//       console.error("Registration error:", err);
+//       setError("Unable to connect to the server. Please make sure the backend is running.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="auth-card">
+//       <h1>Create Account</h1>
+//       <p className="subtitle">Join MarketMind AI</p>
+
+//       {/* Error Message */}
+//       {error && <div className="auth-error">{error}</div>}
+
+//       <form onSubmit={handleSubmit}>
+//         {/* Name */}
+//         <label>Name</label>
+//         <input
+//           type="text"
+//           placeholder="Enter your name"
+//           value={name}
+//           maxLength="30"
+//           onChange={(e) => setName(e.target.value)}
+//           required
+//         />
+
+//         {/* Email */}
+//         <label>Email</label>
+//         <input
+//           type="email"
+//           placeholder="Enter your email"
+//           value={email}
+//           maxLength="50"
+//           onChange={(e) => setEmail(e.target.value)}
+//           required
+//         />
+
+//         {/* Password */}
+//         <label>Password</label>
+//         <div className="password-field">
+//           <input
+//             type={showPassword ? "text" : "password"}
+//             placeholder="Create password"
+//             value={password}
+//             minLength="8"
+//             maxLength="20"
+//             onChange={(e) => setPassword(e.target.value)}
+//             required
+//           />
+//           <button
+//             type="button"
+//             className="toggle-password"
+//             onClick={() => setShowPassword(!showPassword)}
+//           >
+//             {showPassword ? "Hide" : "Show"}
+//           </button>
+//         </div>
+//         {/* Confirm Password */}
+//         <label>Confirm Password</label>
+//         <input
+//           type="password"
+//           placeholder="Confirm password"
+//           value={confirmPassword}
+//           onChange={(e) => setConfirmPassword(e.target.value)}
+//           required
+//         />
+//         {/* Role */}
+//         <label>Register as</label>
+//         <select
+//           className="role-select"
+//           value={role}
+//           onChange={(e) => setRole(e.target.value)}
+//           required
+//         >
+//           <option value="">Choose your role</option>
+//           <option value="Business Owner">Business Owner</option>
+//           <option value="Store Manager">Store Manager</option>
+//           <option value="Sales Executive">Sales Executive</option>
+//           <option value="Administrator">Administrator</option>
+//         </select>
+        
+//         <button className="auth-btn" type="submit" disabled={loading}>
+//           {loading ? "Creating Account..." : "Register"}
+//         </button>
+//       </form>
+
+//       <p className="bottom-text">
+//         Already have an account? <Link to="/">Login</Link>
+//       </p>
+//     </div>
+//   );
+// }
+
+// export default RegisterForm;
+
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import "../../styles/auth.css";
@@ -31,6 +215,7 @@ function RegisterForm() {
     // Email validation
     const emailRule =
       /^[a-zA-Z0-9]+([._-]?[a-zA-Z0-9]+)*@[a-zA-Z0-9]+([.-]?[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$/;
+
     if (!emailRule.test(email)) {
       setError("Please enter a valid email address.");
       return;
@@ -39,6 +224,7 @@ function RegisterForm() {
     // Password validation
     const passwordRule =
       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&*!_\-+=])[A-Za-z\d@#$%^&*!_\-+=]{8,}$/;
+
     if (!passwordRule.test(password)) {
       setError(
         "Password must contain at least 8 characters, one uppercase letter, one lowercase letter, one number, and one special character."
@@ -50,6 +236,7 @@ function RegisterForm() {
       setError("Passwords do not match.");
       return;
     }
+
     if (!role) {
       setError("Please select your role.");
       return;
@@ -58,37 +245,37 @@ function RegisterForm() {
     try {
       setLoading(true);
 
-      // Send registration request to FastAPI
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: name,
-          email: email,
-          password: password,
-          role: role,
+          name,
+          email,
+          password,
+          role,
         }),
       });
 
       const data = await response.json();
 
-      // Handle backend error
       if (!response.ok) {
-        setError(data.detail || "Registration failed. Please try again.");
+        if (Array.isArray(data.detail)) {
+          setError(data.detail.map((err) => err.msg).join(", "));
+        } else {
+          setError(data.detail || "Registration failed.");
+        }
         return;
       }
 
-      // Registration successful
-      alert("Account created successfully. Please login.");
+      alert("Account created successfully!");
 
-      // Navigate to login
       navigate("/");
 
     } catch (err) {
-      console.error("Registration error:", err);
-      setError("Unable to connect to the server. Please make sure the backend is running.");
+      console.error(err);
+      setError("Unable to connect to backend.");
     } finally {
       setLoading(false);
     }
@@ -97,13 +284,15 @@ function RegisterForm() {
   return (
     <div className="auth-card">
       <h1>Create Account</h1>
-      <p className="subtitle">Join MarketMind AI</p>
 
-      {/* Error Message */}
+      <p className="subtitle">
+        Join <strong>MarketMind AI</strong>
+      </p>
+
       {error && <div className="auth-error">{error}</div>}
 
       <form onSubmit={handleSubmit}>
-        {/* Name */}
+
         <label>Name</label>
         <input
           type="text"
@@ -114,7 +303,6 @@ function RegisterForm() {
           required
         />
 
-        {/* Email */}
         <label>Email</label>
         <input
           type="email"
@@ -125,8 +313,8 @@ function RegisterForm() {
           required
         />
 
-        {/* Password */}
         <label>Password</label>
+
         <div className="password-field">
           <input
             type={showPassword ? "text" : "password"}
@@ -137,6 +325,7 @@ function RegisterForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
           <button
             type="button"
             className="toggle-password"
@@ -145,8 +334,9 @@ function RegisterForm() {
             {showPassword ? "Hide" : "Show"}
           </button>
         </div>
-        {/* Confirm Password */}
+
         <label>Confirm Password</label>
+
         <input
           type="password"
           placeholder="Confirm password"
@@ -154,8 +344,9 @@ function RegisterForm() {
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
         />
-        {/* Role */}
+
         <label>Register as</label>
+
         <select
           className="role-select"
           value={role}
@@ -168,14 +359,20 @@ function RegisterForm() {
 <option value="sales_executive">Sales Executive</option>
 <option value="admin">Administrator</option>
         </select>
-        
-        <button className="auth-btn" type="submit" disabled={loading}>
+
+        <button
+          className="auth-btn"
+          type="submit"
+          disabled={loading}
+        >
           {loading ? "Creating Account..." : "Register"}
         </button>
+
       </form>
 
       <p className="bottom-text">
-        Already have an account? <Link to="/">Login</Link>
+        Already have an account?{" "}
+        <Link to="/">Login</Link>
       </p>
     </div>
   );
