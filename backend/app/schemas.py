@@ -1,187 +1,207 @@
-from datetime import datetime
+import datetime as dt
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr
-from app.models import RoleEnum
-
-
-# ---------- Auth ----------
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    role: str
-    username: str
-
+from pydantic import BaseModel, EmailStr, ConfigDict
+from .models import RoleEnum
 
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
-    role: RoleEnum
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-    role: RoleEnum
-
-
-class AuthUser(BaseModel):
-    id: int
-    name: str
-    email: str
-    role: RoleEnum
-
-    class Config:
-        from_attributes = True
-
-
-class AuthResponse(BaseModel):
-    token: str
-    token_type: str = "bearer"
-    user: AuthUser
-
-
+    role: RoleEnum = RoleEnum.sales_executive
+# ---------- Auth / Users ----------
 class UserCreate(BaseModel):
-    username: str
+    full_name: str
     email: EmailStr
-    full_name: Optional[str] = None
     password: str
     role: RoleEnum = RoleEnum.sales_executive
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    username: str
+    full_name: str
     email: str
-    full_name: Optional[str]
     role: RoleEnum
     is_active: bool
 
-    class Config:
-        from_attributes = True
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    full_name: str
 
 
-# ---------- Product / Inventory ----------
-class ProductCreate(BaseModel):
-    name: str
-    category: Optional[str] = None
-    price: float
-    stock_qty: int = 0
-    reorder_threshold: int = 10
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 
-class ProductOut(ProductCreate):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-
-# ---------- Customer ----------
+# ---------- Customers ----------
 class CustomerCreate(BaseModel):
     name: str
     email: Optional[str] = None
     phone: Optional[str] = None
 
 
-class CustomerOut(BaseModel):
+class CustomerOut(CustomerCreate):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    name: str
-    email: Optional[str]
-    phone: Optional[str]
-    segment: Optional[str]
-    churn_probability: Optional[float]
-    retention_risk: Optional[str]
+    created_at: dt.datetime
 
-    class Config:
-        from_attributes = True
+
+# ---------- Products / Inventory ----------
+class ProductCreate(BaseModel):
+    name: str
+    category: Optional[str] = None
+    price: float
+    stock_quantity: int = 0
+    reorder_threshold: int = 10
+    warehouse_location: Optional[str] = None
+
+
+class ProductOut(ProductCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+class StockUpdate(BaseModel):
+    quantity_delta: int  # positive to add stock, negative to deduct
 
 
 # ---------- Sales ----------
-class SalesRecordCreate(BaseModel):
-    product_id: int
+class SaleCreate(BaseModel):
     customer_id: Optional[int] = None
-    quantity: int
+    product_id: Optional[int] = None
+    quantity: int = 1
     unit_price: float
-    sale_date: Optional[datetime] = None
+    sale_date: Optional[dt.datetime] = None
 
 
-class SalesRecordOut(BaseModel):
+class SaleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    product_id: int
     customer_id: Optional[int]
+    product_id: Optional[int]
     quantity: int
     unit_price: float
     total_amount: float
-    sale_date: datetime
-
-    class Config:
-        from_attributes = True
+    sale_date: dt.datetime
+    source: str
 
 
-# ---------- Invoice ----------
+# ---------- Invoices ----------
 class InvoiceCreate(BaseModel):
     customer_id: Optional[int] = None
-    sales_record_id: Optional[int] = None
     amount: float
     status: str = "pending"
+    due_date: Optional[dt.datetime] = None
 
 
-class InvoiceOut(InvoiceCreate):
+class InvoiceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
+    customer_id: Optional[int]
     invoice_number: str
-    created_at: datetime
+    amount: float
+    status: str
+    due_date: Optional[dt.datetime]
+    created_at: dt.datetime
 
-    class Config:
-        from_attributes = True
+
+class InvoiceStatusUpdate(BaseModel):
+    status: str
 
 
-# ---------- ML outputs ----------
+# ---------- Inventory Alerts ----------
+class InventoryAlertOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_id: int
+    message: str
+    level: str
+    created_at: dt.datetime
+    resolved: bool
+
+
+# ---------- AI Responses ----------
 class ForecastPoint(BaseModel):
-    date: str
+    period: str
     predicted_revenue: float
 
 
 class ForecastResponse(BaseModel):
     history: List[dict]
     forecast: List[ForecastPoint]
-    metrics: dict
+    trend: str
+    growth_pct: float
+    mae: Optional[float] = None
+    rmse: Optional[float] = None
+    r2: Optional[float] = None
+
+
+class SegmentSummary(BaseModel):
+    segment: str
+    customer_count: int
+    avg_purchase_value: float
+    avg_purchase_frequency: float
 
 
 class SegmentationResponse(BaseModel):
-    segments: List[dict]
-    metrics: dict
+    segments: List[SegmentSummary]
+    silhouette_score: Optional[float] = None
+    customers: List[dict]
 
 
-class ChurnResult(BaseModel):
+class ChurnRow(BaseModel):
     customer_id: int
     customer_name: str
     churn_probability: float
-    retention_risk: str
+    risk_category: str
+    recommendation: str
 
 
 class ChurnResponse(BaseModel):
-    results: List[ChurnResult]
-    metrics: dict
+    rows: List[ChurnRow]
+    accuracy: Optional[float] = None
+    precision: Optional[float] = None
+    recall: Optional[float] = None
+    f1: Optional[float] = None
 
 
-class RecommendationItem(BaseModel):
-    product_id: int
-    product_name: str
-    score: float
+class RecommendationRow(BaseModel):
+    customer_id: int
+    customer_name: str
+    recommended_products: List[str]
+    reason: str
 
 
 class RecommendationResponse(BaseModel):
-    customer_id: int
-    recommendations: List[RecommendationItem]
+    rows: List[RecommendationRow]
 
 
 class AnomalyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: int
-    alert_type: str
+    category: str
     description: str
     severity: str
-    created_at: datetime
+    score: float
+    created_at: dt.datetime
 
-    class Config:
-        from_attributes = True
+
+class AnomalyResponse(BaseModel):
+    alerts: List[AnomalyOut]
+    detection_accuracy: Optional[float] = None
+    false_positive_rate: Optional[float] = None
+
+
+class KPIResponse(BaseModel):
+    total_revenue: float
+    total_sales: int
+    total_customers: int
+    total_products: int
+    low_stock_count: int
+    pending_invoices: int
+    overdue_invoices: int
+    revenue_by_day: List[dict]
+    top_products: List[dict]

@@ -1,31 +1,29 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import logo from "../../assets/images/logo.png";
-import useAuth from "../../context/useAuth";
+import { useAuth } from "../../context/AuthContext.jsx";
 import "../../styles/auth.css";
 
-const API_URL = "http://127.0.0.1:8000";
-
-function LoginForm() {
+export default function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  
 
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
     if (!role) {
-    setError("Please select your role.");
-    return;
-  }
+      setError("Please select your role.");
+      return;
+    }
 
     // Email Validation
     const emailRule =
@@ -35,7 +33,7 @@ function LoginForm() {
       /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@#$%^&*!_\-+=])[A-Za-z\d@#$%^&*!_\-+=]{8,}$/;
 
     if (!emailRule.test(email)) {
-      setError("Please enter a valid email address");
+      setError("Please enter a valid email address.");
       return;
     }
 
@@ -49,41 +47,23 @@ function LoginForm() {
     try {
       setLoading(true);
 
-      // Send login request to FastAPI
-      const response = await fetch(`${API_URL}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password,
-          role: role,
-        }),
-      });
+      // Call context login method
+      const res = await login(email, password, role);
 
-      const data = await response.json();
-      console.log("Backend response:", data);
-
-      // Handle backend error
-      if (!response.ok) {
-        setError(data.detail || "Login failed. Please check your email and password.");
-        return;
+      if (res?.success) {
+        navigate("/dashboard");
+      } else {
+        setError("Login failed. Please check your credentials.");
       }
-
-      // Backend returns: { token: "...", token_type: "bearer", user: {...} }
-      login(data);
-      navigate("/dashboard");
-
     } catch (err) {
       console.error("Login error:", err);
-      setError("Unable to connect to the server. Please make sure the backend is running.");
+      setError("Unable to connect to the server. Please check your credentials.");
     } finally {
       setLoading(false);
     }
   };
 
-    return (
+  return (
     <div className="auth-card">
       {/* Logo */}
       <div className="logo">
@@ -113,7 +93,6 @@ function LoginForm() {
 
         {/* Password */}
         <label>Password</label>
-
         <div className="password-field">
           <input
             type={showPassword ? "text" : "password"}
@@ -137,17 +116,17 @@ function LoginForm() {
         {/* Role */}
         <label>Role as</label>
         <select
-  className="role-select"
-  value={role}
-  onChange={(e) => setRole(e.target.value)}
-  required
->
-  <option value="">Choose your role</option>
-  <option value="business_owner">Business Owner</option>
-  <option value="store_manager">Store Manager</option>
-  <option value="sales_executive">Sales Executive</option>
-  <option value="admin">Administrator</option>
-</select>
+          className="role-select"
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          required
+        >
+          <option value="">Choose your role</option>
+          <option value="business_owner">Business Owner</option>
+          <option value="store_manager">Store Manager</option>
+          <option value="sales_executive">Sales Executive</option>
+          <option value="admin">Administrator</option>
+        </select>
 
         {/* Remember Me + Forgot Password */}
         <div className="auth-options">
@@ -160,21 +139,14 @@ function LoginForm() {
         </div>
 
         {/* Login Button */}
-        <button
-          className="auth-btn"
-          type="submit"
-          disabled={loading}
-        >
+        <button className="auth-btn" type="submit" disabled={loading}>
           {loading ? "Signing In..." : "Sign In"}
         </button>
       </form>
 
       <p className="bottom-text">
-        Don't have an account?{" "}
-        <Link to="/register">Create one</Link>
+        Don't have an account? <Link to="/register">Create one</Link>
       </p>
     </div>
   );
 }
-
-export default LoginForm;
