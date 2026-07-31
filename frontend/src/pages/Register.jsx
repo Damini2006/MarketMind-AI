@@ -1,51 +1,55 @@
-import React, { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
-import { useAuth } from '../context/AuthContext.jsx'
-import { ErrorBanner } from '../components/ui.jsx'
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { ErrorBanner } from "../components/ui";
 
 const ROLES = [
-  { value: 'business_owner', label: 'Business Owner' },
-  { value: 'store_manager', label: 'Store Manager' },
-  { value: 'sales_executive', label: 'Sales Executive' },
-  { value: 'admin', label: 'System Administrator' },
-]
+  { value: "business_owner", label: "Business Owner" },
+  { value: "store_manager", label: "Store Manager" },
+  { value: "sales_executive", label: "Sales Executive" },
+  { value: "admin", label: "System Administrator" },
+];
 
 export default function Register() {
-  const { register, loading, error } = useAuth()
-  const navigate = useNavigate()
+  const { register, loading, error } = useAuth();
+  const navigate = useNavigate();
+
+  const [showPassword, setShowPassword] = useState(false);
 
   const [form, setForm] = useState({
-    full_name: '',
-    email: '',
-    password: '',
-    role: 'sales_executive'
-  })
+    name: "",
+    email: "",
+    password: "",
+    role: "sales_executive",
+  });
 
-  const [success, setSuccess] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
+  const [success, setSuccess] = useState(false);
 
   const handleChange = (e) =>
-    setForm({ ...form, [e.target.name]: e.target.value })
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value,
+    });
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
 
-    const ok = await register(form)
+    const ok = await register(form);
 
     if (ok) {
-      setSuccess(true)
-      setTimeout(() => navigate('/login'), 1200)
+      setSuccess(true);
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 1200);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-900 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
-
-        <h2 className="text-2xl font-bold text-slate-900 mb-1">
-          Create an account
-        </h2>
+        <h2 className="text-2xl font-bold mb-1">Create an account</h2>
 
         <p className="text-slate-500 text-sm mb-6">
           Join MarketMind AI to start managing your business.
@@ -54,116 +58,89 @@ export default function Register() {
         <ErrorBanner message={error} />
 
         {success && (
-          <div className="bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg px-4 py-3 text-sm mb-4">
-            Account created! Redirecting to login...
+          <div className="bg-green-100 text-green-700 p-3 rounded-lg mb-4">
+            Account created successfully!
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-
           <div>
-            <label className="text-sm font-medium text-slate-700">
-              Full name
-            </label>
+            <label>Full Name</label>
 
             <input
-              name="full_name"
-              required
               className="input mt-1"
-              value={form.full_name}
+              name="name"
+              value={form.name}
               onChange={handleChange}
+              required
             />
           </div>
 
-
           <div>
-            <label className="text-sm font-medium text-slate-700">
-              Email
-            </label>
+            <label>Email</label>
 
             <input
               type="email"
-              name="email"
-              required
               className="input mt-1"
+              name="email"
               value={form.email}
               onChange={handleChange}
+              required
             />
           </div>
 
-
           <div>
-            <label className="text-sm font-medium text-slate-700">
-              Password
-            </label>
+            <label>Password</label>
 
             <div className="relative mt-1">
               <input
                 type={showPassword ? "text" : "password"}
-                name="password"
-                required
                 className="input pr-10"
+                name="password"
                 value={form.password}
                 onChange={handleChange}
+                required
               />
 
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-3 flex items-center text-slate-500 hover:text-slate-700"
+                className="absolute right-3 top-3 text-slate-500"
               >
-                {showPassword ? (
-                  <EyeOff size={20} />
-                ) : (
-                  <Eye size={20} />
-                )}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-
           <div>
-            <label className="text-sm font-medium text-slate-700">
-              Role
-            </label>
+            <label>Role</label>
 
             <select
-              name="role"
               className="input mt-1"
+              name="role"
               value={form.role}
               onChange={handleChange}
             >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
+              {ROLES.map((role) => (
+                <option key={role.value} value={role.value}>
+                  {role.label}
                 </option>
               ))}
             </select>
           </div>
 
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full justify-center flex"
-          >
-            {loading ? 'Creating account...' : 'Create account'}
+          <button className="btn-primary w-full" disabled={loading}>
+            {loading ? "Creating..." : "Create account"}
           </button>
-
         </form>
 
-
-        <p className="text-sm text-slate-500 mt-6 text-center">
-          Already have an account?{' '}
-          <Link
-            to="/login"
-            className="text-brand-600 font-medium hover:underline"
-          >
+        <p className="mt-6 text-center">
+          Already have an account?{" "}
+          <Link className="text-brand-600" to="/login">
             Sign in
           </Link>
         </p>
-
       </div>
     </div>
-  )
+  );
 }
