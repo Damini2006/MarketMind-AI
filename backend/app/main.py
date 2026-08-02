@@ -1,14 +1,17 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import Base, engine
-from app.routers import auth, users, analytics, inventory, sales
-import app.models
 
-app.models.Base.metadata.create_all(bind=engine)
+from .database import Base, engine, SessionLocal
+from . import models
+from .seed_data import seed_if_empty
+from .routers import auth, customers, inventory, sales, invoices, analytics
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="MarketMind AI",
-    description="Small Business Sales Intelligence Platform - FastAPI backend",
+    description="Small Business Sales Intelligence Platform - API",
     version="1.0.0",
 )
 
@@ -21,15 +24,33 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(analytics.router)
+app.include_router(customers.router)
 app.include_router(inventory.router)
 app.include_router(sales.router)
+app.include_router(invoices.router)
+app.include_router(analytics.router)
+
+
+
+@app.on_event("startup")
+def startup_seed():
+    if os.getenv("SEED_DEMO_DATA", "false").lower() != "true":
+        return  # real-data mode: skip demo seeding entirely
+    db = SessionLocal()
+    try:
+        seed_if_empty(db)
+    finally:
+        db.close()
+
+
 @app.get("/")
 def root():
-    return {"message": "MarketMind AI API is running", "docs": "/docs"}
+    return {
+        "status": "ok",
+        "message": "MarketMind AI API is running. Visit /docs for interactive API documentation.",
+    }
 
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "healthy"}

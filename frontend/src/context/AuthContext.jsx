@@ -1,133 +1,82 @@
-import {
-  createContext,
-  useState,
-} from "react";
+import React, { createContext, useContext, useState, useCallback } from "react";
+import api from "../services/api";
 
+const AuthContext = createContext(null);
 
-const AuthContext = createContext();
-
-
-export function AuthProvider({
-  children,
-}) {
-
-
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
+    const raw = localStorage.getItem("marketmind_user");
+    return raw ? JSON.parse(raw) : null;
+  });
 
-    const savedUser =
-      localStorage.getItem("user");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-    if(savedUser){
+  const login = useCallback(async (email, password) => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        return JSON.parse(savedUser);
-      }
+    try {
+      const res = await api.post("/auth/login", {
+        email,
+        password,
+      });
 
-      catch(error){
+      localStorage.setItem("marketmind_token", res.data.access_token);
+      localStorage.setItem(
+        "marketmind_user",
+        JSON.stringify(res.data.user)
+      );
 
-        console.error(
-          "Error loading user:",
-          error
-        );
+      setUser(res.data.user);
 
-        localStorage.removeItem("user");
-
-        return null;
-      }
-
+      return true;
+    } catch (err) {
+      setError(err.response?.data?.detail || "Login failed.");
+      return false;
+    } finally {
+      setLoading(false);
     }
+  }, []);
 
-    return null;
+  const register = useCallback(async (payload) => {
+    setLoading(true);
+    setError(null);
 
-  });
+    try {
+      await api.post("/auth/register", payload);
+      return true;
+    } catch (err) {
+      setError(err.response?.data?.detail || "Registration failed.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-
-
-  const [token, setToken] = useState(() => {
-
-    return localStorage.getItem("token") || null;
-
-  });
-
-
-
-  // Login
-  // Receives response from FastAPI
-  const login = (authData) => {
-
-
-    const userData =
-      authData.user;
-
-
-    const accessToken =
-      authData.token;
-
-
-    setUser(userData);
-
-    setToken(accessToken);
-
-
-
-    localStorage.setItem(
-      "user",
-      JSON.stringify(userData)
-    );
-
-
-    localStorage.setItem(
-      "token",
-      accessToken
-    );
-
-  };
-
-
-
-  // Logout
-  const logout = () => {
-
-
+  const logout = useCallback(() => {
+    localStorage.removeItem("marketmind_token");
+    localStorage.removeItem("marketmind_user");
     setUser(null);
+  }, []);
 
-    setToken(null);
-
-
-    localStorage.removeItem(
-      "user"
-    );
-
-
-    localStorage.removeItem(
-      "token"
-    );
-
-  };
-
-
-
-  const value = {
-
-    user,
-
-    token,
-
-    login,
-
-    logout,
-
-    isAuthenticated:
-      !!user && !!token,
-
-  };
-
-
+  const hasRole = useCallback(
+    (...roles) => !!user && roles.includes(user.role),
+    [user]
+  );
 
   return (
 
     <AuthContext.Provider
-      value={value}
+      value={{
+        user,
+        login,
+        register,
+        logout,
+        loading,
+        error,
+        hasRole,
+      }}
     >
 
       {children}
@@ -138,5 +87,6 @@ export function AuthProvider({
 
 }
 
-
-export default AuthContext;
+export function useAuth() {
+  return useContext(AuthContext);
+}
