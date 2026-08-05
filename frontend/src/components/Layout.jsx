@@ -1,4 +1,4 @@
-import React from 'react'
+import {} from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
@@ -7,16 +7,16 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: null },
-  { to: '/sales', label: 'Sales', icon: ShoppingCart, roles: null },
-  { to: '/inventory', label: 'Inventory', icon: Boxes, roles: null },
-  { to: '/invoices', label: 'Invoices', icon: FileText, roles: null },
-  { to: '/customers', label: 'Customers', icon: Users, roles: null },
-  { to: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['business_owner', 'store_manager', 'admin'] },
-  { to: '/segmentation', label: 'Segmentation', icon: PieChart, roles: null },
-  { to: '/churn', label: 'Churn Risk', icon: UserMinus, roles: ['business_owner', 'store_manager', 'admin'] },
-  { to: '/recommendations', label: 'Recommendations', icon: Sparkles, roles: null },
-  { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert, roles: ['business_owner', 'store_manager', 'admin'] },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/sales', label: 'Sales', icon: ShoppingCart },
+  { to: '/inventory', label: 'Inventory', icon: Boxes },
+  { to: '/invoices', label: 'Invoices', icon: FileText },
+  { to: '/customers', label: 'Customers', icon: Users },
+  { to: '/forecasting', label: 'Forecasting', icon: TrendingUp },
+  { to: '/segmentation', label: 'Segmentation', icon: PieChart },
+  { to: '/churn', label: 'Churn Risk', icon: UserMinus },
+  { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
+  { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
 ]
 
 const ROLE_LABELS = {
@@ -27,10 +27,11 @@ const ROLE_LABELS = {
 }
 
 export default function Layout() {
-  const { user, logout, hasRole } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || hasRole(...item.roles))
+  // All NAV_ITEMS are now directly visible without checking hasRole(...)
+  const visibleItems = NAV_ITEMS
 
   const handleLogout = () => {
     logout()

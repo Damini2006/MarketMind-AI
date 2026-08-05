@@ -1,4 +1,4 @@
-import React from 'react'
+import {} from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
 import Layout from './components/Layout.jsx'
@@ -46,32 +46,11 @@ export default function App() {
         <Route path="inventory" element={<Inventory />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="customers" element={<Customers />} />
-        <Route
-          path="forecasting"
-          element={
-            <ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}>
-              <Forecasting />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="forecasting" element={<Forecasting />} />
         <Route path="segmentation" element={<Segmentation />} />
-        <Route
-          path="churn"
-          element={
-            <ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}>
-              <Churn />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="churn" element={<Churn />} />
         <Route path="recommendations" element={<Recommendations />} />
-        <Route
-          path="anomalies"
-          element={
-            <ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}>
-              <Anomalies />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="anomalies" element={<Anomalies />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
