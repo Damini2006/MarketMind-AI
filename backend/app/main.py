@@ -32,13 +32,12 @@ app.include_router(analytics.router)
 
 
 
+# Change this section in main.py:
 @app.on_event("startup")
 def startup_seed():
-    if os.getenv("SEED_DEMO_DATA", "false").lower() != "true":
-        return  # real-data mode: skip demo seeding entirely
     db = SessionLocal()
     try:
-        seed_if_empty(db)
+        seed_if_empty(db)  # Runs automatically when database is empty
     finally:
         db.close()
 

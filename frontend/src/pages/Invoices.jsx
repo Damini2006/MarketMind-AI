@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
 import { Plus } from 'lucide-react'
@@ -14,13 +14,20 @@ export default function Invoices() {
   const [form, setForm] = useState({ customer_id: '', amount: '', due_date: '' })
 
   const load = useCallback(() => {
-    setLoading(true)
     Promise.all([api.get('/invoices/'), api.get('/customers/')])
-      .then(([i, c]) => { setInvoices(i.data); setCustomers(c.data) })
+      .then(([i, c]) => { 
+        setInvoices(i.data)
+        setCustomers(c.data) 
+      })
+      .catch((err) => {
+        setError(err.response?.data?.detail || 'Failed to load data.')
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { 
+    load() 
+  }, [load])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -33,6 +40,7 @@ export default function Invoices() {
       })
       setShowForm(false)
       setForm({ customer_id: '', amount: '', due_date: '' })
+      setLoading(true)
       load()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not create invoice.')
@@ -40,8 +48,13 @@ export default function Invoices() {
   }
 
   const updateStatus = async (id, status) => {
-    await api.patch(`/invoices/${id}/status`, { status })
-    load()
+    try {
+      await api.patch(`/invoices/${id}/status`, { status })
+      setLoading(true)
+      load()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not update invoice status.')
+    }
   }
 
   if (loading) return <Loading label="Loading invoices..." />

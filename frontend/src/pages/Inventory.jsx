@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
 import { Plus, PackagePlus, PackageMinus, Upload } from 'lucide-react'
@@ -13,13 +13,20 @@ export default function Inventory() {
   const [form, setForm] = useState({ name: '', category: '', price: '', stock_quantity: 0, reorder_threshold: 10, warehouse_location: '' })
 
   const load = useCallback(() => {
-    setLoading(true)
     Promise.all([api.get('/inventory/products'), api.get('/inventory/alerts')])
-      .then(([p, a]) => { setProducts(p.data); setAlerts(a.data) })
+      .then(([p, a]) => { 
+        setProducts(p.data) 
+        setAlerts(a.data) 
+      })
+      .catch((err) => {
+        setError(err.response?.data?.detail || 'Failed to load inventory.')
+      })
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { 
+    load() 
+  }, [load])
 
   const handleUpload = async (e) => {
     const file = e.target.files[0]
@@ -30,6 +37,7 @@ export default function Inventory() {
     try {
       const res = await api.post('/inventory/products/upload-csv', data, { headers: { 'Content-Type': 'multipart/form-data' } })
       setUploadMsg(`Uploaded: ${res.data.products_created} created, ${res.data.products_updated} updated, ${res.data.rows_skipped} skipped.`)
+      setLoading(true)
       load()
     } catch (err) {
       setUploadMsg(err.response?.data?.detail || 'Upload failed.')
@@ -49,6 +57,7 @@ export default function Inventory() {
       })
       setShowForm(false)
       setForm({ name: '', category: '', price: '', stock_quantity: 0, reorder_threshold: 10, warehouse_location: '' })
+      setLoading(true)
       load()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not create product.')
@@ -56,8 +65,13 @@ export default function Inventory() {
   }
 
   const adjustStock = async (productId, delta) => {
-    await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta })
-    load()
+    try {
+      await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta })
+      setLoading(true)
+      load()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Could not update stock.')
+    }
   }
 
   if (loading) return <Loading label="Loading inventory..." />
@@ -80,28 +94,24 @@ export default function Inventory() {
         }
       />
 
-      {uploadMsg && <div className="bg-brand-50 text-brand-700 border border-brand-100 rounded-lg px-4 py-3 text-sm mb-4">{uploadMsg}</div>}
-
-      {alerts.length > 0 && (
-        <div className="card mb-6 border-amber-200 bg-amber-50/50">
-          <h3 className="font-semibold text-amber-800 mb-2 text-sm">⚠️ Active Reorder Alerts</h3>
-          <ul className="space-y-1 text-sm text-amber-700">
-            {alerts.map((a) => <li key={a.id}>• {a.message}</li>)}
-          </ul>
+      {uploadMsg && (
+        <div className="mb-4 p-3 bg-slate-100 rounded-lg text-sm text-slate-700 flex justify-between items-center">
+          <span>{uploadMsg}</span>
+          <button onClick={() => setUploadMsg(null)} className="text-xs text-slate-500 hover:text-slate-700 font-medium">Dismiss</button>
         </div>
       )}
 
       {showForm && (
         <div className="card mb-6">
           <ErrorBanner message={error} />
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div>
               <label className="text-xs font-medium text-slate-600">Product Name</label>
-              <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <input type="text" className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Category</label>
-              <input className="input mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <input type="text" className="input mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Price (₹)</label>
@@ -109,63 +119,72 @@ export default function Inventory() {
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Initial Stock</label>
-              <input type="number" className="input mt-1" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} />
+              <input type="number" className="input mt-1" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} required />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Reorder Threshold</label>
-              <input type="number" className="input mt-1" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: e.target.value })} />
+              <input type="number" className="input mt-1" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Warehouse</label>
-              <input className="input mt-1" value={form.warehouse_location} onChange={(e) => setForm({ ...form, warehouse_location: e.target.value })} />
+              <label className="text-xs font-medium text-slate-600">Warehouse Location</label>
+              <input type="text" className="input mt-1" value={form.warehouse_location} onChange={(e) => setForm({ ...form, warehouse_location: e.target.value })} />
             </div>
-            <button type="submit" className="btn-primary col-span-2 md:col-span-1">Save Product</button>
+            <div className="md:col-span-3 flex justify-end gap-2 mt-2">
+              <button type="button" onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+              <button type="submit" className="btn-primary">Save Product</button>
+            </div>
           </form>
+        </div>
+      )}
+
+      {/* Alerts Section */}
+      {alerts.length > 0 && (
+        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <h3 className="text-sm font-semibold text-amber-800 mb-2">Low Stock Alerts</h3>
+          <div className="flex flex-wrap gap-2">
+            {alerts.map((alert, idx) => (
+              <Badge key={idx} tone="amber">
+                {alert.name} (Stock: {alert.stock_quantity})
+              </Badge>
+            ))}
+          </div>
         </div>
       )}
 
       <div className="card overflow-x-auto">
         {products.length === 0 ? (
-          <EmptyState message="No products yet." />
+          <EmptyState message="No products in inventory." />
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-2 pr-4">Product</th>
+                <th className="py-2 pr-4">Name</th>
                 <th className="py-2 pr-4">Category</th>
                 <th className="py-2 pr-4">Price</th>
                 <th className="py-2 pr-4">Stock</th>
-                <th className="py-2 pr-4">Warehouse</th>
-                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4">Location</th>
                 <th className="py-2 pr-4">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
-                <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-2 pr-4 font-medium text-slate-800">{p.name}</td>
-                  <td className="py-2 pr-4 text-slate-500">{p.category || '—'}</td>
-                  <td className="py-2 pr-4">₹{p.price.toLocaleString('en-IN')}</td>
-                  <td className="py-2 pr-4">{p.stock_quantity}</td>
-                  <td className="py-2 pr-4 text-slate-500">{p.warehouse_location || '—'}</td>
+              {products.map((prod) => (
+                <tr key={prod.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="py-2 pr-4 font-medium">{prod.name}</td>
+                  <td className="py-2 pr-4 text-slate-500">{prod.category || '—'}</td>
+                  <td className="py-2 pr-4 font-semibold">₹{prod.price?.toLocaleString('en-IN')}</td>
                   <td className="py-2 pr-4">
-                    {p.stock_quantity === 0 ? (
-                      <Badge tone="red">Out of stock</Badge>
-                    ) : p.stock_quantity <= p.reorder_threshold ? (
-                      <Badge tone="amber">Low stock</Badge>
-                    ) : (
-                      <Badge tone="green">In stock</Badge>
-                    )}
+                    <span className={prod.stock_quantity <= prod.reorder_threshold ? 'text-red-600 font-bold' : ''}>
+                      {prod.stock_quantity}
+                    </span>
                   </td>
-                  <td className="py-2 pr-4">
-                    <div className="flex gap-1">
-                      <button onClick={() => adjustStock(p.id, 10)} title="Add 10 stock" className="p-1.5 rounded-md hover:bg-emerald-50 text-emerald-600">
-                        <PackagePlus size={16} />
-                      </button>
-                      <button onClick={() => adjustStock(p.id, -10)} title="Remove 10 stock" className="p-1.5 rounded-md hover:bg-red-50 text-red-600">
-                        <PackageMinus size={16} />
-                      </button>
-                    </div>
+                  <td className="py-2 pr-4 text-slate-500">{prod.warehouse_location || '—'}</td>
+                  <td className="py-2 pr-4 flex items-center gap-2">
+                    <button onClick={() => adjustStock(prod.id, 1)} title="Increase Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600">
+                      <PackagePlus size={16} />
+                    </button>
+                    <button onClick={() => adjustStock(prod.id, -1)} title="Decrease Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600">
+                      <PackageMinus size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}

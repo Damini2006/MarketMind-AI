@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, StatCard, EmptyState, Badge } from '../components/ui.jsx'
 import { UserMinus, Percent } from 'lucide-react'
