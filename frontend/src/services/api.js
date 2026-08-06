@@ -30,7 +30,6 @@ api.interceptors.response.use(
       sessionStorage.removeItem("marketmind_token");
       sessionStorage.removeItem("marketmind_user");
     }
-    // Surface the real problem in dev instead of a silent failure
     if (import.meta.env.DEV) {
       console.error(
         `[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} → `,
@@ -41,5 +40,54 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// --- Auth & Profile ---
+export const login = (data) => api.post("/auth/login", data);
+export const register = (data) => api.post("/auth/register", data);
+export const getMe = () => api.get("/auth/me");
+export const updateProfile = (data) => api.put("/auth/profile", data);
+export const changePassword = (data) => api.put("/auth/change-password", data);
+
+// --- OTP Password Reset ---
+export const sendOTP = (email) => api.post("/auth/send-otp", { email });
+export const resetPasswordOTP = (email, otp, newPassword) =>
+  api.post("/auth/reset-password-otp", {
+    email,
+    otp,
+    new_password: newPassword,
+  });
+
+// --- Sales ---
+export const getSales = () => api.get("/sales/");
+export const createSale = (data) => api.post("/sales/", data);
+export const uploadSalesCSV = (formData) =>
+  api.post("/sales/upload-csv", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+// --- Inventory & Products ---
+export const getProducts = () => api.get("/inventory/products");
+export const createProduct = (data) => api.post("/inventory/products", data);
+export const updateStock = (productId, delta) =>
+  api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta });
+export const getInventoryAlerts = () => api.get("/inventory/alerts");
+
+// --- Customers ---
+export const getCustomers = () => api.get("/customers/");
+export const createCustomer = (data) => api.post("/customers/", data);
+
+// --- Invoices ---
+export const getInvoices = () => api.get("/invoices/");
+export const createInvoice = (data) => api.post("/invoices/", data);
+export const updateInvoiceStatus = (id, status) =>
+  api.patch(`/invoices/${id}/status`, { status });
+
+// --- AI Analytics ---
+export const getKPIs = () => api.get("/analytics/kpis");
+export const getForecast = (days = 30) => api.get(`/ai/forecast?days=${days}`);
+export const getSegmentation = () => api.get("/ai/segmentation");
+export const getChurnRisk = () => api.get("/ai/churn-risk");
+export const getRecommendations = () => api.get("/ai/recommendations");
+export const getAnomalies = () => api.get("/ai/anomalies");
 
 export default api;

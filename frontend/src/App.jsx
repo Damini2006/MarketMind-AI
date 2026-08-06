@@ -1,4 +1,3 @@
-import {} from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
 import Layout from './components/Layout.jsx'
@@ -15,7 +14,7 @@ import Churn from './pages/Churn.jsx'
 import Recommendations from './pages/Recommendations.jsx'
 import Anomalies from './pages/Anomalies.jsx'
 import Settings from './pages/Settings.jsx'
-
+import ForgotPassword from "./pages/ForgotPassword.jsx"
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
@@ -31,9 +30,12 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Public Routes */}
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
 
+      {/* Protected Routes inside Layout */}
       <Route
         path="/"
         element={
@@ -54,7 +56,6 @@ export default function App() {
         <Route path="recommendations" element={<Recommendations />} />
         <Route path="anomalies" element={<Anomalies />} />
         <Route path="settings" element={<Settings />} />
-        
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -4,20 +4,12 @@ import { Mail, Lock, Sparkles, CheckCircle2, ArrowRight, Eye, EyeOff } from "luc
 import { useAuth } from "../context/AuthContext.jsx";
 import { ErrorBanner } from "../components/ui.jsx";
 
-const ROLES = [
-  { value: "business_owner", label: "Business Owner" },
-  { value: "store_manager", label: "Store Manager" },
-  { value: "sales_executive", label: "Sales Executive" },
-  { value: "admin", label: "System Administrator" },
-];
-
 export default function Login() {
   const { login, loading, error } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("sales_executive");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -122,24 +114,6 @@ export default function Login() {
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-            </div>
-
-            {/* Role Dropdown */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Account Role
-              </label>
-              <select
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 focus:border-[#2e2b8f] transition-all"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
             </div>
 
             {/* Remember Me & Forgot Password */}

@@ -39,6 +39,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+# --- Password Reset OTP Schemas ---
+class SendOTPRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+    new_password: str
+
+
 # ---------- Customers ----------
 class CustomerCreate(BaseModel):
     name: str

@@ -1,4 +1,4 @@
-import  { createContext, useContext, useState, useCallback } from "react";
+import { createContext, useContext, useState, useCallback } from "react";
 import api from "../services/api";
 
 const AuthContext = createContext(null);
@@ -51,7 +51,7 @@ export function AuthProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setUser]);
 
   const register = useCallback(async (payload) => {
     setLoading(true);
@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("marketmind_token");
     localStorage.removeItem("marketmind_user");
     setUser(null);
-  }, []);
+  }, [setUser]);
 
   const hasRole = useCallback(
     (...roles) => !!user && roles.includes(user.role),
@@ -97,6 +97,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext);
 }

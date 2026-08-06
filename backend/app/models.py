@@ -25,6 +25,10 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
+    # Password Reset OTP fields
+    reset_otp = Column(String, nullable=True)
+    reset_otp_expiry = Column(DateTime, nullable=True)
+
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -104,4 +108,3 @@ class AnomalyAlert(Base):
     score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
     related_id = Column(Integer, nullable=True)
-
