@@ -14,10 +14,13 @@ export default function Customers() {
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
 
   const load = useCallback(() => {
-    setLoading(true)
-    api.get('/customers/').then((res) => setCustomers(res.data)).finally(() => setLoading(false))
-  }, [])
-
+  api.get('/customers/')
+    .then((res) => setCustomers(res.data))
+    .catch((err) => {
+      setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
+    })
+    .finally(() => setLoading(false))
+}, [])
   useEffect(() => { load() }, [load])
 
   const canCreate = hasRole('business_owner', 'sales_executive', 'admin')

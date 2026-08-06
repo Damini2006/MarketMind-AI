@@ -4,6 +4,7 @@ from typing import List, Optional
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from .. import models, schemas
 from ..database import get_db
@@ -61,7 +62,8 @@ def upload_sales_csv(
     """
     Upload a CSV of historical/point-of-sale transactions.
     Expected columns: product_name, quantity, unit_price, [customer_name], [sale_date]
-    Performs validation, auto-creates missing products/customers, and stores transactions.
+    Performs validation, auto-creates missing products/customers (matched case/whitespace-insensitively),
+    and stores transactions.
     """
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
@@ -86,16 +88,25 @@ def upload_sales_csv(
     created, skipped = 0, 0
     for _, row in df.iterrows():
         try:
-            product = db.query(models.Product).filter(models.Product.name == str(row["product_name"]).strip()).first()
+            pname = str(row["product_name"]).strip()
+            product = (
+                db.query(models.Product)
+                .filter(func.lower(func.trim(models.Product.name)) == pname.lower())
+                .first()
+            )
             if not product:
-                product = models.Product(name=str(row["product_name"]).strip(), price=float(row["unit_price"]), stock_quantity=0)
+                product = models.Product(name=pname, price=float(row["unit_price"]), stock_quantity=0)
                 db.add(product)
                 db.flush()
 
             customer = None
             if "customer_name" in df.columns and pd.notna(row.get("customer_name")):
                 cname = str(row["customer_name"]).strip()
-                customer = db.query(models.Customer).filter(models.Customer.name == cname).first()
+                customer = (
+                    db.query(models.Customer)
+                    .filter(func.lower(func.trim(models.Customer.name)) == cname.lower())
+                    .first()
+                )
                 if not customer:
                     customer = models.Customer(name=cname)
                     db.add(customer)

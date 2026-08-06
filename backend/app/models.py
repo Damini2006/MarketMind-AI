@@ -104,3 +104,4 @@ class AnomalyAlert(Base):
     score = Column(Float, default=0.0)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
     related_id = Column(Integer, nullable=True)
+

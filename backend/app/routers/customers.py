@@ -3,6 +3,7 @@ from typing import List
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from .. import models, schemas
 from ..database import get_db
@@ -60,7 +61,7 @@ def upload_customers_csv(
     """
     Bulk-import customers from a CSV.
     Required column: name. Optional columns: email, phone.
-    Existing customers (matched by name) are skipped, not duplicated.
+    Existing customers (matched by name, case/whitespace-insensitive) are skipped, not duplicated.
     """
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
@@ -83,7 +84,11 @@ def upload_customers_csv(
         if not name:
             skipped += 1
             continue
-        existing = db.query(models.Customer).filter(models.Customer.name == name).first()
+        existing = (
+            db.query(models.Customer)
+            .filter(func.lower(func.trim(models.Customer.name)) == name.lower())
+            .first()
+        )
         if existing:
             skipped += 1
             continue

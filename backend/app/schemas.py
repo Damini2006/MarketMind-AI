@@ -3,12 +3,15 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, ConfigDict
 from .models import RoleEnum
 
+
+# ---------- Auth / Users ----------
 class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
     role: RoleEnum = RoleEnum.sales_executive
-# ---------- Auth / Users ----------
+
+
 class UserCreate(BaseModel):
     full_name: str
     email: EmailStr
@@ -65,7 +68,7 @@ class ProductOut(ProductCreate):
 
 
 class StockUpdate(BaseModel):
-    quantity_delta: int  # positive to add stock, negative to deduct
+    quantity_delta: int
 
 
 # ---------- Sales ----------

@@ -3,6 +3,7 @@ import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
 import { Plus, PackagePlus, PackageMinus, Upload } from 'lucide-react'
 
+
 export default function Inventory() {
   const [products, setProducts] = useState([])
   const [alerts, setAlerts] = useState([])

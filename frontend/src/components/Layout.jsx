@@ -1,9 +1,11 @@
-import {} from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import api from '../services/api'
 import {
   LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
+  Settings, Bell, ChevronDown,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -17,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/churn', label: 'Churn Risk', icon: UserMinus },
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
   { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 const ROLE_LABELS = {
@@ -26,12 +29,108 @@ const ROLE_LABELS = {
   admin: 'System Administrator',
 }
 
+function initials(name) {
+  if (!name) return '?'
+  const parts = name.trim().split(' ')
+  return (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
+}
+
+function NotificationBell() {
+  const [alerts, setAlerts] = useState([])
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    api.get('/inventory/alerts').then((res) => setAlerts(res.data)).catch(() => setAlerts([]))
+  }, [])
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} className="relative p-2 rounded-lg hover:bg-slate-100">
+        <Bell size={20} className="text-slate-500" />
+        {alerts.length > 0 && (
+          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+            {alerts.length}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-lg shadow-lg py-2 z-50 max-h-80 overflow-y-auto">
+          <p className="px-4 py-1 text-xs font-semibold text-slate-400 uppercase">Notifications</p>
+          {alerts.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-slate-400">No alerts right now.</p>
+          ) : (
+            alerts.map((a) => (
+              <div key={a.id} className="px-4 py-2 border-t border-slate-100 text-sm text-slate-600">
+                {a.message}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProfileMenu({ user, onLogout }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} className="flex items-center gap-2">
+        <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold">
+          {initials(user?.full_name)}
+        </div>
+        <ChevronDown size={16} className="text-slate-400" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-52 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
+          <div className="px-4 py-2 border-b border-slate-100">
+            <p className="text-sm font-medium text-slate-800">{user?.full_name}</p>
+            <p className="text-xs text-slate-400">{user?.email}</p>
+          </div>
+          <button
+            onClick={() => { setOpen(false); navigate('/settings') }}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <Settings size={16} /> Settings
+          </button>
+          <button
+            onClick={() => { setOpen(false); onLogout() }}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+          >
+            <LogOut size={16} /> Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // All NAV_ITEMS are now directly visible without checking hasRole(...)
   const visibleItems = NAV_ITEMS
+  const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
 
   const handleLogout = () => {
     logout()
@@ -39,9 +138,10 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-64 bg-brand-900 text-white flex flex-col shrink-0">
-        <div className="px-6 py-5 border-b border-white/10">
+    <div className="flex h-screen overflow-hidden">
+      {/* Fixed Sidebar */}
+      <aside className="w-64 bg-brand-900 text-white flex flex-col shrink-0 h-screen">
+        <div className="px-6 py-5 border-b border-white/10 shrink-0">
           <h1 className="text-xl font-bold tracking-tight">MarketMind AI</h1>
           <p className="text-xs text-brand-100/70 mt-1">Sales Intelligence Platform</p>
         </div>
@@ -61,7 +161,7 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="px-4 py-4 border-t border-white/10">
+        <div className="px-4 py-4 border-t border-white/10 shrink-0">
           <p className="text-sm font-semibold">{user?.full_name}</p>
           <p className="text-xs text-brand-100/70">{ROLE_LABELS[user?.role] || user?.role}</p>
           <button
@@ -72,11 +172,22 @@ export default function Layout() {
           </button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-6 md:p-8">
-          <Outlet />
-        </div>
-      </main>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-end px-6 md:px-8 z-10">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-slate-500 hidden sm:block">{today}</span>
+            <NotificationBell />
+            <ProfileMenu user={user} onLogout={handleLogout} />
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto p-6 md:p-8">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

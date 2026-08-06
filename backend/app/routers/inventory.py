@@ -3,6 +3,7 @@ from typing import List
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from .. import models, schemas
 from ..database import get_db
@@ -89,7 +90,7 @@ def upload_products_csv(
     """
     Bulk-import a product catalog / inventory list from CSV.
     Required columns: name, price. Optional: category, stock_quantity, reorder_threshold, warehouse_location.
-    Existing products (matched by name) get their price/stock updated rather than duplicated.
+    Existing products (matched by name, case/whitespace-insensitive) get their price/stock updated rather than duplicated.
     """
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Only .csv files are supported")
@@ -118,7 +119,11 @@ def upload_products_csv(
         stock_qty = int(row["stock_quantity"]) if "stock_quantity" in df.columns and pd.notna(row.get("stock_quantity")) else 0
         reorder = int(row["reorder_threshold"]) if "reorder_threshold" in df.columns and pd.notna(row.get("reorder_threshold")) else 10
 
-        existing = db.query(models.Product).filter(models.Product.name == name).first()
+        existing = (
+            db.query(models.Product)
+            .filter(func.lower(func.trim(models.Product.name)) == name.lower())
+            .first()
+        )
         if existing:
             existing.price = float(row["price"])
             if "stock_quantity" in df.columns and pd.notna(row.get("stock_quantity")):

@@ -14,6 +14,8 @@ import Segmentation from './pages/Segmentation.jsx'
 import Churn from './pages/Churn.jsx'
 import Recommendations from './pages/Recommendations.jsx'
 import Anomalies from './pages/Anomalies.jsx'
+import Settings from './pages/Settings.jsx'
+
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
@@ -51,6 +53,8 @@ export default function App() {
         <Route path="churn" element={<Churn />} />
         <Route path="recommendations" element={<Recommendations />} />
         <Route path="anomalies" element={<Anomalies />} />
+        <Route path="settings" element={<Settings />} />
+        
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

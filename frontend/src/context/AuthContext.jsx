@@ -4,10 +4,24 @@ import api from "../services/api";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+  const [user, setUserState] = useState(() => {
     const raw = localStorage.getItem("marketmind_user");
     return raw ? JSON.parse(raw) : null;
   });
+
+  // Wrap setUser so any update (e.g. from Settings after a profile edit)
+  // also persists to localStorage, keeping state and storage in sync.
+  const setUser = useCallback((updater) => {
+    setUserState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      if (next) {
+        localStorage.setItem("marketmind_user", JSON.stringify(next));
+      } else {
+        localStorage.removeItem("marketmind_user");
+      }
+      return next;
+    });
+  }, []);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -69,6 +83,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
+        setUser,
         login,
         register,
         logout,
