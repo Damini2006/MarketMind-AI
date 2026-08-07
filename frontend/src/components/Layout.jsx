@@ -2,8 +2,9 @@ import React from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import {
-  LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
+  LayoutDashboard, ShoppingCart, Boxes, FileText, Users, UsersRound,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
+  Tags, Truck, Database
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -12,6 +13,10 @@ const NAV_ITEMS = [
   { to: '/inventory', label: 'Inventory', icon: Boxes, roles: null },
   { to: '/invoices', label: 'Invoices', icon: FileText, roles: null },
   { to: '/customers', label: 'Customers', icon: Users, roles: null },
+  { to: '/team', label: 'Team', icon: UsersRound, roles: ['business_owner', 'admin'] },
+  { to: '/categories', label: 'Categories', icon: Tags, roles: ['business_owner', 'store_manager', 'admin'] },
+  { to: '/suppliers', label: 'Suppliers', icon: Truck, roles: ['business_owner', 'store_manager', 'admin'] },
+  { to: '/datasets', label: 'Datasets', icon: Database, roles: ['business_owner', 'admin'] },
   { to: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['business_owner', 'store_manager', 'admin'] },
   { to: '/segmentation', label: 'Segmentation', icon: PieChart, roles: null },
   { to: '/churn', label: 'Churn Risk', icon: UserMinus, roles: ['business_owner', 'store_manager', 'admin'] },
@@ -62,7 +67,7 @@ export default function Layout() {
         </nav>
         <div className="px-4 py-4 border-t border-white/10">
           <p className="text-sm font-semibold">{user?.full_name}</p>
-          <p className="text-xs text-brand-100/70">{ROLE_LABELS[user?.role] || user?.role}</p>
+          <p className="text-xs text-brand-100/70">{ROLE_LABELS[user?.role?.role_name] || user?.role?.role_name}</p>
           <button
             onClick={handleLogout}
             className="mt-3 flex items-center gap-2 text-xs text-brand-100/80 hover:text-white transition-colors"

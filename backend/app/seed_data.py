@@ -6,113 +6,111 @@ from . import models
 from .core.security import hash_password
 random.seed(42)
 
-DEMO_USERS = [
-    ("Asha Rao", "owner@marketmind.ai", "Owner@123", models.RoleEnum.business_owner),
-    ("Vikram Shetty", "manager@marketmind.ai", "Manager@123", models.RoleEnum.store_manager),
-    ("Priya Nair", "sales@marketmind.ai", "Sales@123", models.RoleEnum.sales_executive),
-    ("System Admin", "admin@marketmind.ai", "Admin@123", models.RoleEnum.admin),
+DEMO_USERS_BUSINESS_1 = [
+    ("Asha Rao", "owner@marketmind.ai", "Owner@123", "business_owner"),
+    ("Vikram Shetty", "manager@marketmind.ai", "Manager@123", "store_manager"),
+    ("Priya Nair", "sales@marketmind.ai", "Sales@123", "sales_executive"),
 ]
 
-PRODUCT_CATALOG = [
-    ("Organic Basmati Rice 5kg", "Grocery", 650),
-    ("Cold-Pressed Sunflower Oil 1L", "Grocery", 210),
-    ("Whole Wheat Atta 10kg", "Grocery", 480),
-    ("Assam Black Tea 500g", "Beverages", 190),
-    ("Filter Coffee Powder 500g", "Beverages", 260),
-    ("Toor Dal 1kg", "Grocery", 145,),
-    ("Herbal Shampoo 340ml", "Personal Care", 320),
-    ("Ayurvedic Soap Pack of 4", "Personal Care", 180),
-    ("LED Bulb 9W", "Home & Electronics", 120),
-    ("Non-stick Frying Pan", "Home & Electronics", 899,),
-    ("Stainless Steel Water Bottle", "Home & Electronics", 350),
-    ("Notebook Set of 5", "Stationery", 150),
+DEMO_USERS_BUSINESS_2 = [
+    ("Rahul Jain", "rahul@techstore.ai", "Tech@123", "business_owner"),
 ]
 
-CUSTOMER_NAMES = [
-    "Ramesh Kumar", "Sunita Patil", "Arjun Mehta", "Fatima Sheikh", "Deepak Verma",
-    "Kavya Iyer", "Rohit Sharma", "Anjali Gupta", "Suresh Reddy", "Meera Joshi",
-    "Karan Malhotra", "Divya Pillai", "Naveen Kumar", "Pooja Bansal", "Vivek Nair",
-    "Shreya Desai", "Manoj Tiwari", "Ritu Chawla", "Ajay Singh", "Neha Kulkarni",
+ROLES = [
+    ("business_owner", "Business Owner with full access"),
+    ("store_manager", "Store Manager with inventory and sales access"),
+    ("sales_executive", "Sales Executive with sales access"),
+    ("admin", "System Administrator"),
 ]
-
 
 def seed_if_empty(db: Session):
-    if db.query(models.User).count() > 0:
+    if db.query(models.Business).count() > 0:
         return  # already seeded
 
-    for name, email, password, role in DEMO_USERS:
-        db.add(models.User(full_name=name, email=email, hashed_password=hash_password(password), role=role))
-
-    products = []
-    for name, category, price in PRODUCT_CATALOG:
-        p = models.Product(
-            name=name,
-            category=category,
-            price=price,
-            stock_quantity=random.randint(0, 150),
-            reorder_threshold=20,
-            warehouse_location=random.choice(["Warehouse A", "Warehouse B", "Warehouse C"]),
-        )
-        db.add(p)
-        products.append(p)
+    # Seed Roles
+    db_roles = {}
+    for r_name, r_desc in ROLES:
+        role = models.Role(role_name=r_name, description=r_desc)
+        db.add(role)
+        db_roles[r_name] = role
     db.flush()
 
-    customers = []
-    for name in CUSTOMER_NAMES:
-        c = models.Customer(name=name, email=f"{name.split()[0].lower()}@example.com", phone=f"9{random.randint(100000000, 999999999)}")
-        db.add(c)
-        customers.append(c)
+    # Seed Businesses
+    b1 = models.Business(company_name="Mega Mart")
+    b2 = models.Business(company_name="Tech Store")
+    db.add_all([b1, b2])
     db.flush()
 
-    start_date = dt.datetime.utcnow() - dt.timedelta(days=120)
-    for day_offset in range(120):
-        current_date = start_date + dt.timedelta(days=day_offset)
-        num_sales_today = random.randint(2, 8)
-        # Introduce a mild upward trend plus weekly seasonality.
-        trend_multiplier = 1 + (day_offset / 120) * 0.4
-        weekday_multiplier = 1.3 if current_date.weekday() in (4, 5) else 1.0
-        for _ in range(num_sales_today):
-            product = random.choice(products)
-            customer = random.choice(customers)
-            qty = max(1, int(random.gauss(3, 2) * trend_multiplier * weekday_multiplier))
-            sale = models.Sale(
-                customer_id=customer.id,
-                product_id=product.id,
-                quantity=qty,
-                unit_price=product.price,
-                total_amount=qty * product.price,
-                sale_date=current_date.replace(hour=random.randint(9, 20), minute=random.randint(0, 59)),
-                source="seed",
-            )
-            db.add(sale)
+    # Seed Users for B1
+    for full_name, email, password, role_name in DEMO_USERS_BUSINESS_1:
+        db.add(models.User(
+            full_name=full_name, email=email, 
+            hashed_password=hash_password(password), role_id=db_roles[role_name].id,
+            business_id=b1.id
+        ))
+        
+    # Seed Users for B2
+    for full_name, email, password, role_name in DEMO_USERS_BUSINESS_2:
+        db.add(models.User(
+            full_name=full_name, email=email, 
+            hashed_password=hash_password(password), role_id=db_roles[role_name].id,
+            business_id=b2.id
+        ))
+        
+    # Admin
+    db.add(models.User(
+        full_name="System Admin", email="admin@marketmind.ai", 
+        hashed_password=hash_password("Admin@123"), role_id=db_roles["admin"].id,
+        business_id=b1.id
+    ))
+    db.flush()
 
-    # Inject a handful of clear outlier transactions for anomaly detection to catch.
-    for _ in range(4):
-        product = random.choice(products)
-        customer = random.choice(customers)
-        sale = models.Sale(
-            customer_id=customer.id,
-            product_id=product.id,
-            quantity=random.randint(80, 150),
-            unit_price=product.price,
-            total_amount=random.randint(80, 150) * product.price,
-            sale_date=start_date + dt.timedelta(days=random.randint(0, 119), hours=random.choice([2, 3, 4])),
-            source="seed",
-        )
-        db.add(sale)
+    # B1 DATA
+    cat_b1 = models.Category(category_name="Grocery", business_id=b1.id)
+    db.add(cat_b1)
+    db.flush()
+    
+    sup_b1 = models.Supplier(supplier_name="Fresh Foods", business_id=b1.id)
+    db.add(sup_b1)
+    db.flush()
+    
+    prod_b1 = models.Product(name="Organic Rice", category_id=cat_b1.id, supplier_id=sup_b1.id, selling_price=50.0, business_id=b1.id)
+    db.add(prod_b1)
+    db.flush()
+    
+    db.add(models.Inventory(product_id=prod_b1.id, quantity_available=100, reorder_level=20))
+    
+    cust_b1 = models.Customer(full_name="Ramesh Kumar", business_id=b1.id)
+    db.add(cust_b1)
+    db.flush()
+    
+    sale_b1 = models.Sale(business_id=b1.id, customer_id=cust_b1.id, total_amount=100.0)
+    db.add(sale_b1)
+    db.flush()
+    db.add(models.SaleItem(sale_id=sale_b1.id, product_id=prod_b1.id, quantity=2, unit_price=50.0, total=100.0))
 
-    for i in range(15):
-        customer = random.choice(customers)
-        status = random.choice(["pending", "paid", "paid", "overdue"])
-        due = dt.datetime.utcnow() + dt.timedelta(days=random.randint(-10, 20))
-        db.add(
-            models.Invoice(
-                customer_id=customer.id,
-                invoice_number=f"INV-SEED-{i:04d}",
-                amount=round(random.uniform(500, 8000), 2),
-                status=status,
-                due_date=due,
-            )
-        )
+    # B2 DATA
+    cat_b2 = models.Category(category_name="Electronics", business_id=b2.id)
+    db.add(cat_b2)
+    db.flush()
+    
+    sup_b2 = models.Supplier(supplier_name="Tech Parts Inc", business_id=b2.id)
+    db.add(sup_b2)
+    db.flush()
+    
+    prod_b2 = models.Product(name="USB-C Cable", category_id=cat_b2.id, supplier_id=sup_b2.id, selling_price=15.0, business_id=b2.id)
+    db.add(prod_b2)
+    db.flush()
+    
+    db.add(models.Inventory(product_id=prod_b2.id, quantity_available=500, reorder_level=50))
+    
+    cust_b2 = models.Customer(full_name="Alice Smith", business_id=b2.id)
+    db.add(cust_b2)
+    db.flush()
+    
+    sale_b2 = models.Sale(business_id=b2.id, customer_id=cust_b2.id, total_amount=30.0)
+    db.add(sale_b2)
+    db.flush()
+    db.add(models.SaleItem(sale_id=sale_b2.id, product_id=prod_b2.id, quantity=2, unit_price=15.0, total=30.0))
 
     db.commit()

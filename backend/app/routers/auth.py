@@ -1,5 +1,6 @@
+import datetime as dt
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .. import models, schemas
 from ..database import get_db
@@ -14,7 +15,6 @@ router = APIRouter(
     prefix="/api/auth",
     tags=["Authentication"],
 )
-
 
 @router.post(
     "/register",
@@ -36,20 +36,35 @@ def register(
             status_code=400,
             detail="Email already registered",
         )
+        
+    # Public registration always creates a new business and owner
+    role = db.query(models.Role).filter(models.Role.role_name == "business_owner").first()
+    if not role:
+        raise HTTPException(
+            status_code=500,
+            detail="Role 'business_owner' not found in database.",
+        )
+
+    business = models.Business(company_name=payload.company_name)
+    db.add(business)
+    db.flush()
 
     user = models.User(
-        full_name=payload.name,
+        full_name=payload.full_name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role_id=role.id,
+        business_id=business.id,
     )
 
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # Eager load role and business for response
+    user = db.query(models.User).options(joinedload(models.User.role), joinedload(models.User.business)).filter(models.User.id == user.id).first()
 
     return user
-
 
 @router.post("/login", response_model=schemas.Token)
 def login(
@@ -58,6 +73,7 @@ def login(
 ):
     user = (
         db.query(models.User)
+        .options(joinedload(models.User.role), joinedload(models.User.business))
         .filter(models.User.email == payload.email)
         .first()
     )
@@ -70,11 +86,15 @@ def login(
             status_code=401,
             detail="Incorrect email or password",
         )
+        
+    # Update last_login
+    user.last_login = dt.datetime.utcnow()
+    db.commit()
 
     token = create_access_token(
         {
             "sub": str(user.id),
-            "role": user.role.value,
+            "role": user.role.role_name,
         }
     )
 
@@ -83,7 +103,6 @@ def login(
         "token_type": "bearer",
         "user": user,
     }
-
 
 @router.get("/me", response_model=schemas.UserOut)
 def me(

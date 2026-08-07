@@ -11,7 +11,7 @@ export default function Customers() {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState(null)
   const [uploadMsg, setUploadMsg] = useState(null)
-  const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', phone: '', address: '', gender: '' })
 
   const load = useCallback(() => {
     setLoading(true)
@@ -44,7 +44,7 @@ export default function Customers() {
     try {
       await api.post('/customers/', form)
       setShowForm(false)
-      setForm({ name: '', email: '', phone: '' })
+      setForm({ full_name: '', email: '', phone: '', address: '', gender: '' })
       load()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not create customer.')
@@ -80,8 +80,8 @@ export default function Customers() {
           <ErrorBanner message={error} />
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
             <div>
-              <label className="text-xs font-medium text-slate-600">Name</label>
-              <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <label className="text-xs font-medium text-slate-600">Full Name</label>
+              <input className="input mt-1" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Email</label>
@@ -91,7 +91,16 @@ export default function Customers() {
               <label className="text-xs font-medium text-slate-600">Phone</label>
               <input className="input mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
-            <button type="submit" className="btn-primary col-span-2 md:col-span-1">Save Customer</button>
+            <div>
+              <label className="text-xs font-medium text-slate-600">Gender</label>
+              <select className="input mt-1" value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <button type="submit" className="btn-primary md:col-span-1">Save Customer</button>
           </form>
         </div>
       )}
@@ -112,7 +121,7 @@ export default function Customers() {
             <tbody>
               {customers.map((c) => (
                 <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-2 pr-4 font-medium text-slate-800">{c.name}</td>
+                  <td className="py-2 pr-4 font-medium text-slate-800">{c.full_name}</td>
                   <td className="py-2 pr-4 text-slate-500">{c.email || '—'}</td>
                   <td className="py-2 pr-4 text-slate-500">{c.phone || '—'}</td>
                   <td className="py-2 pr-4 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>

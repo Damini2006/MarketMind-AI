@@ -4,12 +4,7 @@ import { FiEye, FiEyeOff } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext.jsx";
 import { ErrorBanner } from "../components/ui.jsx";
 
-const ROLES = [
-  { value: "business_owner", label: "Business Owner" },
-  { value: "store_manager", label: "Store Manager" },
-  { value: "sales_executive", label: "Sales Executive" },
-  { value: "admin", label: "System Administrator" },
-];
+
 
 export default function Login() {
   const { login, loading, error } = useAuth();
@@ -17,13 +12,13 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("sales_executive");
+
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    const ok = await login(email, password, role);
+    const ok = await login(email, password);
 
     if (ok) {
       navigate("/dashboard");
@@ -127,24 +122,7 @@ export default function Login() {
             </div>
 
 
-            {/* Role Dropdown */}
-            <div>
-              <label className="block mb-2 text-sm font-semibold text-slate-700">
-                Role
-              </label>
 
-              <select
-                className="input"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
 
 
             {/* Button */}

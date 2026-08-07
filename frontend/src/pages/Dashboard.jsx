@@ -20,7 +20,7 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={`Welcome back, ${user?.full_name?.split(' ')[0] || ''}`}
+        title={`Welcome back, ${user?.full_name || ''}`}
         subtitle="Here's how your business is performing today."
       />
 

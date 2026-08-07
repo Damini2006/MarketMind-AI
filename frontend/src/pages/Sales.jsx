@@ -11,7 +11,7 @@ export default function Sales() {
   const [showForm, setShowForm] = useState(false)
   const [uploadMsg, setUploadMsg] = useState(null)
   const [error, setError] = useState(null)
-  const [form, setForm] = useState({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
+  const [form, setForm] = useState({ product_id: '', customer_name: '', quantity: 1, unit_price: '' })
 
   const load = useCallback(() => {
     setLoading(true)
@@ -29,7 +29,7 @@ export default function Sales() {
   const handleProductChange = (e) => {
     const pid = e.target.value
     const product = products.find((p) => String(p.id) === pid)
-    setForm({ ...form, product_id: pid, unit_price: product ? product.price : '' })
+    setForm({ ...form, product_id: pid, unit_price: product ? product.selling_price : '' })
   }
 
   const handleSubmit = async (e) => {
@@ -37,13 +37,19 @@ export default function Sales() {
     setError(null)
     try {
       await api.post('/sales/', {
-        product_id: form.product_id ? Number(form.product_id) : null,
-        customer_id: form.customer_id ? Number(form.customer_id) : null,
-        quantity: Number(form.quantity),
-        unit_price: Number(form.unit_price),
+        customer_name: form.customer_name ? form.customer_name.trim() : null,
+        payment_method: 'cash',
+        items: [
+          {
+            product_id: form.product_id ? Number(form.product_id) : null,
+            quantity: Number(form.quantity),
+            unit_price: Number(form.unit_price),
+            discount: 0
+          }
+        ]
       })
       setShowForm(false)
-      setForm({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
+      setForm({ product_id: '', customer_name: '', quantity: 1, unit_price: '' })
       load()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not record sale.')
@@ -100,11 +106,11 @@ export default function Sales() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Customer</label>
-              <select className="input mt-1" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}>
-                <option value="">Walk-in / none</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label className="text-xs font-medium text-slate-600">Customer (optional)</label>
+              <input type="text" list="customer-list" className="input mt-1" placeholder="Type a name..." value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
+              <datalist id="customer-list">
+                {customers.map((c) => <option key={c.id} value={c.full_name} />)}
+              </datalist>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Quantity</label>
@@ -126,29 +132,31 @@ export default function Sales() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
+                <th className="py-2 pr-4">Invoice</th>
                 <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Product</th>
+                <th className="py-2 pr-4">Items</th>
                 <th className="py-2 pr-4">Customer</th>
-                <th className="py-2 pr-4">Qty</th>
-                <th className="py-2 pr-4">Unit Price</th>
                 <th className="py-2 pr-4">Total</th>
-                <th className="py-2 pr-4">Source</th>
+                <th className="py-2 pr-4">Status</th>
               </tr>
             </thead>
             <tbody>
               {sales.slice(0, 100).map((s) => {
-                const product = products.find((p) => p.id === s.product_id)
                 const customer = customers.find((c) => c.id === s.customer_id)
+                const itemsStr = s.sale_items?.map(i => {
+                  const p = products.find(pr => pr.id === i.product_id)
+                  return `${p?.name || 'Item'} (x${i.quantity})`
+                }).join(', ') || 'No items'
+                
                 return (
                   <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-2 pr-4 font-medium text-slate-800">{s.invoice_number}</td>
                     <td className="py-2 pr-4 text-slate-500">{new Date(s.sale_date).toLocaleDateString()}</td>
-                    <td className="py-2 pr-4 font-medium text-slate-800">{product?.name || `#${s.product_id}`}</td>
-                    <td className="py-2 pr-4">{customer?.name || '—'}</td>
-                    <td className="py-2 pr-4">{s.quantity}</td>
-                    <td className="py-2 pr-4">₹{s.unit_price.toLocaleString('en-IN')}</td>
-                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount.toLocaleString('en-IN')}</td>
+                    <td className="py-2 pr-4 text-slate-600 max-w-xs truncate" title={itemsStr}>{itemsStr}</td>
+                    <td className="py-2 pr-4">{customer ? customer.full_name : '—'}</td>
+                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount?.toLocaleString('en-IN') || 0}</td>
                     <td className="py-2 pr-4">
-                      <Badge tone={s.source === 'csv_upload' ? 'blue' : s.source === 'seed' ? 'slate' : 'green'}>{s.source}</Badge>
+                      <Badge tone={s.payment_status === 'completed' ? 'green' : 'amber'}>{s.payment_status}</Badge>
                     </td>
                   </tr>
                 )

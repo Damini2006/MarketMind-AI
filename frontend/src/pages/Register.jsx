@@ -4,12 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { ErrorBanner } from "../components/ui";
 
-const ROLES = [
-  { value: "business_owner", label: "Business Owner" },
-  { value: "store_manager", label: "Store Manager" },
-  { value: "sales_executive", label: "Sales Executive" },
-  { value: "admin", label: "System Administrator" },
-];
+
 
 export default function Register() {
   const { register, loading, error } = useAuth();
@@ -18,10 +13,10 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [form, setForm] = useState({
-    name: "",
+    company_name: "",
+    full_name: "",
     email: "",
     password: "",
-    role: "sales_executive",
   });
 
   const [success, setSuccess] = useState(false);
@@ -65,12 +60,21 @@ export default function Register() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label>Full Name</label>
-
+            <label>Company Name</label>
             <input
               className="input mt-1"
-              name="name"
-              value={form.name}
+              name="company_name"
+              value={form.company_name}
+              onChange={handleChange}
+              required
+            />
+          </div>
+          <div>
+            <label>Full Name</label>
+            <input
+              className="input mt-1"
+              name="full_name"
+              value={form.full_name}
               onChange={handleChange}
               required
             />
@@ -112,22 +116,7 @@ export default function Register() {
             </div>
           </div>
 
-          <div>
-            <label>Role</label>
 
-            <select
-              className="input mt-1"
-              name="role"
-              value={form.role}
-              onChange={handleChange}
-            >
-              {ROLES.map((role) => (
-                <option key={role.value} value={role.value}>
-                  {role.label}
-                </option>
-              ))}
-            </select>
-          </div>
 
           <button className="btn-primary w-full" disabled={loading}>
             {loading ? "Creating..." : "Create account"}

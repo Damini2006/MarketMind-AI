@@ -14,11 +14,15 @@ import Segmentation from './pages/Segmentation.jsx'
 import Churn from './pages/Churn.jsx'
 import Recommendations from './pages/Recommendations.jsx'
 import Anomalies from './pages/Anomalies.jsx'
+import Categories from './pages/Categories.jsx'
+import Suppliers from './pages/Suppliers.jsx'
+import Team from './pages/Team.jsx'
+import Datasets from './pages/Datasets.jsx'
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  if (allowedRoles && (!user.role || !allowedRoles.includes(user.role.role_name))) {
     return <Navigate to="/dashboard" replace />
   }
   return children
@@ -46,6 +50,19 @@ export default function App() {
         <Route path="inventory" element={<Inventory />} />
         <Route path="invoices" element={<Invoices />} />
         <Route path="customers" element={<Customers />} />
+        <Route path="categories" element={<Categories />} />
+        <Route path="suppliers" element={<Suppliers />} />
+        <Route path="datasets" element={<Datasets />} />
+        
+        <Route
+          path="team"
+          element={
+            <ProtectedRoute allowedRoles={['business_owner', 'admin']}>
+              <Team />
+            </ProtectedRoute>
+          }
+        />
+        
         <Route
           path="forecasting"
           element={

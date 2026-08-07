@@ -10,12 +10,25 @@ export default function Inventory() {
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState(null)
   const [uploadMsg, setUploadMsg] = useState(null)
-  const [form, setForm] = useState({ name: '', category: '', price: '', stock_quantity: 0, reorder_threshold: 10, warehouse_location: '' })
+  const [form, setForm] = useState({ name: '', selling_price: '', purchase_price: '', stock_quantity: 0, reorder_level: 10, warehouse_location: '' })
 
   const load = useCallback(() => {
     setLoading(true)
-    Promise.all([api.get('/inventory/products'), api.get('/inventory/alerts')])
-      .then(([p, a]) => { setProducts(p.data); setAlerts(a.data) })
+    Promise.all([api.get('/inventory/products'), api.get('/inventory/stock'), api.get('/inventory/alerts')])
+      .then(([pRes, sRes, aRes]) => {
+        const stockMap = sRes.data.reduce((acc, s) => {
+          acc[s.product_id] = s;
+          return acc;
+        }, {});
+        
+        const merged = pRes.data.map(p => ({
+          ...p,
+          inventory: stockMap[p.id] || { quantity_available: 0, reorder_level: 0, warehouse_location: null }
+        }));
+        
+        setProducts(merged)
+        setAlerts(aRes.data)
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -43,12 +56,13 @@ export default function Inventory() {
     try {
       await api.post('/inventory/products', {
         ...form,
-        price: Number(form.price),
+        selling_price: Number(form.selling_price),
+        purchase_price: Number(form.purchase_price),
         stock_quantity: Number(form.stock_quantity),
-        reorder_threshold: Number(form.reorder_threshold),
+        reorder_level: Number(form.reorder_level),
       })
       setShowForm(false)
-      setForm({ name: '', category: '', price: '', stock_quantity: 0, reorder_threshold: 10, warehouse_location: '' })
+      setForm({ name: '', selling_price: '', purchase_price: '', stock_quantity: 0, reorder_level: 10, warehouse_location: '' })
       load()
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not create product.')
@@ -56,7 +70,7 @@ export default function Inventory() {
   }
 
   const adjustStock = async (productId, delta) => {
-    await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta })
+    await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta, transaction_type: delta > 0 ? 'IN' : 'OUT' })
     load()
   }
 
@@ -86,7 +100,7 @@ export default function Inventory() {
         <div className="card mb-6 border-amber-200 bg-amber-50/50">
           <h3 className="font-semibold text-amber-800 mb-2 text-sm">⚠️ Active Reorder Alerts</h3>
           <ul className="space-y-1 text-sm text-amber-700">
-            {alerts.map((a) => <li key={a.id}>• {a.message}</li>)}
+            {alerts.map((a) => <li key={a.id}>• {a.title}: {a.description}</li>)}
           </ul>
         </div>
       )}
@@ -100,23 +114,23 @@ export default function Inventory() {
               <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Category</label>
-              <input className="input mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <label className="text-xs font-medium text-slate-600">Selling Price (₹)</label>
+              <input type="number" step="0.01" className="input mt-1" value={form.selling_price} onChange={(e) => setForm({ ...form, selling_price: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Price (₹)</label>
-              <input type="number" step="0.01" className="input mt-1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required />
+              <label className="text-xs font-medium text-slate-600">Purchase Price (₹)</label>
+              <input type="number" step="0.01" className="input mt-1" value={form.purchase_price} onChange={(e) => setForm({ ...form, purchase_price: e.target.value })} />
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600">Initial Stock</label>
               <input type="number" className="input mt-1" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Reorder Threshold</label>
-              <input type="number" className="input mt-1" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: e.target.value })} />
+              <label className="text-xs font-medium text-slate-600">Reorder Level</label>
+              <input type="number" className="input mt-1" value={form.reorder_level} onChange={(e) => setForm({ ...form, reorder_level: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Warehouse</label>
+              <label className="text-xs font-medium text-slate-600">Warehouse Location</label>
               <input className="input mt-1" value={form.warehouse_location} onChange={(e) => setForm({ ...form, warehouse_location: e.target.value })} />
             </div>
             <button type="submit" className="btn-primary col-span-2 md:col-span-1">Save Product</button>
@@ -132,8 +146,7 @@ export default function Inventory() {
             <thead>
               <tr className="text-left text-slate-500 border-b border-slate-200">
                 <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Category</th>
-                <th className="py-2 pr-4">Price</th>
+                <th className="py-2 pr-4">Selling Price</th>
                 <th className="py-2 pr-4">Stock</th>
                 <th className="py-2 pr-4">Warehouse</th>
                 <th className="py-2 pr-4">Status</th>
@@ -144,14 +157,13 @@ export default function Inventory() {
               {products.map((p) => (
                 <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-2 pr-4 font-medium text-slate-800">{p.name}</td>
-                  <td className="py-2 pr-4 text-slate-500">{p.category || '—'}</td>
-                  <td className="py-2 pr-4">₹{p.price.toLocaleString('en-IN')}</td>
-                  <td className="py-2 pr-4">{p.stock_quantity}</td>
-                  <td className="py-2 pr-4 text-slate-500">{p.warehouse_location || '—'}</td>
+                  <td className="py-2 pr-4">₹{p.selling_price.toLocaleString('en-IN')}</td>
+                  <td className="py-2 pr-4">{p.inventory.quantity_available}</td>
+                  <td className="py-2 pr-4 text-slate-500">{p.inventory.warehouse_location || '—'}</td>
                   <td className="py-2 pr-4">
-                    {p.stock_quantity === 0 ? (
+                    {p.inventory.quantity_available === 0 ? (
                       <Badge tone="red">Out of stock</Badge>
-                    ) : p.stock_quantity <= p.reorder_threshold ? (
+                    ) : p.inventory.quantity_available <= p.inventory.reorder_level ? (
                       <Badge tone="amber">Low stock</Badge>
                     ) : (
                       <Badge tone="green">In stock</Badge>
