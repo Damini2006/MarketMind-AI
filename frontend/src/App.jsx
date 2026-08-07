@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext.jsx'
+import LandingPage from './pages/LandingPage';
 import Layout from './components/Layout.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
@@ -30,35 +31,37 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Public Routes */}
+      {/* Public Landing Page */}
+      <Route path="/" element={<LandingPage />} />
+
+      {/* Public Auth Routes */}
       <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
       <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
 
-      {/* Protected Routes inside Layout */}
+      {/* Protected Dashboard App Routes */}
       <Route
-        path="/"
         element={
           <ProtectedRoute>
             <Layout />
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="sales" element={<Sales />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="invoices" element={<Invoices />} />
-        <Route path="customers" element={<Customers />} />
-        <Route path="forecasting" element={<Forecasting />} />
-        <Route path="segmentation" element={<Segmentation />} />
-        <Route path="churn" element={<Churn />} />
-        <Route path="recommendations" element={<Recommendations />} />
-        <Route path="anomalies" element={<Anomalies />} />
-        <Route path="settings" element={<Settings />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/sales" element={<Sales />} />
+        <Route path="/inventory" element={<Inventory />} />
+        <Route path="/invoices" element={<Invoices />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/forecasting" element={<Forecasting />} />
+        <Route path="/segmentation" element={<Segmentation />} />
+        <Route path="/churn" element={<Churn />} />
+        <Route path="/recommendations" element={<Recommendations />} />
+        <Route path="/anomalies" element={<Anomalies />} />
+        <Route path="/settings" element={<Settings />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Catch-all Wildcard Route */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
