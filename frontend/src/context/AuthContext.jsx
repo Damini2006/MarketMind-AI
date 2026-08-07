@@ -1,9 +1,12 @@
 import { createContext, useContext, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate();
+
   const [user, setUserState] = useState(() => {
     const raw = localStorage.getItem("marketmind_user");
     return raw ? JSON.parse(raw) : null;
@@ -72,7 +75,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("marketmind_token");
     localStorage.removeItem("marketmind_user");
     setUser(null);
-  }, [setUser]);
+    navigate("/"); // Redirects directly to landing page
+  }, [setUser, navigate]);
 
   const hasRole = useCallback(
     (...roles) => !!user && roles.includes(user.role),

@@ -15,20 +15,24 @@ export default function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     const ok = await login(email, password, rememberMe);
-
     if (ok) {
       navigate("/dashboard");
     }
   };
 
+  const togglePasswordVisibility = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowPassword((prev) => !prev);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#2e2b8f] p-4 md:p-6 font-sans">
-      <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white rounded-3xl shadow-2xl overflow-hidden border border-white/10">
+    <div className="min-h-screen flex items-center justify-center bg-[#2e2b8f] dark:bg-slate-950 p-4 md:p-6 font-sans transition-colors duration-300">
+      <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/10 dark:border-slate-800 transition-colors duration-300">
         
         {/* Branding Panel */}
-        <div className="hidden md:flex md:col-span-5 flex-col justify-between bg-[#2e2b8f] text-white p-10 relative overflow-hidden">
+        <div className="hidden md:flex md:col-span-5 flex-col justify-between bg-[#2e2b8f] dark:bg-slate-900 text-white p-10 relative overflow-hidden dark:border-r dark:border-slate-800">
           <div className="relative z-10">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-brand-200 text-xs font-semibold mb-6">
               <Sparkles size={14} className="text-amber-400" />
@@ -37,21 +41,21 @@ export default function Login() {
             <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3 leading-tight">
               MarketMind AI
             </h1>
-            <p className="text-slate-300 text-sm leading-relaxed">
+            <p className="text-slate-300 dark:text-slate-400 text-sm leading-relaxed">
               AI-powered sales intelligence platform designed for retail stores, supermarkets, and small businesses.
             </p>
           </div>
 
           <div className="relative z-10 space-y-3">
-            <div className="flex items-center gap-2 text-xs text-slate-300">
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
               <CheckCircle2 size={16} className="text-emerald-400" />
               <span>Smart Sales Analytics</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
               <CheckCircle2 size={16} className="text-emerald-400" />
               <span>Inventory Management</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300">
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
               <CheckCircle2 size={16} className="text-emerald-400" />
               <span>Customer Insights & Reports</span>
             </div>
@@ -59,12 +63,12 @@ export default function Login() {
         </div>
 
         {/* Form Container */}
-        <div className="md:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white">
+        <div className="md:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="mb-6">
-            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
               Sign In
             </h2>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Enter your credentials to access your account.
             </p>
           </div>
@@ -75,15 +79,15 @@ export default function Login() {
             
             {/* Email */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Email Address
               </label>
               <div className="relative">
-                <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
                 <input
                   type="email"
                   required
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 focus:border-[#2e2b8f] transition-all"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -93,23 +97,23 @@ export default function Login() {
 
             {/* Password */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Password
               </label>
               <div className="relative">
-                <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 focus:border-[#2e2b8f] transition-all"
+                  className="w-full pl-10 pr-12 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none p-1 z-10"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -118,19 +122,19 @@ export default function Login() {
 
             {/* Remember Me & Forgot Password */}
             <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none font-medium">
+              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none font-medium">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-[#2e2b8f] focus:ring-[#2e2b8f]/20"
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-[#2e2b8f] dark:bg-slate-800 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30"
                 />
                 Remember me
               </label>
 
               <Link
                 to="/forgot-password"
-                className="text-xs text-[#2e2b8f] font-bold hover:underline"
+                className="text-xs text-[#2e2b8f] dark:text-indigo-400 font-bold hover:underline"
               >
                 Forgot password?
               </Link>
@@ -140,7 +144,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3 px-4 bg-[#2e2b8f] hover:bg-[#252275] active:bg-[#1d1a5c] text-white font-semibold rounded-xl text-sm shadow-md shadow-[#2e2b8f]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full mt-2 py-3 px-4 bg-[#2e2b8f] hover:bg-[#252275] active:bg-[#1d1a5c] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:active:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-[#2e2b8f]/20 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <span>{loading ? "Signing in..." : "Sign In"}</span>
               {!loading && <ArrowRight size={16} />}
@@ -148,9 +152,9 @@ export default function Login() {
 
           </form>
 
-          <p className="text-center text-xs text-slate-500 mt-6">
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">
             New business?{" "}
-            <Link to="/register" className="text-[#2e2b8f] font-bold hover:underline">
+            <Link to="/register" className="text-[#2e2b8f] dark:text-indigo-400 font-bold hover:underline">
               Create an account
             </Link>
           </p>

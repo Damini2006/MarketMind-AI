@@ -1,7 +1,7 @@
-import  { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Plus, Upload } from 'lucide-react'
+import { Plus, Upload, Search, ArrowUpDown } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 
 export default function Customers() {
@@ -12,15 +12,19 @@ export default function Customers() {
   const [error, setError] = useState(null)
   const [uploadMsg, setUploadMsg] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  
+  const [search, setSearch] = useState('')
+  const [sortField, setSortField] = useState('name')
+  const [sortAsc, setSortAsc] = useState(true)
 
   const load = useCallback(() => {
-  api.get('/customers/')
-    .then((res) => setCustomers(res.data))
-    .catch((err) => {
-      setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
-    })
-    .finally(() => setLoading(false))
-}, [])
+    api.get('/customers/')
+      .then((res) => setCustomers(res.data))
+      .catch((err) => {
+        setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
+      })
+      .finally(() => setLoading(false))
+  }, [])
   useEffect(() => { load() }, [load])
 
   const canCreate = hasRole('business_owner', 'sales_executive', 'admin')
@@ -54,6 +58,26 @@ export default function Customers() {
     }
   }
 
+  const handleSort = (field) => {
+    if (sortField === field) setSortAsc(!sortAsc)
+    else {
+      setSortField(field)
+      setSortAsc(true)
+    }
+  }
+
+  const processedCustomers = customers
+    .filter((c) => 
+      c.name.toLowerCase().includes(search.toLowerCase()) || 
+      c.email?.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      let valA = a[sortField] || ''
+      let valB = b[sortField] || ''
+      if (sortAsc) return valA > valB ? 1 : -1
+      return valA < valB ? 1 : -1
+    })
+
   if (loading) return <Loading label="Loading customers..." />
 
   return (
@@ -64,12 +88,12 @@ export default function Customers() {
         action={
           canCreate && (
             <div className="flex gap-2">
-              <label className="btn-secondary cursor-pointer flex items-center gap-2">
-                <Upload size={16} /> Upload CSV
+              <label className="btn-secondary cursor-pointer flex items-center gap-2 text-xs">
+                <Upload size={14} /> Upload CSV
                 <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
               </label>
-              <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2">
-                <Plus size={16} /> Add Customer
+              <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2 text-xs">
+                <Plus size={14} /> Add Customer
               </button>
             </div>
           )
@@ -99,31 +123,50 @@ export default function Customers() {
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        {customers.length === 0 ? (
-          <EmptyState message="No customers yet." />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Email</th>
-                <th className="py-2 pr-4">Phone</th>
-                <th className="py-2 pr-4">Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-2 pr-4 font-medium text-slate-800">{c.name}</td>
-                  <td className="py-2 pr-4 text-slate-500">{c.email || '—'}</td>
-                  <td className="py-2 pr-4 text-slate-500">{c.phone || '—'}</td>
-                  <td className="py-2 pr-4 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="relative w-full max-w-xs">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search customers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input text-xs pl-8 py-1.5"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          {processedCustomers.length === 0 ? (
+            <EmptyState message="No customers found." />
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-slate-500 border-b border-slate-200">
+                  <th className="py-2 pr-4 cursor-pointer" onClick={() => handleSort('name')}>
+                    <div className="flex items-center gap-1">Name <ArrowUpDown size={12} /></div>
+                  </th>
+                  <th className="py-2 pr-4">Email</th>
+                  <th className="py-2 pr-4">Phone</th>
+                  <th className="py-2 pr-4 cursor-pointer" onClick={() => handleSort('created_at')}>
+                    <div className="flex items-center gap-1">Joined <ArrowUpDown size={12} /></div>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+              </thead>
+              <tbody>
+                {processedCustomers.map((c) => (
+                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-2 pr-4 font-medium text-slate-800">{c.name}</td>
+                    <td className="py-2 pr-4 text-slate-500">{c.email || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500">{c.phone || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   )

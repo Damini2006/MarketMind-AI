@@ -10,10 +10,30 @@ const TREND_TONE = { increasing: 'green', decreasing: 'red', stable: 'brand' }
 export default function Forecasting() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [horizon, setHorizon] = useState(14)
 
   useEffect(() => {
-    api.get('/ai/forecast?horizon_days=14').then((res) => setData(res.data)).finally(() => setLoading(false))
-  }, [])
+    let isMounted = true
+
+    api.get(`/ai/forecast?horizon_days=${horizon}`)
+      .then((res) => {
+        if (isMounted) setData(res.data)
+      })
+      .finally(() => {
+        if (isMounted) setLoading(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [horizon])
+
+  const handleHorizonChange = (days) => {
+    if (days !== horizon) {
+      setLoading(true)
+      setHorizon(days)
+    }
+  }
 
   if (loading) return <Loading label="Running forecasting model..." />
   if (!data || data.trend === 'insufficient_data') {
@@ -44,11 +64,31 @@ export default function Forecasting() {
       </div>
 
       <div className="card">
-        <h3 className="font-semibold text-slate-800 mb-4">Revenue: History vs. 14-Day Forecast</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-slate-800">Revenue: History vs. Forecast</h3>
+          
+          {/* Horizon Selection Buttons */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+            <span className="text-slate-400 px-1">Horizon:</span>
+            {[7, 14, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => handleHorizonChange(days)}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  horizon === days ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {days} Days
+              </button>
+            ))}
+          </div>
+        </div>
+
         <ResponsiveContainer width="100%" height={340}>
           <LineChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="period" tick={{ fontSize: 10 }} interval={6} />
+            <XAxis dataKey="period" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
             <Legend />
