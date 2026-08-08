@@ -95,25 +95,25 @@ export default function Sales() {
           <ErrorBanner message={error} />
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
             <div>
-              <label className="text-xs font-medium text-slate-600">Product</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Product</label>
               <select className="input mt-1" value={form.product_id} onChange={handleProductChange} required>
                 <option value="">Select product</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Customer</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Customer</label>
               <select className="input mt-1" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}>
                 <option value="">Walk-in / none</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Quantity</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Quantity</label>
               <input type="number" min="1" className="input mt-1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Unit Price (₹)</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Unit Price (₹)</label>
               <input type="number" step="0.01" className="input mt-1" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} required />
             </div>
             <button type="submit" className="btn-primary col-span-2 md:col-span-1">Record Sale</button>
@@ -127,7 +127,7 @@ export default function Sales() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
+              <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
                 <th className="py-2 pr-4">Date</th>
                 <th className="py-2 pr-4">Product</th>
                 <th className="py-2 pr-4">Customer</th>
@@ -142,9 +142,9 @@ export default function Sales() {
                 const product = products.find((p) => p.id === s.product_id)
                 const customer = customers.find((c) => c.id === s.customer_id)
                 return (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2 pr-4 text-slate-500">{new Date(s.sale_date).toLocaleDateString()}</td>
-                    <td className="py-2 pr-4 font-medium text-slate-800">{product?.name || `#${s.product_id}`}</td>
+                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(s.sale_date).toLocaleDateString()}</td>
+                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{product?.name || `#${s.product_id}`}</td>
                     <td className="py-2 pr-4">{customer?.name || '—'}</td>
                     <td className="py-2 pr-4">{s.quantity}</td>
                     <td className="py-2 pr-4">₹{s.unit_price.toLocaleString('en-IN')}</td>

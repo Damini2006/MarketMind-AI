@@ -45,12 +45,12 @@ export default function Churn() {
 
       <div className="card">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
-          <h3 className="font-semibold text-slate-800">Customer Churn Risk</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Customer Churn Risk</h3>
           
           <div className="flex flex-wrap items-center gap-2">
             {/* Search Bar */}
             <div className="relative flex-1 sm:w-48">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 placeholder="Search..."
@@ -61,13 +61,13 @@ export default function Churn() {
             </div>
 
             {/* Filter Buttons */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium dark:bg-slate-800">
               {['All', 'High', 'Medium', 'Low'].map((level) => (
                 <button
                   key={level}
                   onClick={() => setRiskFilter(level)}
                   className={`px-2.5 py-1 rounded-md transition-all ${
-                    riskFilter === level ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                    riskFilter === level ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'
                   }`}
                 >
                   {level}
@@ -80,7 +80,7 @@ export default function Churn() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
+              <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
                 <th className="py-2 pr-4">Customer</th>
                 <th className="py-2 pr-4">Risk</th>
                 <th className="py-2 pr-4">Probability</th>
@@ -89,11 +89,11 @@ export default function Churn() {
             </thead>
             <tbody>
               {filteredRows.map((r) => (
-                <tr key={r.customer_id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-2 pr-4 font-medium text-slate-800">{r.customer_name}</td>
+                <tr key={r.customer_id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
+                  <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{r.customer_name}</td>
                   <td className="py-2 pr-4"><Badge tone={RISK_TONE[r.risk_category]}>{r.risk_category}</Badge></td>
                   <td className="py-2 pr-4">{(r.churn_probability * 100).toFixed(0)}%</td>
-                  <td className="py-2 pr-4 text-slate-500 max-w-md">{r.recommendation}</td>
+                  <td className="py-2 pr-4 text-slate-500 max-w-md dark:text-slate-400">{r.recommendation}</td>
                 </tr>
               ))}
             </tbody>

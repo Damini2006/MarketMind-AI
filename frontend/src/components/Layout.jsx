@@ -64,13 +64,13 @@ function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-2 z-50 max-h-80 overflow-y-auto">
+        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-2 z-50 max-h-80 overflow-y-auto">
           <p className="px-4 py-1 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase">Notifications</p>
           {alerts.length === 0 ? (
-            <p className="px-4 py-3 text-sm text-slate-400 dark:text-slate-500">No alerts right now.</p>
+            <p className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">No alerts right now.</p>
           ) : (
             alerts.map((a) => (
-              <div key={a.id} className="px-4 py-2 border-t border-slate-100 dark:border-slate-700/60 text-sm text-slate-600 dark:text-slate-300">
+              <div key={a.id} className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300">
                 {a.message}
               </div>
             ))
@@ -103,14 +103,14 @@ function ProfileMenu({ user, onLogout }) {
         <ChevronDown size={16} className="text-slate-400 dark:text-slate-500" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50">
-          <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+        <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-lg py-1 z-50">
+          <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
             <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{user?.full_name}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">{user?.email}</p>
           </div>
           <button
             onClick={() => { setOpen(false); navigate('/settings') }}
-            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             <Settings size={16} /> Settings
           </button>
@@ -133,7 +133,6 @@ export default function Layout() {
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
 
   const handleLogout = () => {
-    // AuthContext's logout() already navigates to "/" (the landing page).
     logout()
   }
 

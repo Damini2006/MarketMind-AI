@@ -23,21 +23,21 @@ router = APIRouter(
     tags=["Authentication"],
 )
 
-# --- Secure SMTP Email Configuration ---
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
-
 
 def send_email_otp(target_email: str, otp_code: str):
     """Utility function to deliver the 6-digit OTP code to the user's email inbox."""
-    if not SENDER_EMAIL or not SENDER_PASSWORD:
+    # Fetch environment variables dynamically inside the function
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    sender_email = os.getenv("SENDER_EMAIL")
+    sender_password = os.getenv("SENDER_PASSWORD")
+
+    if not sender_email or not sender_password:
         raise ValueError("SENDER_EMAIL or SENDER_PASSWORD environment variable is missing.")
 
     message = MIMEMultipart("alternative")
     message["Subject"] = "MarketMind AI - Your Password Reset OTP"
-    message["From"] = f"MarketMind AI <{SENDER_EMAIL}>"
+    message["From"] = f"MarketMind AI <{sender_email}>"
     message["To"] = target_email
 
     body_html = f"""
@@ -58,10 +58,10 @@ def send_email_otp(target_email: str, otp_code: str):
     message.attach(MIMEText(body_html, "html"))
 
     # Connect to Google SMTP server and send email
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
         server.starttls()
-        server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        server.sendmail(SENDER_EMAIL, target_email, message.as_string())
+        server.login(sender_email, sender_password)
+        server.sendmail(sender_email, target_email, message.as_string())
 
 
 # --- Request Schemas ---

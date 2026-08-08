@@ -3,11 +3,19 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import api from '../services/api'
 import { Loading, PageHeader, StatCard, EmptyState } from '../components/ui.jsx'
 import { TrendingUp, TrendingDown, Minus, Target } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext.jsx'
 
 const TREND_ICON = { increasing: TrendingUp, decreasing: TrendingDown, stable: Minus }
 const TREND_TONE = { increasing: 'green', decreasing: 'red', stable: 'brand' }
 
 export default function Forecasting() {
+  const { theme } = useTheme()
+  const isDark = theme === 'dark'
+  const axisColor = isDark ? '#94a3b8' : '#64748b'
+  const gridColor = isDark ? '#334155' : '#e2e8f0'
+  const tooltipStyle = isDark
+    ? { backgroundColor: '#1e293b', border: '1px solid #334155', color: '#e2e8f0' }
+    : undefined
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [horizon, setHorizon] = useState(14)
@@ -65,18 +73,18 @@ export default function Forecasting() {
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-slate-800">Revenue: History vs. Forecast</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Revenue: History vs. Forecast</h3>
           
           {/* Horizon Selection Buttons */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
-            <span className="text-slate-400 px-1">Horizon:</span>
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium dark:bg-slate-800">
+            <span className="text-slate-400 px-1 dark:text-slate-500">Horizon:</span>
             {[7, 14, 30].map((days) => (
               <button
                 key={days}
                 type="button"
                 onClick={() => handleHorizonChange(days)}
                 className={`px-2.5 py-1 rounded-md transition-all ${
-                  horizon === days ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                  horizon === days ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'
                 }`}
               >
                 {days} Days
@@ -87,11 +95,11 @@ export default function Forecasting() {
 
         <ResponsiveContainer width="100%" height={340}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-            <XAxis dataKey="period" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Legend />
+            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+            <XAxis dataKey="period" tick={{ fontSize: 10, fill: axisColor }} interval="preserveStartEnd" />
+            <YAxis tick={{ fontSize: 11, fill: axisColor }} />
+            <Tooltip contentStyle={tooltipStyle} labelStyle={isDark ? { color: '#e2e8f0' } : undefined} />
+            <Legend wrapperStyle={isDark ? { color: '#cbd5e1' } : undefined} />
             <Line type="monotone" dataKey="actual" name="Actual Revenue" stroke="#3b5bdb" strokeWidth={2} dot={false} connectNulls={false} />
             <Line type="monotone" dataKey="forecast" name="Forecasted Revenue" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls={false} />
           </LineChart>

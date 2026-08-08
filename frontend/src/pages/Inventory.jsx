@@ -104,9 +104,9 @@ export default function Inventory() {
       />
 
       {uploadMsg && (
-        <div className="mb-4 p-3 bg-slate-100 rounded-lg text-sm text-slate-700 flex justify-between items-center">
+        <div className="mb-4 p-3 bg-slate-100 rounded-lg text-sm text-slate-700 flex justify-between items-center dark:bg-slate-800 dark:text-slate-300">
           <span>{uploadMsg}</span>
-          <button onClick={() => setUploadMsg(null)} className="text-xs text-slate-500 hover:text-slate-700 font-medium">Dismiss</button>
+          <button onClick={() => setUploadMsg(null)} className="text-xs text-slate-500 hover:text-slate-700 font-medium dark:text-slate-400 dark:hover:text-slate-300">Dismiss</button>
         </div>
       )}
 
@@ -115,27 +115,27 @@ export default function Inventory() {
           <ErrorBanner message={error} />
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div>
-              <label className="text-xs font-medium text-slate-600">Product Name</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Product Name</label>
               <input type="text" className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Category</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Category</label>
               <input type="text" className="input mt-1" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Price (₹)</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Price (₹)</label>
               <input type="number" step="0.01" className="input mt-1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Initial Stock</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Initial Stock</label>
               <input type="number" className="input mt-1" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Reorder Threshold</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Reorder Threshold</label>
               <input type="number" className="input mt-1" value={form.reorder_threshold} onChange={(e) => setForm({ ...form, reorder_threshold: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Warehouse Location</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Warehouse Location</label>
               <input type="text" className="input mt-1" value={form.warehouse_location} onChange={(e) => setForm({ ...form, warehouse_location: e.target.value })} />
             </div>
             <div className="md:col-span-3 flex justify-end gap-2 mt-2">
@@ -163,7 +163,7 @@ export default function Inventory() {
       <div className="card">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mb-4">
           <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search products..."
@@ -173,11 +173,11 @@ export default function Inventory() {
             />
           </div>
 
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium dark:bg-slate-800">
             <button
               onClick={() => setStatusFilter('all')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                statusFilter === 'all' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                statusFilter === 'all' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'
               }`}
             >
               All
@@ -185,7 +185,7 @@ export default function Inventory() {
             <button
               onClick={() => setStatusFilter('low_stock')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                statusFilter === 'low_stock' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                statusFilter === 'low_stock' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'
               }`}
             >
               Low Stock
@@ -193,7 +193,7 @@ export default function Inventory() {
             <button
               onClick={() => setStatusFilter('in_stock')}
               className={`px-2.5 py-1 rounded-md transition-all ${
-                statusFilter === 'in_stock' ? 'bg-white text-slate-800 shadow-sm font-semibold' : 'text-slate-500 hover:text-slate-800'
+                statusFilter === 'in_stock' ? 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm font-semibold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100'
               }`}
             >
               In Stock
@@ -207,7 +207,7 @@ export default function Inventory() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200">
+                <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
                   <th className="py-2 pr-4">Name</th>
                   <th className="py-2 pr-4">Category</th>
                   <th className="py-2 pr-4">Price</th>
@@ -218,21 +218,21 @@ export default function Inventory() {
               </thead>
               <tbody>
                 {filteredProducts.map((prod) => (
-                  <tr key={prod.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <tr key={prod.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
                     <td className="py-2 pr-4 font-medium">{prod.name}</td>
-                    <td className="py-2 pr-4 text-slate-500">{prod.category || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.category || '—'}</td>
                     <td className="py-2 pr-4 font-semibold">₹{prod.price?.toLocaleString('en-IN')}</td>
                     <td className="py-2 pr-4">
                       <span className={prod.stock_quantity <= prod.reorder_threshold ? 'text-red-600 font-bold' : ''}>
                         {prod.stock_quantity}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-slate-500">{prod.warehouse_location || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.warehouse_location || '—'}</td>
                     <td className="py-2 pr-4 flex items-center gap-2">
-                      <button onClick={() => adjustStock(prod.id, 1)} title="Increase Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600">
+                      <button onClick={() => adjustStock(prod.id, 1)} title="Increase Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600 dark:text-slate-300">
                         <PackagePlus size={16} />
                       </button>
-                      <button onClick={() => adjustStock(prod.id, -1)} title="Decrease Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600">
+                      <button onClick={() => adjustStock(prod.id, -1)} title="Decrease Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600 dark:text-slate-300">
                         <PackageMinus size={16} />
                       </button>
                     </td>

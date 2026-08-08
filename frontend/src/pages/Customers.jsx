@@ -107,15 +107,15 @@ export default function Customers() {
           <ErrorBanner message={error} />
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
             <div>
-              <label className="text-xs font-medium text-slate-600">Name</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Name</label>
               <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Email</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Email</label>
               <input type="email" className="input mt-1" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Phone</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone</label>
               <input className="input mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             </div>
             <button type="submit" className="btn-primary col-span-2 md:col-span-1">Save Customer</button>
@@ -126,7 +126,7 @@ export default function Customers() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <div className="relative w-full max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
             <input
               type="text"
               placeholder="Search customers..."
@@ -143,7 +143,7 @@ export default function Customers() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200">
+                <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
                   <th className="py-2 pr-4 cursor-pointer" onClick={() => handleSort('name')}>
                     <div className="flex items-center gap-1">Name <ArrowUpDown size={12} /></div>
                   </th>
@@ -156,11 +156,11 @@ export default function Customers() {
               </thead>
               <tbody>
                 {processedCustomers.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2 pr-4 font-medium text-slate-800">{c.name}</td>
-                    <td className="py-2 pr-4 text-slate-500">{c.email || '—'}</td>
-                    <td className="py-2 pr-4 text-slate-500">{c.phone || '—'}</td>
-                    <td className="py-2 pr-4 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
+                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
+                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{c.name}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{c.email || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{c.phone || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(c.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>
