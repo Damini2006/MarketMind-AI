@@ -1,10 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FiEye, FiEyeOff } from "react-icons/fi";
+import { Mail, Lock, Sparkles, CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { ErrorBanner } from "../components/ui.jsx";
-
-
 
 export default function Login() {
   const { login, loading, error } = useAuth();
@@ -12,142 +10,154 @@ export default function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const ok = await login(email, password);
-
+    const ok = await login(email, password, rememberMe);
     if (ok) {
       navigate("/dashboard");
     }
   };
 
+  const togglePasswordVisibility = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowPassword((prev) => !prev);
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-brand-900 px-4">
-      <div className="w-full max-w-5xl grid md:grid-cols-2 bg-white rounded-2xl shadow-2xl overflow-hidden">
-
-        {/* Left Side */}
-        <div className="hidden md:flex flex-col justify-center bg-brand-900 text-white p-12">
-
-          <h1 className="text-5xl font-bold mb-6">
-            MarketMind AI
-          </h1>
-
-          <p className="text-brand-100 text-lg leading-8">
-            AI-powered sales intelligence platform designed for
-            retail stores, supermarkets and small businesses.
-
-            <br /><br />
-
-            Manage inventory, customers, invoices, sales,
-            analytics and business insights—all from one dashboard.
-          </p>
-
-          <div className="mt-10 space-y-4 text-lg">
-            <div>📊 Smart Sales Analytics</div>
-            <div>📦 Inventory Management</div>
-            <div>👥 Customer Management</div>
-            <div>📈 Business Insights</div>
+    <div className="min-h-screen flex items-center justify-center bg-[#2e2b8f] dark:bg-slate-950 p-4 md:p-6 font-sans transition-colors duration-300">
+      <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/10 dark:border-slate-800 transition-colors duration-300">
+        
+        {/* Branding Panel */}
+        <div className="hidden md:flex md:col-span-5 flex-col justify-between bg-[#2e2b8f] dark:bg-slate-900 text-white p-10 relative overflow-hidden dark:border-r dark:border-slate-800">
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-brand-200 text-xs font-semibold mb-6">
+              <Sparkles size={14} className="text-amber-400" />
+              <span>Welcome Back</span>
+            </div>
+            <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3 leading-tight">
+              MarketMind AI
+            </h1>
+            <p className="text-slate-300 dark:text-slate-400 text-sm leading-relaxed">
+              AI-powered sales intelligence platform designed for retail stores, supermarkets, and small businesses.
+            </p>
           </div>
 
+          <div className="relative z-10 space-y-3">
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span>Smart Sales Analytics</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span>Inventory Management</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
+              <CheckCircle2 size={16} className="text-emerald-400" />
+              <span>Customer Insights & Reports</span>
+            </div>
+          </div>
         </div>
 
-
-        {/* Right Side */}
-        <div className="p-10 flex flex-col justify-center">
-
-          <h2 className="text-4xl font-bold text-slate-900 mb-2">
-            Welcome back
-          </h2>
-
-          <p className="text-slate-500 mb-8">
-            Sign in to your account to continue.
-          </p>
+        {/* Form Container */}
+        <div className="md:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white dark:bg-slate-900 transition-colors duration-300">
+          <div className="mb-6">
+            <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+              Sign In
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              Enter your credentials to access your account.
+            </p>
+          </div>
 
           <ErrorBanner message={error} />
 
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
             {/* Email */}
             <div>
-              <label className="block mb-2 text-sm font-semibold text-slate-700">
-                Email
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                Email Address
               </label>
-
-              <input
-                type="email"
-                required
-                className="input"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <div className="relative">
+                <Mail size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                <input
+                  type="email"
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
             </div>
-
 
             {/* Password */}
             <div>
-              <label className="block mb-2 text-sm font-semibold text-slate-700">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                 Password
               </label>
-
               <div className="relative">
-
+                <Lock size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  className="input pr-10"
+                  className="w-full pl-10 pr-12 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 focus:outline-none p-1 z-10"
                 >
-                  {showPassword ? (
-                    <FiEyeOff size={20} />
-                  ) : (
-                    <FiEye size={20} />
-                  )}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
-
               </div>
             </div>
 
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none font-medium">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-[#2e2b8f] dark:bg-slate-800 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30"
+                />
+                Remember me
+              </label>
 
+              <Link
+                to="/forgot-password"
+                className="text-xs text-[#2e2b8f] dark:text-indigo-400 font-bold hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
-
-
-            {/* Button */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full flex justify-center"
+              className="w-full mt-2 py-3 px-4 bg-[#2e2b8f] hover:bg-[#252275] active:bg-[#1d1a5c] dark:bg-indigo-600 dark:hover:bg-indigo-500 dark:active:bg-indigo-700 text-white font-semibold rounded-xl text-sm shadow-md shadow-[#2e2b8f]/20 dark:shadow-none transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              {loading ? "Signing in..." : "Sign In"}
+              <span>{loading ? "Signing in..." : "Sign In"}</span>
+              {!loading && <ArrowRight size={16} />}
             </button>
-
 
           </form>
 
-
-          <p className="text-center text-slate-500 mt-8">
+          <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-6">
             New business?{" "}
-            <Link
-              to="/register"
-              className="text-brand-600 font-semibold hover:underline"
-            >
+            <Link to="/register" className="text-[#2e2b8f] dark:text-indigo-400 font-bold hover:underline">
               Create an account
             </Link>
           </p>
-
 
         </div>
       </div>

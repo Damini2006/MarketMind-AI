@@ -57,6 +57,10 @@ class User(Base):
     inventory_transactions = relationship("InventoryTransaction", back_populates="user")
     uploaded_datasets = relationship("UploadedDataset", back_populates="user")
 
+    # Password Reset OTP fields
+    reset_otp = Column(String, nullable=True)
+    reset_otp_expiry = Column(DateTime, nullable=True)
+
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -316,3 +320,15 @@ class ProductRecommendation(Base):
 
     customer = relationship("Customer", back_populates="recommendations")
     product = relationship("Product", back_populates="recommendations")
+
+
+class AnomalyAlert(Base):
+    __tablename__ = "anomaly_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String)  # sales | inventory | revenue
+    description = Column(Text)
+    severity = Column(String, default="medium")  # low | medium | high
+    score = Column(Float, default=0.0)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    related_id = Column(Integer, nullable=True)

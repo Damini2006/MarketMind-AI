@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
 import { Upload, Plus } from 'lucide-react'
@@ -14,12 +14,14 @@ export default function Sales() {
   const [form, setForm] = useState({ product_id: '', customer_name: '', quantity: 1, unit_price: '' })
 
   const load = useCallback(() => {
-    setLoading(true)
     Promise.all([api.get('/sales/'), api.get('/inventory/products'), api.get('/customers/')])
       .then(([s, p, c]) => {
         setSales(s.data)
         setProducts(p.data)
         setCustomers(c.data)
+      })
+      .catch((err) => {
+        setError(err.response?.data?.detail || err.message || 'Failed to load sales data.')
       })
       .finally(() => setLoading(false))
   }, [])
@@ -29,7 +31,7 @@ export default function Sales() {
   const handleProductChange = (e) => {
     const pid = e.target.value
     const product = products.find((p) => String(p.id) === pid)
-    setForm({ ...form, product_id: pid, unit_price: product ? product.selling_price : '' })
+    setForm({ ...form, product_id: pid, unit_price: product ? product.price : '' })
   }
 
   const handleSubmit = async (e) => {
@@ -37,16 +39,10 @@ export default function Sales() {
     setError(null)
     try {
       await api.post('/sales/', {
-        customer_name: form.customer_name ? form.customer_name.trim() : null,
-        payment_method: 'cash',
-        items: [
-          {
-            product_id: form.product_id ? Number(form.product_id) : null,
-            quantity: Number(form.quantity),
-            unit_price: Number(form.unit_price),
-            discount: 0
-          }
-        ]
+        product_id: form.product_id ? Number(form.product_id) : null,
+        customer_id: form.customer_id ? Number(form.customer_id) : null,
+        quantity: Number(form.quantity),
+        unit_price: Number(form.unit_price),
       })
       setShowForm(false)
       setForm({ product_id: '', customer_name: '', quantity: 1, unit_price: '' })
@@ -99,25 +95,25 @@ export default function Sales() {
           <ErrorBanner message={error} />
           <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
             <div>
-              <label className="text-xs font-medium text-slate-600">Product</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Product</label>
               <select className="input mt-1" value={form.product_id} onChange={handleProductChange} required>
                 <option value="">Select product</option>
                 {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Customer (optional)</label>
-              <input type="text" list="customer-list" className="input mt-1" placeholder="Type a name..." value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })} />
-              <datalist id="customer-list">
-                {customers.map((c) => <option key={c.id} value={c.full_name} />)}
-              </datalist>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Customer</label>
+              <select className="input mt-1" value={form.customer_name} onChange={(e) => setForm({ ...form, customer_name: e.target.value })}>
+                <option value="">Walk-in / none</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.full_name}</option>)}
+              </select>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Quantity</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Quantity</label>
               <input type="number" min="1" className="input mt-1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} required />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600">Unit Price (₹)</label>
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Unit Price (₹)</label>
               <input type="number" step="0.01" className="input mt-1" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} required />
             </div>
             <button type="submit" className="btn-primary col-span-2 md:col-span-1">Record Sale</button>
@@ -131,32 +127,30 @@ export default function Sales() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200">
-                <th className="py-2 pr-4">Invoice</th>
+              <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
                 <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Items</th>
+                <th className="py-2 pr-4">Product</th>
                 <th className="py-2 pr-4">Customer</th>
+                <th className="py-2 pr-4">Qty</th>
+                <th className="py-2 pr-4">Unit Price</th>
                 <th className="py-2 pr-4">Total</th>
-                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4">Source</th>
               </tr>
             </thead>
             <tbody>
               {sales.slice(0, 100).map((s) => {
+                const product = products.find((p) => p.id === s.product_id)
                 const customer = customers.find((c) => c.id === s.customer_id)
-                const itemsStr = s.sale_items?.map(i => {
-                  const p = products.find(pr => pr.id === i.product_id)
-                  return `${p?.name || 'Item'} (x${i.quantity})`
-                }).join(', ') || 'No items'
-                
                 return (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2 pr-4 font-medium text-slate-800">{s.invoice_number}</td>
-                    <td className="py-2 pr-4 text-slate-500">{new Date(s.sale_date).toLocaleDateString()}</td>
-                    <td className="py-2 pr-4 text-slate-600 max-w-xs truncate" title={itemsStr}>{itemsStr}</td>
-                    <td className="py-2 pr-4">{customer ? customer.full_name : '—'}</td>
-                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount?.toLocaleString('en-IN') || 0}</td>
+                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(s.sale_date).toLocaleDateString()}</td>
+                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{product?.name || `#${s.product_id}`}</td>
+                    <td className="py-2 pr-4">{customer?.full_name || '—'}</td>
+                    <td className="py-2 pr-4">{s.quantity}</td>
+                    <td className="py-2 pr-4">₹{s.unit_price.toLocaleString('en-IN')}</td>
+                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount.toLocaleString('en-IN')}</td>
                     <td className="py-2 pr-4">
-                      <Badge tone={s.payment_status === 'completed' ? 'green' : 'amber'}>{s.payment_status}</Badge>
+                      <Badge tone={s.source === 'csv_upload' ? 'blue' : s.source === 'seed' ? 'slate' : 'green'}>{s.source}</Badge>
                     </td>
                   </tr>
                 )
