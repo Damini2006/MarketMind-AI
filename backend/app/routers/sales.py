@@ -220,6 +220,16 @@ def upload_sales_csv(
             
             sale.subtotal = subtotal
             sale.total_amount = subtotal
+            
+            # Auto-create invoice for this sale
+            invoice = models.Invoice(
+                sale_id=sale.id,
+                invoice_number=str(inv_num),
+                invoice_status="paid" if sale.payment_status == "completed" else "pending",
+                payment_date=sale_date if sale.payment_status == "completed" else None
+            )
+            db.add(invoice)
+            
             created += 1
         except Exception:
             skipped += len(group)

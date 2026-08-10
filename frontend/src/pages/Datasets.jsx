@@ -39,11 +39,11 @@ export default function Datasets() {
             <tbody>
               {datasets.map((d) => (
                 <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="py-2 font-medium">{d.dataset_name}</td>
+                  <td className="py-2 font-medium">{d.file_name}</td>
                   <td className="py-2">
-                    <Badge tone="blue">{d.dataset_type}</Badge>
+                    <Badge tone="blue">{d.file_name?.toLowerCase().includes('sale') ? 'Sales' : 'Inventory'}</Badge>
                   </td>
-                  <td className="py-2">{d.rows_count}</td>
+                  <td className="py-2">{d.total_records || '—'}</td>
                   <td className="py-2 text-slate-500">{new Date(d.upload_date).toLocaleString()}</td>
                 </tr>
               ))}

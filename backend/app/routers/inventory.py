@@ -181,9 +181,22 @@ def upload_products_csv(
         stock_qty = int(row["stock_quantity"]) if "stock_quantity" in df.columns and pd.notna(row.get("stock_quantity")) else 0
         reorder = int(row["reorder_level"]) if "reorder_level" in df.columns and pd.notna(row.get("reorder_level")) else 10
 
+        category_id = None
+        if "category_name" in df.columns and pd.notna(row.get("category_name")):
+            cat_name = str(row["category_name"]).strip()
+            if cat_name:
+                category = db.query(models.Category).filter(models.Category.category_name == cat_name, models.Category.business_id == current_user.business_id).first()
+                if not category:
+                    category = models.Category(category_name=cat_name, business_id=current_user.business_id)
+                    db.add(category)
+                    db.flush()
+                category_id = category.id
+
         existing = db.query(models.Product).filter(models.Product.name == name, models.Product.business_id == current_user.business_id).first()
         if existing:
             existing.selling_price = float(row["selling_price"])
+            if category_id:
+                existing.category_id = category_id
             if "purchase_price" in df.columns and pd.notna(row.get("purchase_price")):
                 existing.purchase_price = float(row["purchase_price"])
                 
@@ -200,6 +213,7 @@ def upload_products_csv(
             product = models.Product(
                 name=name,
                 business_id=current_user.business_id,
+                category_id=category_id,
                 selling_price=float(row["selling_price"]),
                 purchase_price=float(row["purchase_price"]) if "purchase_price" in df.columns and pd.notna(row.get("purchase_price")) else 0.0,
             )

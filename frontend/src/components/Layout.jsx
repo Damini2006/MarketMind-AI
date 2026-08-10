@@ -75,7 +75,8 @@ function NotificationBell() {
           ) : (
             alerts.map((a) => (
               <div key={a.id} className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 text-sm text-slate-600 dark:text-slate-300">
-                {a.message}
+                <p className="font-semibold">{a.title}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{a.description}</p>
               </div>
             ))
           )}
