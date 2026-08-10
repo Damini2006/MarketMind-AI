@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, Sparkles, CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Sparkles, CheckCircle2, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { ErrorBanner } from "../components/ui.jsx";
+import AnimateShape from "../components/AnimateShape.jsx"; // Import the 3D visual component
 
 export default function Login() {
   const { login, loading, error } = useAuth();
@@ -28,35 +29,58 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#2e2b8f] dark:bg-slate-950 p-4 md:p-6 font-sans transition-colors duration-300">
-      <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/10 dark:border-slate-800 transition-colors duration-300">
+    <div className="min-h-screen flex flex-col items-center justify-between bg-[#2e2b8f] dark:bg-slate-950 p-4 md:p-6 font-sans transition-colors duration-300 relative overflow-hidden">
+      
+      {/* Background Page Glows & Grid Pattern */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.07] bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
+        <div className="absolute -top-[30%] -left-[10%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-br from-indigo-400/30 via-purple-500/20 to-transparent blur-[120px] animate-pulse" />
+        <div className="absolute -bottom-[30%] -right-[10%] w-[60vw] h-[60vw] rounded-full bg-gradient-to-tl from-blue-400/30 via-indigo-600/20 to-transparent blur-[120px] animate-pulse" style={{ animationDuration: '6s' }} />
+      </div>
+
+      {/* Top spacing element to center the card nicely */}
+      <div className="w-full" />
+
+      {/* Main Container Card */}
+      <div className="w-full max-w-5xl grid md:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/10 dark:border-slate-800 transition-colors duration-300 relative z-10 my-auto">
         
-        {/* Branding Panel */}
+        {/* Branding Panel with 3D Background */}
         <div className="hidden md:flex md:col-span-5 flex-col justify-between bg-[#2e2b8f] dark:bg-slate-900 text-white p-10 relative overflow-hidden dark:border-r dark:border-slate-800">
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-brand-200 text-xs font-semibold mb-6">
-              <Sparkles size={14} className="text-amber-400" />
+          
+          <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:12px_12px] pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
+
+          {/* 3D Interactive Visual Canvas */}
+          <div className="absolute inset-0 z-0 opacity-80 mix-blend-screen pointer-events-none">
+            <AnimateShape />
+          </div>
+
+          {/* Content Layer (z-10 ensures it stays above the canvas) */}
+          <div className="relative z-10 pointer-events-none">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-brand-200 text-xs font-semibold mb-6 shadow-inner">
+              <Sparkles size={14} className="text-amber-400 animate-spin" style={{ animationDuration: '8s' }} />
               <span>Welcome Back</span>
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3 leading-tight">
+            <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3 leading-tight drop-shadow-sm">
               MarketMind AI
             </h1>
-            <p className="text-slate-300 dark:text-slate-400 text-sm leading-relaxed">
+            <p className="text-slate-200 dark:text-slate-300 text-sm leading-relaxed font-medium">
               AI-powered sales intelligence platform designed for retail stores, supermarkets, and small businesses.
             </p>
           </div>
 
-          <div className="relative z-10 space-y-3">
-            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
-              <CheckCircle2 size={16} className="text-emerald-400" />
+          <div className="relative z-10 pointer-events-none space-y-3 p-4 rounded-2xl bg-black/20 backdrop-blur-md border border-white/10 shadow-lg">
+            <div className="flex items-center gap-2 text-xs text-slate-200 font-medium">
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
               <span>Smart Sales Analytics</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
-              <CheckCircle2 size={16} className="text-emerald-400" />
+            <div className="flex items-center gap-2 text-xs text-slate-200 font-medium">
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
               <span>Inventory Management</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-300 dark:text-slate-400">
-              <CheckCircle2 size={16} className="text-emerald-400" />
+            <div className="flex items-center gap-2 text-xs text-slate-200 font-medium">
+              <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
               <span>Customer Insights & Reports</span>
             </div>
           </div>
@@ -161,6 +185,21 @@ export default function Login() {
 
         </div>
       </div>
+
+      {/* Landing Page Style Footer (Kept at last) */}
+      <footer className="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between text-xs text-indigo-200/70 dark:text-slate-500 py-3 gap-2 relative z-10">
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={14} className="text-indigo-300 dark:text-indigo-400" />
+          <span>© 2026 MarketMind AI. All rights reserved.</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
+          <span>•</span>
+          <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+          <span>•</span>
+          <a href="#" className="hover:text-white transition-colors">Support</a>
+        </div>
+      </footer>
     </div>
   );
 }

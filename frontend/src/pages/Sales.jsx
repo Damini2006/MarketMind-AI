@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Upload, Plus } from 'lucide-react'
+import { Upload, Plus, Download } from 'lucide-react'
+import { downloadCSV } from '../utils/csv'
 
 export default function Sales() {
   const [sales, setSales] = useState([])
@@ -26,7 +27,29 @@ export default function Sales() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+
+    async function startFetching() {
+      try {
+        const [s, p, c] = await Promise.all([api.get('/sales/'), api.get('/inventory/products'), api.get('/customers/')])
+        if (!cancelled) {
+          setSales(s.data)
+          setProducts(p.data)
+          setCustomers(c.data)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.response?.data?.detail || err.message || 'Failed to load sales data.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    startFetching()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleProductChange = (e) => {
     const pid = e.target.value
@@ -50,6 +73,23 @@ export default function Sales() {
     } catch (err) {
       setError(err.response?.data?.detail || 'Could not record sale.')
     }
+  }
+
+  const handleExport = () => {
+    const rows = sales.map((s) => {
+      const product = products.find((p) => p.id === s.product_id)
+      const customer = customers.find((c) => c.id === s.customer_id)
+      return [
+        s.sale_date ? s.sale_date.slice(0, 10) : '',
+        product?.name || '',
+        customer?.name || '',
+        s.quantity,
+        s.unit_price,
+        s.total_amount,
+        s.source,
+      ]
+    })
+    downloadCSV('sales.csv', ['Date', 'Product', 'Customer', 'Qty', 'Unit Price', 'Total', 'Source'], rows)
   }
 
   const handleUpload = async (e) => {
@@ -81,6 +121,9 @@ export default function Sales() {
               <Upload size={16} /> Upload CSV
               <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
             </label>
+            <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
+              <Download size={16} /> Export CSV
+            </button>
             <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2">
               <Plus size={16} /> Add Sale
             </button>
@@ -88,7 +131,7 @@ export default function Sales() {
         }
       />
 
-      {uploadMsg && <div className="bg-brand-50 text-brand-700 border border-brand-100 rounded-lg px-4 py-3 text-sm mb-4">{uploadMsg}</div>}
+      {uploadMsg && <div className="bg-brand-50 text-brand-700 border border-brand-100 rounded-lg px-4 py-3 text-sm mb-4 dark:bg-brand-950/40 dark:text-brand-300 dark:border-brand-900/60">{uploadMsg}</div>}
 
       {showForm && (
         <div className="card mb-6">

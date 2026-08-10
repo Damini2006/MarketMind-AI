@@ -1,0 +1,16 @@
+name,price,category,stock_quantity,reorder_threshold,warehouse_location
+Organic Basmati Rice 5kg,650,Grocery,80,20,Warehouse A
+Cold-Pressed Sunflower Oil 1L,210,Grocery,120,25,Warehouse A
+Whole Wheat Atta 10kg,480,Grocery,60,20,Warehouse A
+Assam Black Tea 500g,190,Beverages,45,15,Warehouse B
+Filter Coffee Powder 500g,260,Beverages,35,15,Warehouse B
+Toor Dal 1kg,145,Grocery,90,30,Warehouse A
+Herbal Shampoo 340ml,320,Personal Care,50,15,Warehouse C
+Ayurvedic Soap Pack of 4,180,Personal Care,70,20,Warehouse C
+LED Bulb 9W,120,Home & Electronics,110,30,Warehouse C
+Non-stick Frying Pan,899,Home & Electronics,25,10,Warehouse C
+Stainless Steel Water Bottle,350,Home & Electronics,40,12,Warehouse C
+Notebook Set of 5,150,Stationery,65,20,Warehouse B
+Paper Clips Pack of 100,45,Stationery,200,50,Warehouse B
+Almonds 250g,425,Grocery,30,10,Warehouse A
+Instant Noodles 6-Pack,96,Grocery,150,40,Warehouse A

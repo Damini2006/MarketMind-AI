@@ -1,7 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
-import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff } from 'lucide-react'
+import Avatar from '../components/Avatar'
+import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2 } from 'lucide-react'
+import { AVATAR_COLORS } from '../utils/avatar'
+
+const CURRENCIES = [
+  { code: 'INR', symbol: '₹', label: 'INR (₹)' },
+  { code: 'USD', symbol: '$', label: 'USD ($)' },
+  { code: 'EUR', symbol: '€', label: 'EUR (€)' },
+  { code: 'GBP', symbol: '£', label: 'GBP (£)' },
+]
+
+const TIMEZONES = [
+  { code: 'Asia/Kolkata', label: 'IST (UTC+05:30)' },
+  { code: 'UTC', label: 'UTC' },
+  { code: 'Europe/London', label: 'GMT (UTC±00:00)' },
+  { code: 'America/New_York', label: 'EST (UTC-05:00)' },
+]
 
 const ROLE_LABELS = {
   business_owner: 'Business Owner',
@@ -41,6 +57,17 @@ export default function Settings() {
   // Profile Form State
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [email, setEmail] = useState(user?.email || '')
+  const [phone, setPhone] = useState(user?.phone || '')
+  const [currency, setCurrency] = useState(user?.preferred_currency || 'INR')
+  const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Kolkata')
+  const [avatarColor, setAvatarColor] = useState(user?.avatar_color || 'indigo')
+  const [bio, setBio] = useState(user?.bio || '')
+  const [business, setBusiness] = useState(null)
+  const [avatarMsg, setAvatarMsg] = useState({ type: '', text: '' })
+  const [avatarLoading, setAvatarLoading] = useState(false)
+  const fileInputRef = useRef(null)
+  const [prefsMsg, setPrefsMsg] = useState({ type: '', text: '' })
+  const [prefsLoading, setPrefsLoading] = useState(false)
   const [prevUser, setPrevUser] = useState(user)
   const [profileMsg, setProfileMsg] = useState({ type: '', text: '' })
   const [profileLoading, setProfileLoading] = useState(false)
@@ -59,7 +86,19 @@ export default function Settings() {
     setPrevUser(user)
     setFullName(user?.full_name || '')
     setEmail(user?.email || '')
+    setPhone(user?.phone || '')
+    setCurrency(user?.preferred_currency || 'INR')
+    setTimezone(user?.timezone || 'Asia/Kolkata')
+    setAvatarColor(user?.avatar_color || 'indigo')
+    setBio(user?.bio || '')
   }
+
+  // Load company info for the tenant card
+  useEffect(() => {
+    api.get('/users/business')
+      .then((res) => setBusiness(res.data))
+      .catch(() => setBusiness(null))
+  }, [])
 
   // Profile Update Handler
   const handleUpdateProfile = async (e) => {
@@ -68,7 +107,15 @@ export default function Settings() {
     setProfileLoading(true)
 
     try {
-      const res = await api.put('/auth/profile', { full_name: fullName, email })
+      const res = await api.put('/auth/profile', {
+        full_name: fullName,
+        email,
+        phone: phone || null,
+        preferred_currency: currency,
+        timezone,
+        avatar_color: avatarColor,
+        bio: bio || null,
+      })
       if (setUser && res.data) {
         setUser((prev) => ({ ...prev, ...res.data }))
       }
@@ -80,6 +127,80 @@ export default function Settings() {
       })
     } finally {
       setProfileLoading(false)
+    }
+  }
+
+  // Profile Photo Handlers
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarMsg({ type: '', text: '' })
+    setAvatarLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await api.post('/users/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      if (setUser && res.data) {
+        setUser((prev) => ({ ...prev, ...res.data }))
+      }
+      setAvatarMsg({ type: 'success', text: 'Profile photo updated!' })
+    } catch (err) {
+      setAvatarMsg({
+        type: 'error',
+        text: err.response?.data?.detail || 'Failed to upload photo.',
+      })
+    } finally {
+      setAvatarLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    setAvatarMsg({ type: '', text: '' })
+    setAvatarLoading(true)
+    try {
+      const res = await api.delete('/users/avatar')
+      if (setUser && res.data) {
+        setUser((prev) => ({ ...prev, ...res.data }))
+      }
+      setAvatarMsg({ type: 'success', text: 'Profile photo removed.' })
+    } catch (err) {
+      setAvatarMsg({
+        type: 'error',
+        text: err.response?.data?.detail || 'Failed to remove photo.',
+      })
+    } finally {
+      setAvatarLoading(false)
+    }
+  }
+
+  // Preferences Save Handler (shares the profile endpoint)
+  const handleSavePreferences = async () => {
+    setPrefsMsg({ type: '', text: '' })
+    setPrefsLoading(true)
+    try {
+      const res = await api.put('/auth/profile', {
+        full_name: fullName,
+        email,
+        phone: phone || null,
+        preferred_currency: currency,
+        timezone,
+        avatar_color: avatarColor,
+        bio: bio || null,
+      })
+      if (setUser && res.data) {
+        setUser((prev) => ({ ...prev, ...res.data }))
+      }
+      setPrefsMsg({ type: 'success', text: 'Preferences saved!' })
+    } catch (err) {
+      setPrefsMsg({
+        type: 'error',
+        text: err.response?.data?.detail || 'Failed to save preferences.',
+      })
+    } finally {
+      setPrefsLoading(false)
     }
   }
 
@@ -121,6 +242,17 @@ export default function Settings() {
 
   const userPermissions = PERMISSIONS_MAP[user?.role] || PERMISSIONS_MAP['business_owner']
 
+  // Profile completion meter
+  const completionItems = [
+    { label: 'Profile photo', done: !!user?.avatar_url },
+    { label: 'Phone number', done: !!phone },
+    { label: 'Bio', done: !!bio },
+    { label: 'Preferences set', done: !!currency && !!timezone },
+  ]
+  const completionPct = Math.round(
+    (completionItems.filter((i) => i.done).length / completionItems.length) * 100
+  )
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -133,16 +265,77 @@ export default function Settings() {
 
       {/* User Header Profile Card */}
       <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4 dark:bg-slate-800 dark:border-slate-700">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xl font-bold">
-            {fullName ? fullName.substring(0, 2).toUpperCase() : 'US'}
+        <div className="flex items-center gap-5">
+          <div className="flex flex-col items-center gap-2">
+            <div className="relative group">
+              <Avatar
+                user={{ full_name: fullName, avatar_color: avatarColor, avatar_url: user?.avatar_url }}
+                size="lg"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarLoading}
+                title="Upload photo"
+                className="absolute inset-0 rounded-full bg-black/40 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-0"
+              >
+                {avatarLoading ? <Loader2 size={22} className="animate-spin" /> : <Camera size={22} />}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={avatarLoading}
+                className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1 disabled:opacity-50"
+              >
+                <Camera size={12} /> {user?.avatar_url ? 'Change photo' : 'Upload photo'}
+              </button>
+              {user?.avatar_url && (
+                <button
+                  type="button"
+                  onClick={handleAvatarRemove}
+                  disabled={avatarLoading}
+                  className="text-[11px] font-semibold text-red-500 hover:text-red-600 flex items-center gap-1 disabled:opacity-50"
+                >
+                  <Trash2 size={12} /> Remove
+                </button>
+              )}
+            </div>
+            {avatarMsg.text && (
+              <p className={`text-[11px] ${avatarMsg.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                {avatarMsg.text}
+              </p>
+            )}
+            <div className="flex items-center gap-1.5">
+              {Object.entries(AVATAR_COLORS).map(([key, cls]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setAvatarColor(key)}
+                  title={`${key} avatar`}
+                  className={`w-5 h-5 rounded-full ${cls} ${
+                    avatarColor === key ? 'ring-2 ring-offset-2 ring-brand-500 dark:ring-offset-slate-800' : 'opacity-70 hover:opacity-100'
+                  } transition-all`}
+                />
+              ))}
+            </div>
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{fullName || 'User Profile'}</h2>
             <p className="text-sm text-slate-500 dark:text-slate-400">{email}</p>
+            {phone && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{phone}</p>}
+            {bio && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 italic max-w-sm">{bio}</p>}
           </div>
         </div>
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200">
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60">
           Role: {ROLE_LABELS[user?.role] || user?.role || 'Business Owner'}
         </span>
       </div>
@@ -176,7 +369,7 @@ export default function Settings() {
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-slate-100"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                 required
               />
             </div>
@@ -189,8 +382,34 @@ export default function Settings() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-slate-100"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1 dark:text-slate-300">
+                Phone
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Optional contact number"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1 dark:text-slate-300">
+                Bio
+              </label>
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Short intro — e.g. Founder of Mega Mart, passionate about retail analytics."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 resize-none"
               />
             </div>
 
@@ -237,7 +456,7 @@ export default function Settings() {
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     autoComplete="current-password"
                     placeholder="Enter current password"
-                    className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-slate-100"
+                    className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                     required
                   />
                   <button
@@ -262,7 +481,7 @@ export default function Settings() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       autoComplete="new-password"
                       placeholder="At least 6 characters"
-                      className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-slate-100"
+                      className="w-full px-3 py-2 pr-10 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                       required
                     />
                     <button
@@ -285,7 +504,7 @@ export default function Settings() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     autoComplete="new-password"
                     placeholder="Re-enter new password"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:text-slate-100"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                     required
                   />
                 </div>
@@ -307,6 +526,54 @@ export default function Settings() {
 
         {/* Sidebar Cards */}
         <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-3 dark:bg-slate-800 dark:border-slate-700">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Profile Completion</h3>
+              <span className="text-sm font-bold text-brand-600 dark:text-brand-400">{completionPct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                style={{ width: `${completionPct}%` }}
+              />
+            </div>
+            <ul className="space-y-1.5 pt-1">
+              {completionItems.map((item) => (
+                <li key={item.label} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                  <span className={`w-1.5 h-1.5 rounded-full ${item.done ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4 dark:bg-slate-800 dark:border-slate-700">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60">
+              <Building2 size={20} className="text-brand-600" />
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Your Business</h3>
+            </div>
+            {business ? (
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-slate-600 text-xs font-medium dark:text-slate-300">Company</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">{business.company_name}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-t border-slate-100 dark:border-slate-700/60">
+                  <span className="text-slate-600 text-xs font-medium dark:text-slate-300">Team Members</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">{business.member_count}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-t border-slate-100 dark:border-slate-700/60">
+                  <span className="text-slate-600 text-xs font-medium dark:text-slate-300">Member Since</span>
+                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">
+                    {new Date(business.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500 dark:text-slate-400">Loading business info...</p>
+            )}
+          </div>
+
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4 dark:bg-slate-800 dark:border-slate-700">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60">
               <ShieldCheck size={20} className="text-brand-600" />
@@ -331,15 +598,51 @@ export default function Settings() {
               <Globe size={20} className="text-brand-600" />
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Preferences</h3>
             </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center justify-between py-1">
-                <span className="text-slate-600 text-xs font-medium dark:text-slate-300">Default Currency</span>
-                <span className="font-semibold text-slate-800 dark:text-slate-100">₹ INR</span>
+            {prefsMsg.text && (
+              <div
+                className={`p-3 rounded-lg text-sm ${
+                  prefsMsg.type === 'success'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60'
+                    : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/60'
+                }`}
+              >
+                {prefsMsg.text}
               </div>
-              <div className="flex items-center justify-between py-1 border-t border-slate-100 dark:border-slate-700/60">
-                <span className="text-slate-600 text-xs font-medium dark:text-slate-300">Timezone</span>
-                <span className="text-xs text-slate-800 font-mono dark:text-slate-100">IST (UTC+05:30)</span>
+            )}
+            <div className="space-y-4 text-sm">
+              <div>
+                <label className="block text-slate-600 text-xs font-medium mb-1.5 dark:text-slate-300">Default Currency</label>
+                <select
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                >
+                  {CURRENCIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.label}</option>
+                  ))}
+                </select>
               </div>
+              <div>
+                <label className="block text-slate-600 text-xs font-medium mb-1.5 dark:text-slate-300">Timezone</label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                >
+                  {TIMEZONES.map((t) => (
+                    <option key={t.code} value={t.code}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={handleSavePreferences}
+                disabled={prefsLoading}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600"
+              >
+                <Save size={16} />
+                {prefsLoading ? 'Saving...' : 'Save Preferences'}
+              </button>
             </div>
           </div>
         </div>

@@ -1,7 +1,36 @@
-import { createContext, useContext, useState, useCallback } from "react";
-import api from "../services/api";
+import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import api, {
+  getKPIs,
+  getSales,
+  getCustomers,
+  getProducts,
+  getInvoices,
+  getCategories,
+  getSuppliers,
+  getDatasets,
+  getTeamMembers,
+  getInventoryAlerts,
+} from "../services/api";
 
 const AuthContext = createContext(null);
+
+// Warm the frontend GET cache with every list page's data so they all render
+// instantly right after login or a page refresh — no spinner on first visit.
+// Fire-and-forget: results land in the axios cache, no state touched here.
+const prefetchCore = () => {
+  Promise.allSettled([
+    getKPIs(),
+    getSales(),
+    getCustomers(),
+    getProducts(),
+    getInvoices(),
+    getCategories(),
+    getSuppliers(),
+    getDatasets(),
+    getTeamMembers(),
+    getInventoryAlerts(),
+  ]);
+};
 
 export function AuthProvider({ children }) {
   const [user, setUserState] = useState(() => {
@@ -21,6 +50,14 @@ export function AuthProvider({ children }) {
       }
       return next;
     });
+  }, []);
+
+  // On boot with a stored token (page refresh), prefetch the core data so the
+  // dashboard is already warm when the app renders.
+  useEffect(() => {
+    if (localStorage.getItem("marketmind_token")) {
+      prefetchCore();
+    }
   }, []);
 
   const [loading, setLoading] = useState(false);
@@ -43,6 +80,9 @@ export function AuthProvider({ children }) {
       );
 
       setUser(res.data.user);
+
+      // Prime the cache before navigating to the dashboard.
+      prefetchCore();
 
       return true;
     } catch (err) {

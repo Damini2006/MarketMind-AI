@@ -5,9 +5,20 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from .core.security import decode_access_token
+from .cache import get_or_set
 from . import models
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+# The user lookup runs on EVERY authenticated request; on a remote database
+# (Neon) that single query costs ~0.6s. Cache it — mutations
+# (profile/password/avatar) invalidate the entry, so staleness is bounded and
+# only affects the user's own row.
+USER_CACHE_TTL = 60
+
+
+def _load_user(db: Session, user_id: int):
+    return db.query(models.User).filter(models.User.id == user_id).first()
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
@@ -22,7 +33,9 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user_id = payload.get("sub")
     if user_id is None:
         raise credentials_exception
-    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    user = get_or_set(
+        f"user:{user_id}", USER_CACHE_TTL, lambda: _load_user(db, int(user_id))
+    )
     if user is None or not user.is_active:
         raise credentials_exception
     return user

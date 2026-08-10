@@ -53,7 +53,7 @@ export default function Segmentation() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div className="card">
-          <h3 className="font-semibold text-slate-800 mb-4">Segment Distribution</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Segment Distribution</h3>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
@@ -76,16 +76,16 @@ export default function Segmentation() {
         </div>
 
         <div className="card">
-          <h3 className="font-semibold text-slate-800 mb-4">Segment Summary</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Segment Summary</h3>
           <div className="space-y-3">
             {segments.map((s) => (
-              <div key={s.segment} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0">
+              <div key={s.segment} className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 last:border-0">
                 <div>
                   <Badge tone={SEGMENT_TONE[s.segment] || 'slate'}>{s.segment}</Badge>
-                  <p className="text-xs text-slate-500 mt-1">{s.customer_count} customers</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{s.customer_count} customers</p>
                 </div>
                 <div className="text-right text-sm">
-                  <p className="font-semibold text-slate-800">
+                  <p className="font-semibold text-slate-800 dark:text-slate-100">
                     ₹{(s.avg_purchase_value ?? 0).toLocaleString('en-IN')}
                   </p>
                   <p className="text-xs text-slate-400">avg. {s.avg_purchase_frequency} orders</p>
@@ -97,10 +97,10 @@ export default function Segmentation() {
       </div>
 
       <div className="card overflow-x-auto">
-        <h3 className="font-semibold text-slate-800 mb-4">Customer Detail</h3>
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Customer Detail</h3>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-500 border-b border-slate-200">
+            <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
               <th className="py-2 pr-4">Customer</th>
               <th className="py-2 pr-4">Segment</th>
               <th className="py-2 pr-4">Orders</th>
@@ -109,8 +109,8 @@ export default function Segmentation() {
           </thead>
           <tbody>
             {customers.map((c) => (
-              <tr key={c.customer_id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="py-2 pr-4 font-medium text-slate-800">{c.customer_name}</td>
+              <tr key={c.customer_id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{c.customer_name}</td>
                 <td className="py-2 pr-4">
                   <Badge tone={SEGMENT_TONE[c.segment] || 'slate'}>{c.segment}</Badge>
                 </td>

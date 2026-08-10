@@ -15,6 +15,10 @@ import Segmentation from './pages/Segmentation.jsx'
 import Churn from './pages/Churn.jsx'
 import Recommendations from './pages/Recommendations.jsx'
 import Anomalies from './pages/Anomalies.jsx'
+import Categories from './pages/Categories.jsx'
+import Suppliers from './pages/Suppliers.jsx'
+import Datasets from './pages/Datasets.jsx'
+import Team from './pages/Team.jsx'
 import Settings from './pages/Settings.jsx'
 import ForgotPassword from "./pages/ForgotPassword.jsx"
 
@@ -70,6 +74,10 @@ export default function App() {
           <Route path="/churn" element={<Churn />} />
           <Route path="/recommendations" element={<Recommendations />} />
           <Route path="/anomalies" element={<Anomalies />} />
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/datasets" element={<Datasets />} />
+          <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

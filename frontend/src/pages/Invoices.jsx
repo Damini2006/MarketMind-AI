@@ -26,7 +26,28 @@ export default function Invoices() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+
+    async function startFetching() {
+      try {
+        const [i, c] = await Promise.all([api.get('/invoices/'), api.get('/customers/')])
+        if (!cancelled) {
+          setInvoices(i.data)
+          setCustomers(c.data)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.response?.data?.detail || 'Failed to load data.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    startFetching()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()

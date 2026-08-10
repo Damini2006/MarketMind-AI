@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from .. import models, schemas
+from ..cache import get_or_set, invalidate
 from ..database import get_db
 from ..deps import get_current_user, require_roles
 
@@ -14,7 +15,16 @@ router = APIRouter(prefix="/api/customers", tags=["Customers"])
 
 @router.get("/", response_model=List[schemas.CustomerOut])
 def list_customers(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    return db.query(models.Customer).order_by(models.Customer.id.desc()).all()
+    def _load():
+        return [
+            schemas.CustomerOut.model_validate(c).model_dump(mode="json")
+            for c in db.query(models.Customer)
+            .filter(models.Customer.business_id == current_user.business_id)
+            .order_by(models.Customer.id.desc())
+            .all()
+        ]
+
+    return get_or_set(f"customers_list:{current_user.business_id}", 60, _load)
 
 
 @router.post("/", response_model=schemas.CustomerOut, status_code=201)
@@ -23,16 +33,24 @@ def create_customer(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "sales_executive", "admin")),
 ):
-    customer = models.Customer(**payload.model_dump())
+    customer = models.Customer(**payload.model_dump(), business_id=current_user.business_id)
     db.add(customer)
     db.commit()
     db.refresh(customer)
+    invalidate("customers_list:")
     return customer
 
 
 @router.get("/{customer_id}", response_model=schemas.CustomerOut)
 def get_customer(customer_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    customer = (
+        db.query(models.Customer)
+        .filter(
+            models.Customer.id == customer_id,
+            models.Customer.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
@@ -44,11 +62,19 @@ def delete_customer(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("admin", "business_owner")),
 ):
-    customer = db.query(models.Customer).filter(models.Customer.id == customer_id).first()
+    customer = (
+        db.query(models.Customer)
+        .filter(
+            models.Customer.id == customer_id,
+            models.Customer.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     db.delete(customer)
     db.commit()
+    invalidate("customers_list:")
     return None
 
 
@@ -86,7 +112,10 @@ def upload_customers_csv(
             continue
         existing = (
             db.query(models.Customer)
-            .filter(func.lower(func.trim(models.Customer.name)) == name.lower())
+            .filter(
+                func.lower(func.trim(models.Customer.name)) == name.lower(),
+                models.Customer.business_id == current_user.business_id,
+            )
             .first()
         )
         if existing:
@@ -97,9 +126,11 @@ def upload_customers_csv(
                 name=name,
                 email=str(row["email"]).strip() if "email" in df.columns and pd.notna(row.get("email")) else None,
                 phone=str(row["phone"]).strip() if "phone" in df.columns and pd.notna(row.get("phone")) else None,
+                business_id=current_user.business_id,
             )
         )
         created += 1
 
     db.commit()
+    invalidate("customers_list:")
     return {"rows_processed": int(len(df)), "customers_created": created, "rows_skipped": skipped}

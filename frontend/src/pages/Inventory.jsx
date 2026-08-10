@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Plus, PackagePlus, PackageMinus, Upload, Search } from 'lucide-react'
+import { Plus, PackagePlus, PackageMinus, Upload, Search, Download } from 'lucide-react'
+import { downloadCSV } from '../utils/csv'
 
 export default function Inventory() {
   const [products, setProducts] = useState([])
@@ -27,7 +28,40 @@ export default function Inventory() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+
+    async function startFetching() {
+      try {
+        const [p, a] = await Promise.all([api.get('/inventory/products'), api.get('/inventory/alerts')])
+        if (!cancelled) {
+          setProducts(p.data)
+          setAlerts(a.data)
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.response?.data?.detail || 'Failed to load inventory.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    startFetching()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleExport = () => {
+    const rows = products.map((p) => [
+      p.name,
+      p.category || '',
+      p.price,
+      p.stock_quantity,
+      p.reorder_threshold,
+      p.warehouse_location || '',
+    ])
+    downloadCSV('inventory.csv', ['Name', 'Category', 'Price', 'Stock', 'Reorder Threshold', 'Warehouse Location'], rows)
+  }
 
   const handleUpload = async (e) => {
     const file = e.target.files[0]
@@ -96,6 +130,9 @@ export default function Inventory() {
               <Upload size={14} /> Upload CSV
               <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
             </label>
+            <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-xs">
+              <Download size={14} /> Export CSV
+            </button>
             <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2 text-xs">
               <Plus size={14} /> Add Product
             </button>
@@ -148,7 +185,7 @@ export default function Inventory() {
 
       {/* Alerts Section */}
       {alerts.length > 0 && (
-        <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="mb-6 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl p-4">
           <h3 className="text-sm font-semibold text-amber-800 mb-2">Low Stock Alerts</h3>
           <div className="flex flex-wrap gap-2">
             {alerts.map((alert, idx) => (

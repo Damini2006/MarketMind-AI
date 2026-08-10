@@ -62,7 +62,7 @@ export default function Forecasting() {
 
   return (
     <div>
-      <PageHeader title="Sales Forecasting" subtitle="Time-series forecasting engine (Random Forest) trained on historical revenue." />
+      <PageHeader title="Sales Forecasting" subtitle="Time-series forecasting engine (Linear Regression) trained on daily revenue trends." />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="Trend" value={data.trend[0].toUpperCase() + data.trend.slice(1)} icon={TrendIcon} tone={TREND_TONE[data.trend]} />

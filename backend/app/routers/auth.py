@@ -4,12 +4,15 @@ import smtplib
 import datetime as dt
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..cache import invalidate
 from ..database import get_db
+from ..seed_data import seed_business_demo_data
 from ..core.security import (
     hash_password,
     verify_password,
@@ -68,6 +71,11 @@ def send_email_otp(target_email: str, otp_code: str):
 class ProfileUpdateRequest(BaseModel):
     full_name: str
     email: EmailStr
+    phone: Optional[str] = None
+    preferred_currency: Optional[str] = None
+    timezone: Optional[str] = None
+    avatar_color: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class ChangePasswordRequest(BaseModel):
@@ -108,17 +116,27 @@ def register(
             detail="Email address is already registered",
         )
 
+    # Multi-tenant registration: each signup creates its own business,
+    # and the person who registers becomes that business's owner.
+    business = models.Business(company_name=payload.company_name)
+    db.add(business)
+    db.flush()
+
     user = models.User(
         full_name=payload.name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
-        role=payload.role,
+        role=models.RoleEnum.business_owner,
+        business_id=business.id,
     )
-
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    db.flush()
 
+    # Seed demo data (products, customers, sales, invoices) so a brand-new
+    # business is not an empty dashboard. seed_business_demo_data commits.
+    seed_business_demo_data(db, business)
+
+    db.refresh(user)
     return user
 
 
@@ -168,6 +186,8 @@ def update_profile(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    # Drop the user cache entry BEFORE mutating the shared cached object.
+    invalidate(f"user:{current_user.id}")
     existing = (
         db.query(models.User)
         .filter(models.User.email == payload.email, models.User.id != current_user.id)
@@ -181,6 +201,14 @@ def update_profile(
 
     current_user.full_name = payload.full_name
     current_user.email = payload.email
+    current_user.phone = payload.phone  # None clears the field
+    current_user.bio = payload.bio  # None clears the field
+    if payload.preferred_currency is not None:
+        current_user.preferred_currency = payload.preferred_currency
+    if payload.timezone is not None:
+        current_user.timezone = payload.timezone
+    if payload.avatar_color is not None:
+        current_user.avatar_color = payload.avatar_color
 
     db.commit()
     db.refresh(current_user)
@@ -193,6 +221,7 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    invalidate(f"user:{current_user.id}")
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=400,

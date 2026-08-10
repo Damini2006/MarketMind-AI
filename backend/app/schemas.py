@@ -6,10 +6,11 @@ from .models import RoleEnum
 
 # ---------- Auth / Users ----------
 class RegisterRequest(BaseModel):
+    company_name: str
     name: str
     email: EmailStr
     password: str
-    role: RoleEnum = RoleEnum.sales_executive
+    role: RoleEnum = RoleEnum.business_owner
 
 
 class UserCreate(BaseModel):
@@ -26,6 +27,12 @@ class UserOut(BaseModel):
     email: str
     role: RoleEnum
     is_active: bool
+    phone: Optional[str] = None
+    preferred_currency: Optional[str] = None
+    timezone: Optional[str] = None
+    avatar_color: Optional[str] = None
+    avatar_url: Optional[str] = None
+    bio: Optional[str] = None
 
 
 class Token(BaseModel):
@@ -61,6 +68,42 @@ class CustomerOut(CustomerCreate):
     model_config = ConfigDict(from_attributes=True)
     id: int
     created_at: dt.datetime
+
+
+# ---------- Categories & Suppliers ----------
+class CategoryCreate(BaseModel):
+    category_name: str
+    description: Optional[str] = None
+
+
+class CategoryOut(CategoryCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+class SupplierCreate(BaseModel):
+    supplier_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+
+class SupplierOut(SupplierCreate):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+
+
+# ---------- Datasets ----------
+class UploadedDatasetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    file_name: str
+    file_path: Optional[str] = None
+    upload_date: dt.datetime
+    validation_status: str
+    total_records: int
+    valid_records: int
+    invalid_records: int
 
 
 # ---------- Products / Inventory ----------
@@ -135,6 +178,28 @@ class InventoryAlertOut(BaseModel):
     level: str
     created_at: dt.datetime
     resolved: bool
+
+
+# ---------- Notifications ----------
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    type: str
+    title: str
+    message: str
+    level: str
+    link: Optional[str] = None
+    read: bool
+    created_at: dt.datetime
+
+
+class NotificationListResponse(BaseModel):
+    items: List[NotificationOut]
+    unread_count: int
+
+
+class UnreadCountResponse(BaseModel):
+    unread_count: int
 
 
 # ---------- AI Responses ----------

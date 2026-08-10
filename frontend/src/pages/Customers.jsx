@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Plus, Upload, Search, ArrowUpDown } from 'lucide-react'
+import { Plus, Upload, Search, ArrowUpDown, Download } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
+import { downloadCSV } from '../utils/csv'
 
 export default function Customers() {
   const { hasRole } = useAuth()
@@ -25,9 +26,37 @@ export default function Customers() {
       })
       .finally(() => setLoading(false))
   }, [])
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+
+    async function startFetching() {
+      try {
+        const res = await api.get('/customers/')
+        if (!cancelled) setCustomers(res.data)
+      } catch (err) {
+        if (!cancelled) setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    startFetching()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const canCreate = hasRole('business_owner', 'sales_executive', 'admin')
+
+  const handleExport = () => {
+    const rows = customers.map((c) => [
+      c.name,
+      c.email || '',
+      c.phone || '',
+      c.created_at ? c.created_at.slice(0, 10) : '',
+    ])
+    downloadCSV('customers.csv', ['Name', 'Email', 'Phone', 'Joined'], rows)
+  }
 
   const handleUpload = async (e) => {
     const file = e.target.files[0]
@@ -92,6 +121,9 @@ export default function Customers() {
                 <Upload size={14} /> Upload CSV
                 <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
               </label>
+              <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-xs">
+                <Download size={14} /> Export CSV
+              </button>
               <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2 text-xs">
                 <Plus size={14} /> Add Customer
               </button>

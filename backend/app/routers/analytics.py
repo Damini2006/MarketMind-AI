@@ -5,26 +5,55 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from .. import models, schemas
+from ..cache import get_or_set
 from ..database import get_db
 from ..deps import get_current_user
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 
-@router.get("/kpis", response_model=schemas.KPIResponse)
-def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    sales = db.query(models.Sale).all()
+def _compute_kpis(db: Session, business_id: int):
+    sales = (
+        db.query(models.Sale)
+        .filter(models.Sale.business_id == business_id)
+        .all()
+    )
     total_revenue = sum(s.total_amount for s in sales)
     total_sales = len(sales)
-    total_customers = db.query(models.Customer).count()
-    total_products = db.query(models.Product).count()
-    low_stock_count = (
-        db.query(models.Product)
-        .filter(models.Product.stock_quantity <= models.Product.reorder_threshold)
+    total_customers = (
+        db.query(models.Customer)
+        .filter(models.Customer.business_id == business_id)
         .count()
     )
-    pending_invoices = db.query(models.Invoice).filter(models.Invoice.status == "pending").count()
-    overdue_invoices = db.query(models.Invoice).filter(models.Invoice.status == "overdue").count()
+    total_products = (
+        db.query(models.Product)
+        .filter(models.Product.business_id == business_id)
+        .count()
+    )
+    low_stock_count = (
+        db.query(models.Product)
+        .filter(
+            models.Product.business_id == business_id,
+            models.Product.stock_quantity <= models.Product.reorder_threshold,
+        )
+        .count()
+    )
+    pending_invoices = (
+        db.query(models.Invoice)
+        .filter(
+            models.Invoice.business_id == business_id,
+            models.Invoice.status == "pending",
+        )
+        .count()
+    )
+    overdue_invoices = (
+        db.query(models.Invoice)
+        .filter(
+            models.Invoice.business_id == business_id,
+            models.Invoice.status == "overdue",
+        )
+        .count()
+    )
 
     revenue_by_day = defaultdict(float)
     for s in sales:
@@ -37,7 +66,12 @@ def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
         if s.product_id:
             product_revenue[s.product_id] += s.total_amount
     top_ids = sorted(product_revenue.items(), key=lambda x: x[1], reverse=True)[:5]
-    products_by_id = {p.id: p for p in db.query(models.Product).all()}
+    products_by_id = {
+        p.id: p
+        for p in db.query(models.Product)
+        .filter(models.Product.business_id == business_id)
+        .all()
+    }
     top_products = [
         {"product": products_by_id[pid].name if pid in products_by_id else f"#{pid}", "revenue": round(rev, 2)}
         for pid, rev in top_ids
@@ -53,4 +87,14 @@ def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
         overdue_invoices=overdue_invoices,
         revenue_by_day=revenue_series,
         top_products=top_products,
+    )
+
+
+@router.get("/kpis", response_model=schemas.KPIResponse)
+def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Dashboard KPIs. Cached 60s — recomputing every poll is wasteful."""
+    return get_or_set(
+        f"analytics:{current_user.business_id}:kpis",
+        60,
+        lambda: _compute_kpis(db, current_user.business_id),
     )

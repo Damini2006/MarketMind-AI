@@ -34,7 +34,7 @@ export default function Churn() {
 
   return (
     <div>
-      <PageHeader title="Churn Prediction" subtitle="Classification model (Random Forest) trained on purchase inactivity and engagement." />
+      <PageHeader title="Churn Prediction" subtitle="Classification model (Logistic Regression) trained on historical purchase inactivity." />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard label="High-Risk Customers" value={highRisk} icon={UserMinus} tone="red" />

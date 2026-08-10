@@ -25,6 +25,7 @@ def _check_and_create_alert(db: Session, product: models.Product):
                 product_id=product.id,
                 message=f"'{product.name}' stock is low ({product.stock_quantity} left, reorder threshold {product.reorder_threshold}).",
                 level=level,
+                business_id=product.business_id,
             )
             db.add(alert)
             db.commit()
@@ -37,7 +38,12 @@ def _check_and_create_alert(db: Session, product: models.Product):
 
 @router.get("/products", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    return db.query(models.Product).order_by(models.Product.id.desc()).all()
+    return (
+        db.query(models.Product)
+        .filter(models.Product.business_id == current_user.business_id)
+        .order_by(models.Product.id.desc())
+        .all()
+    )
 
 
 @router.post("/products", response_model=schemas.ProductOut, status_code=201)
@@ -46,7 +52,7 @@ def create_product(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ):
-    product = models.Product(**payload.model_dump())
+    product = models.Product(**payload.model_dump(), business_id=current_user.business_id)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -61,7 +67,14 @@ def update_stock(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ):
-    product = db.query(models.Product).filter(models.Product.id == product_id).first()
+    product = (
+        db.query(models.Product)
+        .filter(
+            models.Product.id == product_id,
+            models.Product.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     product.stock_quantity = max(0, product.stock_quantity + payload.quantity_delta)
@@ -75,7 +88,10 @@ def update_stock(
 def list_alerts(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     return (
         db.query(models.InventoryAlert)
-        .filter(models.InventoryAlert.resolved == False)  # noqa: E712
+        .filter(
+            models.InventoryAlert.resolved == False,  # noqa: E712
+            models.InventoryAlert.business_id == current_user.business_id,
+        )
         .order_by(models.InventoryAlert.created_at.desc())
         .all()
     )
@@ -121,7 +137,10 @@ def upload_products_csv(
 
         existing = (
             db.query(models.Product)
-            .filter(func.lower(func.trim(models.Product.name)) == name.lower())
+            .filter(
+                func.lower(func.trim(models.Product.name)) == name.lower(),
+                models.Product.business_id == current_user.business_id,
+            )
             .first()
         )
         if existing:
@@ -142,6 +161,7 @@ def upload_products_csv(
                 stock_quantity=stock_qty,
                 reorder_threshold=reorder,
                 warehouse_location=str(row["warehouse_location"]).strip() if "warehouse_location" in df.columns and pd.notna(row.get("warehouse_location")) else None,
+                business_id=current_user.business_id,
             )
             db.add(product)
             db.flush()

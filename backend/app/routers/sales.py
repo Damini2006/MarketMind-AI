@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from .. import models, schemas
+from ..cache import get_or_set, invalidate
 from ..database import get_db
 from ..deps import get_current_user, require_roles
 from .inventory import _check_and_create_alert
@@ -16,13 +17,31 @@ router = APIRouter(prefix="/api/sales", tags=["Sales"])
 REQUIRED_CSV_COLUMNS = {"product_name", "quantity", "unit_price"}
 
 
+def _load_sales(db: Session, business_id: int, limit: int):
+    """Fetch the sales list once and serialize it so the cached value is plain JSON."""
+    return [
+        schemas.SaleOut.model_validate(s).model_dump(mode="json")
+        for s in db.query(models.Sale)
+        .filter(models.Sale.business_id == business_id)
+        .order_by(models.Sale.sale_date.desc())
+        .limit(limit)
+        .all()
+    ]
+
+
 @router.get("/", response_model=List[schemas.SaleOut])
 def list_sales(
     limit: int = 500,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return db.query(models.Sale).order_by(models.Sale.sale_date.desc()).limit(limit).all()
+    # Cached 60s: the 500-row query is the most expensive round-trip to Neon.
+    # Safe to cache long — every mutation invalidates the entry.
+    return get_or_set(
+        f"sales_list:{current_user.business_id}:{limit}",
+        60,
+        lambda: _load_sales(db, current_user.business_id, limit),
+    )
 
 
 @router.post("/", response_model=schemas.SaleOut, status_code=201)
@@ -40,16 +59,25 @@ def create_sale(
         total_amount=total,
         sale_date=payload.sale_date or dt.datetime.utcnow(),
         source="manual",
+        business_id=current_user.business_id,
     )
     db.add(sale)
     if payload.product_id:
-        product = db.query(models.Product).filter(models.Product.id == payload.product_id).first()
+        product = (
+            db.query(models.Product)
+            .filter(
+                models.Product.id == payload.product_id,
+                models.Product.business_id == current_user.business_id,
+            )
+            .first()
+        )
         if product:
             product.stock_quantity = max(0, product.stock_quantity - payload.quantity)
             db.commit()
             _check_and_create_alert(db, product)
     db.commit()
     db.refresh(sale)
+    invalidate("sales_list:")
     return sale
 
 
@@ -91,11 +119,19 @@ def upload_sales_csv(
             pname = str(row["product_name"]).strip()
             product = (
                 db.query(models.Product)
-                .filter(func.lower(func.trim(models.Product.name)) == pname.lower())
+                .filter(
+                    func.lower(func.trim(models.Product.name)) == pname.lower(),
+                    models.Product.business_id == current_user.business_id,
+                )
                 .first()
             )
             if not product:
-                product = models.Product(name=pname, price=float(row["unit_price"]), stock_quantity=0)
+                product = models.Product(
+                    name=pname,
+                    price=float(row["unit_price"]),
+                    stock_quantity=0,
+                    business_id=current_user.business_id,
+                )
                 db.add(product)
                 db.flush()
 
@@ -104,11 +140,14 @@ def upload_sales_csv(
                 cname = str(row["customer_name"]).strip()
                 customer = (
                     db.query(models.Customer)
-                    .filter(func.lower(func.trim(models.Customer.name)) == cname.lower())
+                    .filter(
+                        func.lower(func.trim(models.Customer.name)) == cname.lower(),
+                        models.Customer.business_id == current_user.business_id,
+                    )
                     .first()
                 )
                 if not customer:
-                    customer = models.Customer(name=cname)
+                    customer = models.Customer(name=cname, business_id=current_user.business_id)
                     db.add(customer)
                     db.flush()
 
@@ -129,6 +168,7 @@ def upload_sales_csv(
                 total_amount=qty * price,
                 sale_date=sale_date,
                 source="csv_upload",
+                business_id=current_user.business_id,
             )
             db.add(sale)
             created += 1
@@ -137,4 +177,21 @@ def upload_sales_csv(
             continue
 
     db.commit()
+
+    # Record the upload in the datasets log so the Datasets page can show it
+    dataset = models.UploadedDataset(
+        file_name=file.filename,
+        validation_status="valid",
+        total_records=int(len(df)),
+        valid_records=created,
+        invalid_records=skipped,
+        uploaded_by=current_user.id,
+        business_id=current_user.business_id,
+    )
+    db.add(dataset)
+    db.commit()
+    # Uploads also create products/customers, so bust both list caches.
+    invalidate("sales_list:")
+    invalidate("customers_list:")
+
     return {"rows_processed": int(len(df)), "sales_created": created, "rows_skipped": skipped}
