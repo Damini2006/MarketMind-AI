@@ -119,7 +119,8 @@ export default function Settings() {
     }
   }
 
-  const userPermissions = PERMISSIONS_MAP[user?.role] || PERMISSIONS_MAP['business_owner']
+  const userRole = typeof user?.role === 'object' ? user.role.role_name : (user?.role || 'business_owner')
+  const userPermissions = PERMISSIONS_MAP[userRole] || PERMISSIONS_MAP['business_owner']
 
   return (
     <div className="space-y-6">
@@ -143,7 +144,7 @@ export default function Settings() {
           </div>
         </div>
         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 text-brand-700 border border-brand-200">
-          Role: {ROLE_LABELS[user?.role] || user?.role || 'Business Owner'}
+          Role: {ROLE_LABELS[userRole] || userRole}
         </span>
       </div>
 

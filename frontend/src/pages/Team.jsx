@@ -6,7 +6,6 @@ import { PageHeader, ErrorBanner, Loading } from "../components/ui";
 const ROLES = [
   { value: "store_manager", label: "Store Manager" },
   { value: "sales_executive", label: "Sales Executive" },
-  { value: "admin", label: "System Administrator" },
 ];
 
 export default function Team() {

@@ -86,8 +86,8 @@ export default function Inventory() {
   }
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.category?.toLowerCase().includes(search.toLowerCase())
-    const isLow = p.inventory?.quantity_available <= p.reorder_threshold
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.category_name || '').toLowerCase().includes(search.toLowerCase())
+    const isLow = (p.inventory?.quantity_available || 0) <= (p.inventory?.reorder_level || 0)
     if (statusFilter === 'low_stock') return matchesSearch && isLow
     if (statusFilter === 'in_stock') return matchesSearch && !isLow
     return matchesSearch
@@ -230,14 +230,14 @@ export default function Inventory() {
                 {filteredProducts.map((prod) => (
                   <tr key={prod.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
                     <td className="py-2 pr-4 font-medium">{prod.name}</td>
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.category || '—'}</td>
-                    <td className="py-2 pr-4 font-semibold">₹{prod.price?.toLocaleString('en-IN')}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.category_name || '—'}</td>
+                    <td className="py-2 pr-4 font-semibold">₹{prod.selling_price?.toLocaleString('en-IN')}</td>
                     <td className="py-2 pr-4">
-                      <span className={prod.stock_quantity <= prod.reorder_threshold ? 'text-red-600 font-bold' : ''}>
-                        {prod.stock_quantity}
+                      <span className={(prod.inventory?.quantity_available || 0) <= (prod.inventory?.reorder_level || 0) ? 'text-red-600 font-bold' : ''}>
+                        {prod.inventory?.quantity_available || 0}
                       </span>
                     </td>
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.warehouse_location || '—'}</td>
+                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{prod.inventory?.warehouse_location || '—'}</td>
                     <td className="py-2 pr-4 flex items-center gap-2">
                       <button onClick={() => adjustStock(prod.id, 1)} title="Increase Stock" className="p-1 hover:bg-slate-200 rounded text-slate-600 dark:text-slate-300">
                         <PackagePlus size={16} />

@@ -139,18 +139,30 @@ export default function Sales() {
             </thead>
             <tbody>
               {sales.slice(0, 100).map((s) => {
-                const product = products.find((p) => p.id === s.product_id)
+                const item = s.sale_items && s.sale_items.length > 0 ? s.sale_items[0] : null
+                const productId = item ? item.product_id : s.product_id
+                const quantity = s.sale_items ? s.sale_items.reduce((acc, i) => acc + i.quantity, 0) : (s.quantity || 0)
+                const unitPrice = item ? item.unit_price : (s.unit_price || 0)
+                
+                const product = products.find((p) => p.id === productId)
                 const customer = customers.find((c) => c.id === s.customer_id)
+                
+                const moreItemsText = s.sale_items && s.sale_items.length > 1 ? ` (+${s.sale_items.length - 1} more)` : ''
+                const productName = product ? product.name : (productId ? `#${productId}` : 'Unknown')
+
                 return (
                   <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
                     <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(s.sale_date).toLocaleDateString()}</td>
-                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{product?.name || `#${s.product_id}`}</td>
+                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">
+                      {productName}
+                      <span className="text-xs text-slate-400 font-normal ml-1">{moreItemsText}</span>
+                    </td>
                     <td className="py-2 pr-4">{customer?.full_name || '—'}</td>
-                    <td className="py-2 pr-4">{s.quantity}</td>
-                    <td className="py-2 pr-4">₹{s.unit_price.toLocaleString('en-IN')}</td>
-                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount.toLocaleString('en-IN')}</td>
+                    <td className="py-2 pr-4">{quantity}</td>
+                    <td className="py-2 pr-4">₹{Number(unitPrice).toLocaleString('en-IN')}</td>
+                    <td className="py-2 pr-4 font-semibold">₹{Number(s.total_amount || 0).toLocaleString('en-IN')}</td>
                     <td className="py-2 pr-4">
-                      <Badge tone={s.source === 'csv_upload' ? 'blue' : s.source === 'seed' ? 'slate' : 'green'}>{s.source}</Badge>
+                      <Badge tone={s.source === 'csv_upload' ? 'blue' : s.source === 'seed' ? 'slate' : 'green'}>{s.source || 'manual'}</Badge>
                     </td>
                   </tr>
                 )
