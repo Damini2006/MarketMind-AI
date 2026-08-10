@@ -126,7 +126,7 @@ def register(
         full_name=payload.name,
         email=payload.email,
         hashed_password=hash_password(payload.password),
-        role=models.RoleEnum.business_owner,
+        role=payload.role,
         business_id=business.id,
     )
     db.add(user)
