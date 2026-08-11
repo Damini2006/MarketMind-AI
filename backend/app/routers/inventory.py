@@ -12,6 +12,51 @@ from ..deps import get_current_user, require_roles
 router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 
 
+def _ensure_inventory_row(db: Session, product: models.Product):
+    """Mirror ``product.stock_quantity`` into the normalized inventory ledger
+    row (pre-dev parity). ``Product`` remains the authoritative source."""
+    inv = (
+        db.query(models.Inventory)
+        .filter(models.Inventory.product_id == product.id)
+        .first()
+    )
+    if inv is None:
+        inv = models.Inventory(
+            product_id=product.id,
+            quantity_available=product.stock_quantity,
+            reorder_level=product.reorder_threshold,
+            warehouse_location=product.warehouse_location,
+        )
+        db.add(inv)
+    else:
+        inv.quantity_available = product.stock_quantity
+        inv.reorder_level = product.reorder_threshold
+        inv.warehouse_location = product.warehouse_location
+    db.flush()
+    return inv
+
+
+def _record_inventory_transaction(
+    db: Session,
+    product_id: int,
+    user_id: int,
+    transaction_type: str,
+    quantity: int,
+    remarks: str,
+):
+    """Append a stock-movement history row (IN / OUT / ADJUSTMENT)."""
+    db.add(
+        models.InventoryTransaction(
+            product_id=product_id,
+            user_id=user_id,
+            transaction_type=transaction_type,
+            quantity=abs(quantity),
+            remarks=remarks,
+        )
+    )
+    db.flush()
+
+
 def _check_and_create_alert(db: Session, product: models.Product):
     if product.stock_quantity <= product.reorder_threshold:
         existing = (
@@ -56,6 +101,12 @@ def create_product(
     db.add(product)
     db.commit()
     db.refresh(product)
+    _ensure_inventory_row(db, product)
+    if product.stock_quantity > 0:
+        _record_inventory_transaction(
+            db, product.id, current_user.id, "IN", product.stock_quantity, "Initial stock setup"
+        )
+    db.commit()
     _check_and_create_alert(db, product)
     return product
 
@@ -78,6 +129,15 @@ def update_stock(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     product.stock_quantity = max(0, product.stock_quantity + payload.quantity_delta)
+    _ensure_inventory_row(db, product)
+    _record_inventory_transaction(
+        db,
+        product.id,
+        current_user.id,
+        "ADJUSTMENT",
+        payload.quantity_delta,
+        "Manual stock adjustment",
+    )
     db.commit()
     db.refresh(product)
     _check_and_create_alert(db, product)

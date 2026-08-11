@@ -69,15 +69,15 @@ export default function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/customers" element={<Customers />} />
-          <Route path="/forecasting" element={<Forecasting />} />
+          <Route path="/forecasting" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Forecasting /></ProtectedRoute>} />
           <Route path="/segmentation" element={<Segmentation />} />
-          <Route path="/churn" element={<Churn />} />
+          <Route path="/churn" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Churn /></ProtectedRoute>} />
           <Route path="/recommendations" element={<Recommendations />} />
-          <Route path="/anomalies" element={<Anomalies />} />
+          <Route path="/anomalies" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Anomalies /></ProtectedRoute>} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/datasets" element={<Datasets />} />
-          <Route path="/team" element={<Team />} />
+          <Route path="/team" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

@@ -17,7 +17,11 @@ const AuthContext = createContext(null);
 // Warm the frontend GET cache with every list page's data so they all render
 // instantly right after login or a page refresh — no spinner on first visit.
 // Fire-and-forget: results land in the axios cache, no state touched here.
-const prefetchCore = () => {
+// The team list is role-restricted (owner/admin), so only prefetch it for
+// roles that can actually open the Team page.
+const TEAM_ROLES = ['business_owner', 'admin'];
+
+const prefetchCore = (role) => {
   Promise.allSettled([
     getKPIs(),
     getSales(),
@@ -27,7 +31,7 @@ const prefetchCore = () => {
     getCategories(),
     getSuppliers(),
     getDatasets(),
-    getTeamMembers(),
+    TEAM_ROLES.includes(role) ? getTeamMembers() : Promise.resolve(),
     getInventoryAlerts(),
   ]);
 };
@@ -56,7 +60,9 @@ export function AuthProvider({ children }) {
   // dashboard is already warm when the app renders.
   useEffect(() => {
     if (localStorage.getItem("marketmind_token")) {
-      prefetchCore();
+      const raw = localStorage.getItem("marketmind_user");
+      const bootUser = raw ? JSON.parse(raw) : null;
+      prefetchCore(bootUser?.role);
     }
   }, []);
 
@@ -82,7 +88,7 @@ export function AuthProvider({ children }) {
       setUser(res.data.user);
 
       // Prime the cache before navigating to the dashboard.
-      prefetchCore();
+      prefetchCore(res.data.user.role);
 
       return true;
     } catch (err) {

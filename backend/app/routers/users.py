@@ -126,7 +126,7 @@ def get_business_info(
 @router.get("/", response_model=List[schemas.UserOut])
 def list_team(
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_roles("business_owner", "admin")),
 ):
     return (
         db.query(models.User)

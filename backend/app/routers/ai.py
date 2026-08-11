@@ -35,7 +35,7 @@ from sklearn.model_selection import StratifiedKFold, cross_validate
 
 from .. import models
 from ..database import get_db
-from ..deps import get_current_user
+from ..deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/ai", tags=["AI Intelligence"])
 
@@ -95,7 +95,7 @@ def _logistic(x: float) -> float:
 def get_sales_forecast(
     horizon_days: int = 14,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
     sales = (
         db.query(models.Sale)
@@ -178,6 +178,26 @@ def get_sales_forecast(
             {"period": d.isoformat(), "predicted_revenue": round(float(v), 2)}
             for d, v in zip(future_days, preds)
         ]
+
+    # Persist the forecast rows (pre-dev parity) so results survive restarts
+    # and can be queried without retraining. Runs once per cache window.
+    try:
+        db.query(models.Forecast).filter(
+            models.Forecast.business_id == current_user.business_id
+        ).delete()
+        for f in forecast:
+            db.add(
+                models.Forecast(
+                    business_id=current_user.business_id,
+                    forecast_date=dt.date.fromisoformat(f["period"]),
+                    predicted_revenue=f["predicted_revenue"],
+                    model_used="LinearRegression",
+                    confidence_score=r2,
+                )
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
 
     return {
         "trend": trend,
@@ -305,6 +325,7 @@ def get_customer_segmentation(
                 "customer_id": stat["customer"].id,
                 "customer_name": stat["customer"].name,
                 "segment": segment,
+                "cluster_number": int(labels[i]),
                 "frequency": stat["order_count"],
                 "monetary": round(stat["total_spent"], 2),
             }
@@ -323,6 +344,26 @@ def get_customer_segmentation(
                 "avg_purchase_frequency": round(segment_orders[seg_name] / count, 1),
             }
         )
+
+    # Persist segment assignments (pre-dev parity).
+    try:
+        cids = [c["customer_id"] for c in customer_list]
+        if cids:
+            db.query(models.CustomerSegment).filter(
+                models.CustomerSegment.customer_id.in_(cids)
+            ).delete()
+            for c in customer_list:
+                db.add(
+                    models.CustomerSegment(
+                        customer_id=c["customer_id"],
+                        segment_name=c["segment"],
+                        cluster_number=c["cluster_number"],
+                        confidence=silhouette,
+                    )
+                )
+            db.commit()
+    except Exception:
+        db.rollback()
 
     return {
         "silhouette_score": silhouette,
@@ -360,7 +401,8 @@ def _rfm_at(purchases: List[models.Sale], cutoff: dt.datetime):
 @router.get("/churn")
 @ttl_cache(ttl=120)
 def get_churn_predictions(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
     customers = (
         db.query(models.Customer)
@@ -483,6 +525,26 @@ def get_churn_predictions(
             }
         )
 
+    # Persist churn predictions (pre-dev parity).
+    try:
+        cids = [r["customer_id"] for r in rows]
+        if cids:
+            db.query(models.ChurnPrediction).filter(
+                models.ChurnPrediction.customer_id.in_(cids)
+            ).delete()
+            for r in rows:
+                db.add(
+                    models.ChurnPrediction(
+                        customer_id=r["customer_id"],
+                        churn_probability=r["churn_probability"],
+                        risk_level=r["risk_category"],
+                        recommendation=r["recommendation"],
+                    )
+                )
+            db.commit()
+    except Exception:
+        db.rollback()
+
     return {
         "accuracy": accuracy,
         "precision": precision,
@@ -583,6 +645,30 @@ def get_product_recommendations(
             }
         )
 
+    # Persist recommendations (pre-dev parity), mapping product names → ids.
+    try:
+        pid_by_name = {p.name: p.id for p in products}
+        cids = [r["customer_id"] for r in rows]
+        if cids:
+            db.query(models.ProductRecommendation).filter(
+                models.ProductRecommendation.customer_id.in_(cids)
+            ).delete()
+            for r in rows:
+                for name in r["recommended_products"]:
+                    pid = pid_by_name.get(name)
+                    if pid is not None:
+                        db.add(
+                            models.ProductRecommendation(
+                                customer_id=r["customer_id"],
+                                product_id=pid,
+                                recommendation_type="cross_sell",
+                                score=1.0,
+                            )
+                        )
+            db.commit()
+    except Exception:
+        db.rollback()
+
     return {"rows": rows}
 
 
@@ -613,7 +699,8 @@ def _is_material_outlier(sale: models.Sale) -> bool:
 @router.get("/anomalies")
 @ttl_cache(ttl=120)
 def get_anomaly_alerts(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
     sales = (
         db.query(models.Sale)

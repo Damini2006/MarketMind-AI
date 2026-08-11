@@ -36,6 +36,15 @@ const ROLE_LABELS = {
   admin: 'System Administrator',
 }
 
+// Pages restricted by role (pre-dev parity). Pages not listed are visible to
+// every logged-in role.
+const ROLE_RESTRICTED = {
+  '/team': ['business_owner', 'admin'],
+  '/forecasting': ['business_owner', 'store_manager', 'admin'],
+  '/churn': ['business_owner', 'store_manager', 'admin'],
+  '/anomalies': ['business_owner', 'store_manager', 'admin'],
+}
+
 const NOTIF_META = {
   inventory: { icon: Boxes, color: 'text-amber-500 dark:text-amber-400', label: 'Inventory' },
   anomaly: { icon: ShieldAlert, color: 'text-red-500 dark:text-red-400', label: 'Anomaly' },
@@ -251,7 +260,10 @@ function ProfileMenu({ user, onLogout }) {
 export default function Layout() {
   const { user, logout } = useAuth()
 
-  const visibleItems = NAV_ITEMS
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    const allowed = ROLE_RESTRICTED[item.to]
+    return !allowed || allowed.includes(user?.role)
+  })
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
 
   const handleLogout = () => {

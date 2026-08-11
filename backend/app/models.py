@@ -1,7 +1,7 @@
 import enum
 import datetime as dt
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, Text
+    Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, Text, Date
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -28,6 +28,7 @@ class Business(Base):
     products = relationship("Product", back_populates="business")
     sales = relationship("Sale", back_populates="business")
     invoices = relationship("Invoice", back_populates="business")
+    forecasts = relationship("Forecast", back_populates="business")
     inventory_alerts = relationship("InventoryAlert", back_populates="business")
     anomaly_alerts = relationship("AnomalyAlert", back_populates="business")
     uploaded_datasets = relationship("UploadedDataset", back_populates="business")
@@ -61,6 +62,7 @@ class User(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
 
     business = relationship("Business", back_populates="users")
+    inventory_transactions = relationship("InventoryTransaction", back_populates="user")
 
 
 class Customer(Base):
@@ -77,6 +79,9 @@ class Customer(Base):
     business = relationship("Business", back_populates="customers")
     sales = relationship("Sale", back_populates="customer")
     invoices = relationship("Invoice", back_populates="customer")
+    segments = relationship("CustomerSegment", back_populates="customer")
+    churn_predictions = relationship("ChurnPrediction", back_populates="customer")
+    recommendations = relationship("ProductRecommendation", back_populates="customer")
 
 
 class Category(Base):
@@ -138,6 +143,11 @@ class Product(Base):
 
     business = relationship("Business", back_populates="products")
     sales = relationship("Sale", back_populates="product")
+    inventory = relationship("Inventory", back_populates="product", uselist=False)
+    inventory_transactions = relationship("InventoryTransaction", back_populates="product")
+    sale_items = relationship("SaleItem", back_populates="product")
+    forecasts = relationship("Forecast", back_populates="product")
+    recommendations = relationship("ProductRecommendation", back_populates="product")
 
 
 class Sale(Base):
@@ -157,6 +167,7 @@ class Sale(Base):
     business = relationship("Business", back_populates="sales")
     customer = relationship("Customer", back_populates="sales")
     product = relationship("Product", back_populates="sales")
+    sale_items = relationship("SaleItem", back_populates="sale")
 
 
 class Invoice(Base):
@@ -227,3 +238,122 @@ class Notification(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
 
     business = relationship("Business", back_populates="notifications")
+
+
+class Inventory(Base):
+    """Per-product stock ledger row (mirrors ``Product.stock_quantity`` so the
+    normalized pre-dev schema is available; ``Product.stock_quantity`` remains
+    the authoritative field the app reads/writes)."""
+
+    __tablename__ = "inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), unique=True, nullable=False)
+    quantity_available = Column(Integer, nullable=False, default=0)
+    reorder_level = Column(Integer, nullable=False, default=10)
+    warehouse_location = Column(String, nullable=True)
+    last_updated = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+
+    product = relationship("Product", back_populates="inventory")
+
+
+class InventoryTransaction(Base):
+    """Stock movement history: IN / OUT / RETURN / ADJUSTMENT."""
+
+    __tablename__ = "inventory_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    transaction_type = Column(String, nullable=False)  # IN, OUT, RETURN, ADJUSTMENT
+    quantity = Column(Integer, nullable=False)
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    product = relationship("Product", back_populates="inventory_transactions")
+    user = relationship("User", back_populates="inventory_transactions")
+
+
+class SaleItem(Base):
+    """Line items for a sale (one row per product on the sale)."""
+
+    __tablename__ = "sale_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sale_id = Column(Integer, ForeignKey("sales.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    quantity = Column(Integer, nullable=False, default=1)
+    unit_price = Column(Float, nullable=False, default=0.0)
+    discount = Column(Float, nullable=False, default=0.0)
+    total = Column(Float, nullable=False, default=0.0)
+
+    sale = relationship("Sale", back_populates="sale_items")
+    product = relationship("Product", back_populates="sale_items")
+
+
+# --- Persisted AI/ML result tables (from pre-dev) ---
+
+
+class CustomerSegment(Base):
+    """Persisted segmentation output: which cluster each customer belongs to."""
+
+    __tablename__ = "customer_segments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    segment_name = Column(String, nullable=False)
+    cluster_number = Column(Integer, nullable=False)
+    confidence = Column(Float, nullable=True)
+    generated_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="segments")
+
+
+class Forecast(Base):
+    """Persisted forecast rows: predicted revenue per future day."""
+
+    __tablename__ = "forecasts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
+    forecast_date = Column(Date, nullable=False)
+    predicted_sales = Column(Float, nullable=True)
+    predicted_revenue = Column(Float, nullable=True)
+    model_used = Column(String, nullable=True)
+    confidence_score = Column(Float, nullable=True)
+    generated_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    product = relationship("Product", back_populates="forecasts")
+    business = relationship("Business", back_populates="forecasts")
+
+
+class ChurnPrediction(Base):
+    """Persisted churn output: risk per customer."""
+
+    __tablename__ = "churn_predictions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    churn_probability = Column(Float, nullable=False)
+    risk_level = Column(String, nullable=False)
+    recommendation = Column(Text, nullable=True)
+    generated_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="churn_predictions")
+
+
+class ProductRecommendation(Base):
+    """Persisted recommendation output: product suggested to a customer."""
+
+    __tablename__ = "product_recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    recommendation_type = Column(String, nullable=True)  # cross_sell, upsell
+    score = Column(Float, nullable=True)
+    generated_at = Column(DateTime, default=dt.datetime.utcnow)
+
+    customer = relationship("Customer", back_populates="recommendations")
+    product = relationship("Product", back_populates="recommendations")

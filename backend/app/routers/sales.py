@@ -10,7 +10,7 @@ from .. import models, schemas
 from ..cache import get_or_set, invalidate
 from ..database import get_db
 from ..deps import get_current_user, require_roles
-from .inventory import _check_and_create_alert
+from .inventory import _check_and_create_alert, _ensure_inventory_row, _record_inventory_transaction
 
 router = APIRouter(prefix="/api/sales", tags=["Sales"])
 
@@ -62,6 +62,17 @@ def create_sale(
         business_id=current_user.business_id,
     )
     db.add(sale)
+    db.flush()
+    # Line item (pre-dev parity) — one row per product on the sale.
+    db.add(
+        models.SaleItem(
+            sale_id=sale.id,
+            product_id=payload.product_id,
+            quantity=payload.quantity,
+            unit_price=payload.unit_price,
+            total=total,
+        )
+    )
     if payload.product_id:
         product = (
             db.query(models.Product)
@@ -73,6 +84,10 @@ def create_sale(
         )
         if product:
             product.stock_quantity = max(0, product.stock_quantity - payload.quantity)
+            _ensure_inventory_row(db, product)
+            _record_inventory_transaction(
+                db, product.id, current_user.id, "OUT", payload.quantity, f"Sale #{sale.id}"
+            )
             db.commit()
             _check_and_create_alert(db, product)
     db.commit()
@@ -171,6 +186,19 @@ def upload_sales_csv(
                 business_id=current_user.business_id,
             )
             db.add(sale)
+            db.flush()
+            # Line item + inventory ledger mirror (pre-dev parity). Historical
+            # imports don't deduct current stock — products keep their stock.
+            db.add(
+                models.SaleItem(
+                    sale_id=sale.id,
+                    product_id=product.id,
+                    quantity=qty,
+                    unit_price=price,
+                    total=qty * price,
+                )
+            )
+            _ensure_inventory_row(db, product)
             created += 1
         except Exception:
             skipped += 1

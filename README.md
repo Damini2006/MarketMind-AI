@@ -1,8 +1,9 @@
-
 # Team_2_Small_Biz_AI
+
 # MarketMind AI - Small Business Sales Intelligence & Analytics Platform
 MarketMind AI is a comprehensive, production-ready SaaS application designed to empower small businesses with advanced sales tracking, inventory management, customer segmentation, and AI-driven predictive analytics.
-#Key Features
+
+# Key Features
 Advanced 3D Animated Landing Page: Interactive product previews, streamlined entry points, and responsive UI.
 
 Secure Authentication & Onboarding: Complete JWT-based registration and login flows.
@@ -11,7 +12,7 @@ Secure Password Recovery: 6-digit OTP generation and automated delivery via Gmai
 
 Dashboard & Settings: Dark/light mode theme toggling, profile management, and role-based workflows.
 
-Core Business Modules:
+# Core Business Modules:
 
 Sales Tracking: Record, monitor, and analyze revenue metrics.
 
@@ -21,7 +22,7 @@ Customer Profiles & Segmentation: Automated RFM (Recency, Frequency, Monetary) c
 
 Invoices: Professional invoice generation and management.
 
-AI & Machine Learning Insights:
+# AI & Machine Learning Insights:
 
 Sales Forecasting
 
@@ -31,7 +32,7 @@ Anomaly & Fraud Detection Alerts
 
 Smart Product Recommendations
 
-🛠️ Tech Stack
+# Tech Stack
 Frontend: React, Vite, Tailwind CSS, Lucide Icons, React Router
 
 Backend: FastAPI, Python, Pydantic, SQLAlchemy, Uvicorn
@@ -40,27 +41,8 @@ Database: Neon PostgreSQL / SQLite
 
 Authentication: JSON Web Tokens (JWT), Passlib, Gmail SMTP (for OTP)
 
-📁 Project Structure
-Plaintext
-Team_2_Small_Biz_AI/
-├── backend/
-│   ├── app/
-│   │   ├── routers/       # API endpoints (Auth, Sales, Customers, Inventory, AI)
-│   │   ├── models.py      # SQLAlchemy database models
-│   │   ├── schemas.py     # Pydantic data validation schemas
-│   │   └── main.py        # FastAPI entry point
-│   ├── requirements.txt   # Python dependencies
-│   └── venv/              # Python virtual environment
-├── frontend/
-│   ├── src/
-│   │   ├── components/    # Reusable UI components & Layouts
-│   │   ├── context/       # Auth and state management
-│   │   ├── pages/         # Dashboard, Analytics, Auth, Landing pages
-│   │   └── App.jsx        # Main routing configuration
-│   ├── package.json       # Node.js dependencies
-│   └── tailwind.config.js # Tailwind CSS configuration
-└── README.md
-⚙️ Setup & Installation Guide
+
+# Setup & Installation Guide
 Prerequisites
 Make sure you have Node.js and Python (3.9+) installed on your machine.
 

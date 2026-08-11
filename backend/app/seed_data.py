@@ -123,6 +123,38 @@ def seed_business_demo_data(db: Session, business: models.Business):
             db.add(p)
             products.append(p)
         db.flush()
+        # Normalized inventory ledger rows (pre-dev parity)
+        for p in products:
+            db.add(
+                models.Inventory(
+                    product_id=p.id,
+                    quantity_available=p.stock_quantity,
+                    reorder_level=p.reorder_threshold,
+                    warehouse_location=p.warehouse_location,
+                )
+            )
+        db.flush()
+
+    # 3b. Inventory ledger backfill (pre-dev parity): ensure every product of
+    #     the business has an inventory mirror row — idempotent, so it also
+    #     covers businesses/products created before this schema existed.
+    for p in products:
+        has_inv = (
+            db.query(models.Inventory)
+            .filter(models.Inventory.product_id == p.id)
+            .count()
+            > 0
+        )
+        if not has_inv:
+            db.add(
+                models.Inventory(
+                    product_id=p.id,
+                    quantity_available=p.stock_quantity,
+                    reorder_level=p.reorder_threshold,
+                    warehouse_location=p.warehouse_location,
+                )
+            )
+    db.flush()
 
     # 4. Customers
     customers = (
@@ -203,6 +235,37 @@ def seed_business_demo_data(db: Session, business: models.Business):
                 business_id=business.id,
             )
             db.add(sale)
+
+    # 5b. Sale line items (pre-dev parity): one row per seeded sale. Only
+    #     runs when the seed actually created sales, so it is idempotent.
+    seeded_sales = (
+        db.query(models.Sale)
+        .filter(
+            models.Sale.business_id == business.id,
+            models.Sale.source == "seed",
+        )
+        .all()
+    )
+    if seeded_sales:
+        sale_ids = [s.id for s in seeded_sales]
+        has_items = (
+            db.query(models.SaleItem)
+            .filter(models.SaleItem.sale_id.in_(sale_ids))
+            .count()
+            > 0
+        )
+        if not has_items:
+            for s in seeded_sales:
+                db.add(
+                    models.SaleItem(
+                        sale_id=s.id,
+                        product_id=s.product_id,
+                        quantity=s.quantity,
+                        unit_price=s.unit_price,
+                        total=s.total_amount,
+                    )
+                )
+            db.flush()
 
     # 6. Datasets (one demo import record so the Datasets page isn't empty)
     has_datasets = (
