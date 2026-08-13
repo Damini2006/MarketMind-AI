@@ -1,0 +1,5 @@
+# Local database
+backend/marketmind.db
+
+# Large trained model
+backend/app/trained_models/sales_forecast.pkl

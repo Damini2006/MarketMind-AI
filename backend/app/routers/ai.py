@@ -7,8 +7,65 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..database import get_db
 from ..deps import get_current_user
+from ..ml.forecasting import forecast_future_sales
 
 router = APIRouter(prefix="/api/ai", tags=["AI Intelligence"])
+
+
+# @router.get("/forecast")
+# @router.get("/forecasting")
+# def get_sales_forecast(
+#     horizon_days: int = 14,
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
+#     sales = db.query(models.Sale).order_by(models.Sale.sale_date.asc()).all()
+#     if not sales:
+#         return {"trend": "insufficient_data", "history": [], "forecast": []}
+
+#     daily_revenue = defaultdict(float)
+#     for s in sales:
+#         date_str = (
+#             s.sale_date.strftime("%Y-%m-%d")
+#             if s.sale_date
+#             else dt.datetime.utcnow().strftime("%Y-%m-%d")
+#         )
+#         daily_revenue[date_str] += float(s.total_amount)
+
+#     sorted_dates = sorted(daily_revenue.keys())
+#     history = [
+#         {"date": d, "revenue": round(daily_revenue[d], 2)} for d in sorted_dates
+#     ]
+
+#     recent_revenues = [h["revenue"] for h in history[-14:]]
+#     avg_rev = sum(recent_revenues) / max(len(recent_revenues), 1)
+
+#     last_date = (
+#         dt.datetime.strptime(sorted_dates[-1], "%Y-%m-%d")
+#         if sorted_dates
+#         else dt.datetime.utcnow()
+#     )
+#     forecast = []
+#     for i in range(1, horizon_days + 1):
+#         next_date = (last_date + dt.timedelta(days=i)).strftime("%Y-%m-%d")
+#         forecast.append(
+#             {
+#                 "period": next_date,
+#                 "predicted_revenue": round(avg_rev * (1 + (i * 0.005)), 2),
+#             }
+#         )
+
+#     return {
+#         "trend": "increasing",
+#         "growth_pct": 12.5,
+#         "mae": 1450.00,
+#         "r2": 0.89,
+#         "history": history,
+#         "forecast": forecast,
+#     }
+
+
+
 
 
 @router.get("/forecast")
@@ -18,139 +75,184 @@ def get_sales_forecast(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
-    sales = db.query(models.Sale).order_by(models.Sale.sale_date.asc()).all()
-    if not sales:
-        return {"trend": "insufficient_data", "history": [], "forecast": []}
 
-    daily_revenue = defaultdict(float)
-    for s in sales:
-        date_str = (
-            s.sale_date.strftime("%Y-%m-%d")
-            if s.sale_date
-            else dt.datetime.utcnow().strftime("%Y-%m-%d")
-        )
-        daily_revenue[date_str] += float(s.total_amount)
+    # Keep the forecast horizon within a reasonable range.
+    horizon_days = max(1, min(horizon_days, 30))
 
-    sorted_dates = sorted(daily_revenue.keys())
-    history = [
-        {"date": d, "revenue": round(daily_revenue[d], 2)} for d in sorted_dates
+    dataset_path = "app/datasets/sales_data.csv"
+
+    result = forecast_future_sales(
+        dataset_path=dataset_path,
+        horizon_days=horizon_days,
+    )
+
+    forecast = [
+        {
+            "period": item["Date"],
+            "predicted_units_sold": item["predicted_units_sold"],
+        }
+        for item in result["forecast"]
     ]
 
-    recent_revenues = [h["revenue"] for h in history[-14:]]
-    avg_rev = sum(recent_revenues) / max(len(recent_revenues), 1)
-
-    last_date = (
-        dt.datetime.strptime(sorted_dates[-1], "%Y-%m-%d")
-        if sorted_dates
-        else dt.datetime.utcnow()
-    )
-    forecast = []
-    for i in range(1, horizon_days + 1):
-        next_date = (last_date + dt.timedelta(days=i)).strftime("%Y-%m-%d")
-        forecast.append(
-            {
-                "period": next_date,
-                "predicted_revenue": round(avg_rev * (1 + (i * 0.005)), 2),
-            }
-        )
-
     return {
-        "trend": "increasing",
-        "growth_pct": 12.5,
-        "mae": 1450.00,
-        "r2": 0.89,
-        "history": history,
+        "forecast_type": "multi_feature_random_forest",
+        "horizon_days": horizon_days,
+        "last_historical_date": result["last_historical_date"],
+        "total_forecast_units": result["total_forecast_units"],
+        "history": result["history"],
         "forecast": forecast,
     }
 
 
+
+
+
+
+# @router.get("/segmentation")
+# def get_customer_segmentation(
+#     db: Session = Depends(get_db), current_user=Depends(get_current_user)
+# ) -> Dict[str, Any]:
+#     customers = db.query(models.Customer).all()
+#     if not customers:
+#         return {"segments": [], "customers": [], "silhouette_score": 0.0}
+
+#     now = dt.datetime.utcnow()
+#     customer_stats = []
+
+#     # Calculate Recency, Frequency, and Monetary stats per customer
+#     for c in customers:
+#         sales = db.query(models.Sale).filter(models.Sale.customer_id == c.id).order_by(models.Sale.sale_date.desc()).all()
+#         total_spent = sum([float(s.total_amount) for s in sales])
+#         order_count = len(sales)
+        
+#         last_sale = sales[0] if sales else None
+#         days_since_last = (now - last_sale.sale_date).days if last_sale and last_sale.sale_date else 999
+
+#         customer_stats.append({
+#             "customer": c,
+#             "total_spent": total_spent,
+#             "order_count": order_count,
+#             "days_since_last": days_since_last
+#         })
+
+#     # Sort customers by total spent to assign relative percentiles
+#     customer_stats.sort(key=lambda x: x["total_spent"], reverse=True)
+#     total_cust = len(customer_stats)
+
+#     customer_list = []
+#     segment_counts = defaultdict(int)
+#     segment_spend = defaultdict(float)
+#     segment_orders = defaultdict(int)
+
+#     # Assign 6 distinct AI/RFM Segments
+#     for idx, stat in enumerate(customer_stats):
+#         c = stat["customer"]
+#         spent = stat["total_spent"]
+#         orders = stat["order_count"]
+#         recency = stat["days_since_last"]
+
+#         percentile = idx / max(total_cust, 1)
+
+#         if percentile < 0.15 and spent > 0:
+#             segment = "VIP Champions"
+#         elif percentile < 0.35 and orders >= 5:
+#             segment = "Loyal Frequenters"
+#         elif percentile < 0.55 and spent > 0:
+#             segment = "Potential Loyalists"
+#         elif recency > 60:
+#             segment = "At-Risk Spenders"
+#         elif orders <= 2:
+#             segment = "New / Recent Buyers"
+#         else:
+#             segment = "Low Engagement"
+
+#         customer_list.append({
+#             "customer_id": c.id,
+#             "customer_name": c.name,
+#             "segment": segment,
+#             "frequency": orders,
+#             "monetary": round(spent, 2)
+#         })
+
+#         segment_counts[segment] += 1
+#         segment_spend[segment] += spent
+#         segment_orders[segment] += orders
+
+#     segments_summary = []
+#     for seg_name, count in segment_counts.items():
+#         avg_val = segment_spend[seg_name] / count if count > 0 else 0
+#         avg_freq = segment_orders[seg_name] / count if count > 0 else 0
+
+#         segments_summary.append({
+#             "segment": seg_name,
+#             "customer_count": count,
+#             "avg_purchase_value": round(avg_val, 2),
+#             "avg_purchase_frequency": round(avg_freq, 1)
+#         })
+
+#     return {
+#         "silhouette_score": 0.81,
+#         "segments": segments_summary,
+#         "customers": customer_list
+#     }
+
 @router.get("/segmentation")
 def get_customer_segmentation(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
-    customers = db.query(models.Customer).all()
-    if not customers:
-        return {"segments": [], "customers": [], "silhouette_score": 0.0}
 
-    now = dt.datetime.utcnow()
-    customer_stats = []
+    from ..ml.segmentation import train_customer_segmentation
 
-    # Calculate Recency, Frequency, and Monetary stats per customer
-    for c in customers:
-        sales = db.query(models.Sale).filter(models.Sale.customer_id == c.id).order_by(models.Sale.sale_date.desc()).all()
-        total_spent = sum([float(s.total_amount) for s in sales])
-        order_count = len(sales)
-        
-        last_sale = sales[0] if sales else None
-        days_since_last = (now - last_sale.sale_date).days if last_sale and last_sale.sale_date else 999
+    try:
+        result = train_customer_segmentation(db)
+        df = result["data"]
 
-        customer_stats.append({
-            "customer": c,
-            "total_spent": total_spent,
-            "order_count": order_count,
-            "days_since_last": days_since_last
-        })
+        # Build segment summary for frontend
+        segments = []
 
-    # Sort customers by total spent to assign relative percentiles
-    customer_stats.sort(key=lambda x: x["total_spent"], reverse=True)
-    total_cust = len(customer_stats)
+        for segment_name, group in df.groupby("segment"):
+            segments.append(
+                {
+                    "segment": segment_name,
+                    "customer_count": int(len(group)),
+                    "avg_purchase_value": round(
+                        float(group["monetary"].mean()), 2
+                    ),
+                    "avg_purchase_frequency": round(
+                        float(group["frequency"].mean()), 1
+                    ),
+                }
+            )
 
-    customer_list = []
-    segment_counts = defaultdict(int)
-    segment_spend = defaultdict(float)
-    segment_orders = defaultdict(int)
+        # Build customer-level results
+        customers = []
 
-    # Assign 6 distinct AI/RFM Segments
-    for idx, stat in enumerate(customer_stats):
-        c = stat["customer"]
-        spent = stat["total_spent"]
-        orders = stat["order_count"]
-        recency = stat["days_since_last"]
+        for _, row in df.iterrows():
+            customers.append(
+                {
+                    "customer_id": int(row["customer_id"]),
+                    "customer_name": row["customer_name"],
+                    "segment": row["segment"],
+                    "frequency": int(row["frequency"]),
+                    "monetary": round(float(row["monetary"]), 2),
+                }
+            )
 
-        percentile = idx / max(total_cust, 1)
+        return {
+            "best_k": result["best_k"],
+            "silhouette_score": result["silhouette_score"],
+            "scores": result["scores"],
+            "segments": segments,
+            "customers": customers,
+        }
 
-        if percentile < 0.15 and spent > 0:
-            segment = "VIP Champions"
-        elif percentile < 0.35 and orders >= 5:
-            segment = "Loyal Frequenters"
-        elif percentile < 0.55 and spent > 0:
-            segment = "Potential Loyalists"
-        elif recency > 60:
-            segment = "At-Risk Spenders"
-        elif orders <= 2:
-            segment = "New / Recent Buyers"
-        else:
-            segment = "Low Engagement"
-
-        customer_list.append({
-            "customer_id": c.id,
-            "customer_name": c.name,
-            "segment": segment,
-            "frequency": orders,
-            "monetary": round(spent, 2)
-        })
-
-        segment_counts[segment] += 1
-        segment_spend[segment] += spent
-        segment_orders[segment] += orders
-
-    segments_summary = []
-    for seg_name, count in segment_counts.items():
-        avg_val = segment_spend[seg_name] / count if count > 0 else 0
-        avg_freq = segment_orders[seg_name] / count if count > 0 else 0
-
-        segments_summary.append({
-            "segment": seg_name,
-            "customer_count": count,
-            "avg_purchase_value": round(avg_val, 2),
-            "avg_purchase_frequency": round(avg_freq, 1)
-        })
-
-    return {
-        "silhouette_score": 0.81,
-        "segments": segments_summary,
-        "customers": customer_list
-    }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "segments": [],
+            "customers": [],
+        }
 
 @router.get("/churn")
 def get_churn_predictions(
