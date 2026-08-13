@@ -1,1 +1,2 @@
+*.md text
 backend/app/trained_models/*.pkl !text !filter !merge !diff
