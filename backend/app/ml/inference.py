@@ -43,3 +43,32 @@ def predict_customer_churn() -> Dict[str, Any]:
         "results": high_risk,
         "metrics": {"total_high_risk": len(high_risk), "accuracy": 0.89}
     }
+import joblib
+import os
+import pandas as pd
+
+MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "trained_models",
+    "revenue_prediction_compressed.pkl"
+)
+
+model = joblib.load(MODEL_PATH)
+
+
+def predict_revenue(category, region, seasonality, demand, price, promotion):
+
+    input_data = pd.DataFrame([{
+        "Category": category,
+        "Region": region,
+        "Seasonality": seasonality,
+        "Demand": demand,
+        "Price": price,
+        "Promotion": promotion
+    }])
+
+    prediction = model.predict(input_data)
+
+    return {
+        "predicted_revenue": float(prediction[0])
+    }

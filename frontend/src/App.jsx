@@ -11,6 +11,7 @@ import Inventory from './pages/Inventory.jsx'
 import Invoices from './pages/Invoices.jsx'
 import Customers from './pages/Customers.jsx'
 import Forecasting from './pages/Forecasting.jsx'
+import RevenuePrediction from './pages/RevenuePrediction.jsx'
 import Segmentation from './pages/Segmentation.jsx'
 import Churn from './pages/Churn.jsx'
 import Recommendations from './pages/Recommendations.jsx'
@@ -63,6 +64,7 @@ export default function App() {
           <Route path='/datasets' element={<Datasets />} />
           <Route path='/team' element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
           <Route path='/forecasting' element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Forecasting /></ProtectedRoute>} />
+          <Route path='/revenue-prediction'element={<RevenuePrediction />}/>
           <Route path='/segmentation' element={<Segmentation />} />
           <Route path='/churn' element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Churn /></ProtectedRoute>} />
           <Route path='/recommendations' element={<Recommendations />} />

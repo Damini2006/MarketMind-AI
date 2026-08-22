@@ -6,7 +6,7 @@ import ThemeToggle from '../components/ThemeToggle'
 import {
   LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
-  Settings, Bell, ChevronDown, UsersRound, Tags, Truck, Database
+  Settings, Bell, ChevronDown, UsersRound, Tags, Truck, Database,DollarSign
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { to: '/team', label: 'Team', icon: UsersRound, roles: ['business_owner', 'admin'] },
   { to: '/datasets', label: 'Datasets', icon: Database, roles: ['business_owner', 'admin'] },
   { to: '/forecasting', label: 'Forecasting', icon: TrendingUp, roles: ['business_owner', 'store_manager', 'admin'] },
+  { to: '/revenue-prediction', label: 'Revenue Prediction', icon: DollarSign, roles: ['business_owner', 'store_manager', 'admin'] },
   { to: '/segmentation', label: 'Segmentation', icon: PieChart, roles: null },
   { to: '/churn', label: 'Churn Risk', icon: UserMinus, roles: ['business_owner', 'store_manager', 'admin'] },
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles, roles: null },

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, SessionLocal
 from . import models
 from .seed_data import seed_if_empty
-from .routers import auth, customers, inventory, sales, invoices, analytics, categories, suppliers, datasets, users, ai
+from .routers import auth, customers, inventory, sales, invoices, analytics, categories, suppliers, datasets, users, ai,revenue
 
 app = FastAPI(
     title="MarketMind AI",
@@ -32,6 +32,7 @@ app.include_router(suppliers.router)
 app.include_router(datasets.router)
 app.include_router(users.router)
 app.include_router(ai.router)
+app.include_router(revenue.router)
 
 
 
