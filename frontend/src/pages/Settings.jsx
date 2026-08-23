@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
 import Avatar from '../components/Avatar'
-import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2 } from 'lucide-react'
+import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2, Calendar } from 'lucide-react'
 import { AVATAR_COLORS } from '../utils/avatar'
 
 const CURRENCIES = [
@@ -26,29 +26,35 @@ const ROLE_LABELS = {
   admin: 'System Administrator',
 }
 
-const PERMISSIONS_MAP = {
+const ROLE_PAGES = {
   business_owner: [
-    'Full access to Sales, Revenue & Inventory analytics',
-    'Access to Customer Segmentation & Churn Risk models',
-    'AI Recommendations & Anomaly Alerts management',
-    'User & Store Management Control',
-  ],
-  admin: [
-    'System-wide administrative privileges',
-    'Database ingestion & direct API management',
-    'User permission overrides & role assignments',
-    'Full access to all ML prediction modules',
+    'Dashboard', 'Sales', 'Inventory', 'Invoices', 'Customers',
+    'Categories', 'Suppliers', 'Team', 'Datasets', 'Forecasting',
+    'Segmentation', 'Churn Risk', 'Recommendations', 'Anomaly Alerts',
+    'Activity Log', 'Settings',
   ],
   store_manager: [
-    'Access to Sales ingestion & Inventory updates',
-    'Customer view & Invoice generation',
-    'Stock Anomaly alerts & basic forecasting',
+    'Dashboard', 'Sales', 'Inventory', 'Invoices', 'Customers',
+    'Categories', 'Suppliers', 'Forecasting', 'Segmentation',
+    'Churn Risk', 'Recommendations', 'Anomaly Alerts', 'Activity Log', 'Settings',
   ],
   sales_executive: [
-    'Sales entry & Invoice creation',
-    'Customer directory access',
-    'View-only access to basic dashboard KPIs',
+    'Dashboard', 'Sales', 'Inventory', 'Invoices', 'Customers',
+    'Segmentation', 'Recommendations', 'Settings',
   ],
+  admin: [
+    'Dashboard', 'Sales', 'Inventory', 'Invoices', 'Customers',
+    'Categories', 'Suppliers', 'Team', 'Datasets', 'Forecasting',
+    'Segmentation', 'Churn Risk', 'Recommendations', 'Anomaly Alerts',
+    'Activity Log', 'Settings',
+  ],
+}
+
+const ROLE_COLORS = {
+  business_owner: { bg: 'bg-amber-50 dark:bg-amber-950/40', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800/60', dot: 'bg-amber-500' },
+  store_manager: { bg: 'bg-blue-50 dark:bg-blue-950/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800/60', dot: 'bg-blue-500' },
+  sales_executive: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800/60', dot: 'bg-emerald-500' },
+  admin: { bg: 'bg-slate-50 dark:bg-slate-700/40', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-600', dot: 'bg-slate-500' },
 }
 
 export default function Settings() {
@@ -62,6 +68,7 @@ export default function Settings() {
   const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Kolkata')
   const [avatarColor, setAvatarColor] = useState(user?.avatar_color || 'indigo')
   const [bio, setBio] = useState(user?.bio || '')
+  const [dob, setDob] = useState(user?.dob || '')
   const [business, setBusiness] = useState(null)
   const [avatarMsg, setAvatarMsg] = useState({ type: '', text: '' })
   const [avatarLoading, setAvatarLoading] = useState(false)
@@ -91,6 +98,7 @@ export default function Settings() {
     setTimezone(user?.timezone || 'Asia/Kolkata')
     setAvatarColor(user?.avatar_color || 'indigo')
     setBio(user?.bio || '')
+    setDob(user?.dob || '')
   }
 
   // Load company info for the tenant card
@@ -115,6 +123,7 @@ export default function Settings() {
         timezone,
         avatar_color: avatarColor,
         bio: bio || null,
+        dob: dob || null,
       })
       if (setUser && res.data) {
         setUser((prev) => ({ ...prev, ...res.data }))
@@ -189,6 +198,7 @@ export default function Settings() {
         timezone,
         avatar_color: avatarColor,
         bio: bio || null,
+        dob: dob || null,
       })
       if (setUser && res.data) {
         setUser((prev) => ({ ...prev, ...res.data }))
@@ -240,7 +250,8 @@ export default function Settings() {
     }
   }
 
-  const userPermissions = PERMISSIONS_MAP[user?.role] || PERMISSIONS_MAP['business_owner']
+  const userPages = ROLE_PAGES[user?.role] || ROLE_PAGES.business_owner
+const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.business_owner
 
   // Profile completion meter
   const completionItems = [
@@ -289,31 +300,7 @@ export default function Settings() {
                 className="hidden"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={avatarLoading}
-                className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 flex items-center gap-1 disabled:opacity-50"
-              >
-                <Camera size={12} /> {user?.avatar_url ? 'Change photo' : 'Upload photo'}
-              </button>
-              {user?.avatar_url && (
-                <button
-                  type="button"
-                  onClick={handleAvatarRemove}
-                  disabled={avatarLoading}
-                  className="text-[11px] font-semibold text-red-500 hover:text-red-600 flex items-center gap-1 disabled:opacity-50"
-                >
-                  <Trash2 size={12} /> Remove
-                </button>
-              )}
-            </div>
-            {avatarMsg.text && (
-              <p className={`text-[11px] ${avatarMsg.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                {avatarMsg.text}
-              </p>
-            )}
+
             <div className="flex items-center gap-1.5">
               {Object.entries(AVATAR_COLORS).map(([key, cls]) => (
                 <button
@@ -335,8 +322,9 @@ export default function Settings() {
             {bio && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 italic max-w-sm">{bio}</p>}
           </div>
         </div>
-        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-brand-50 dark:bg-brand-950/40 text-brand-700 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60">
-          Role: {ROLE_LABELS[user?.role] || user?.role || 'Business Owner'}
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${roleColor.bg} ${roleColor.text} border ${roleColor.border}`}>
+          <span className={`w-2 h-2 rounded-full ${roleColor.dot}`} />
+          {ROLE_LABELS[user?.role] || user?.role || 'Business Owner'}
         </span>
       </div>
 
@@ -398,6 +386,21 @@ export default function Settings() {
                 placeholder="Optional contact number"
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
               />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1 dark:text-slate-300">
+                Date of Birth
+              </label>
+              <div className="relative">
+                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                />
+              </div>
             </div>
 
             <div>
@@ -577,20 +580,47 @@ export default function Settings() {
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4 dark:bg-slate-800 dark:border-slate-700">
             <div className="flex items-center gap-2 border-b border-slate-100 pb-3 dark:border-slate-700/60">
               <ShieldCheck size={20} className="text-brand-600" />
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Role Permissions</h3>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Your Role</h3>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Your assigned privileges as an active{' '}
-              <span className="font-semibold">{ROLE_LABELS[user?.role] || 'User'}</span>:
-            </p>
-            <ul className="space-y-2 pt-1">
-              {userPermissions.map((perm, index) => (
-                <li key={index} className="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300">
-                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" />
-                  <span>{perm}</span>
-                </li>
-              ))}
-            </ul>
+            {/* Role Badge */}
+            <div className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${roleColor.bg} ${roleColor.border}`}>  
+              <div className={`w-2.5 h-2.5 rounded-full ${roleColor.dot}`} />
+              <span className={`text-sm font-bold ${roleColor.text}`}>{ROLE_LABELS[user?.role] || 'User'}</span>
+            </div>
+            {/* Accessible Pages */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                Can Access ({userPages.length} pages)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {userPages.map((page) => (
+                  <span key={page} className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-md border border-slate-200 dark:border-slate-600">
+                    <CheckCircle2 size={10} className="text-emerald-500" />
+                    {page}
+                  </span>
+                ))}
+              </div>
+            </div>
+            {/* Restricted Pages */}
+            {(() => {
+              const allPages = ROLE_PAGES.business_owner
+              const restricted = allPages.filter(p => !userPages.includes(p))
+              if (restricted.length === 0) return null
+              return (
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
+                    Restricted ({restricted.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {restricted.map((page) => (
+                      <span key={page} className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-md border border-red-200 dark:border-red-800/40 line-through">
+                        {page}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4 dark:bg-slate-800 dark:border-slate-700">

@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Upload, Plus, Download } from 'lucide-react'
+import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
+import { Upload, Plus, Download, ShoppingCart, IndianRupee, Users, Calendar } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'
 
 export default function Sales() {
@@ -12,44 +13,17 @@ export default function Sales() {
   const [showForm, setShowForm] = useState(false)
   const [uploadMsg, setUploadMsg] = useState(null)
   const [error, setError] = useState(null)
+  const [selectedSale, setSelectedSale] = useState(null)
   const [form, setForm] = useState({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
 
   const load = useCallback(() => {
     Promise.all([api.get('/sales/'), api.get('/inventory/products'), api.get('/customers/')])
-      .then(([s, p, c]) => {
-        setSales(s.data)
-        setProducts(p.data)
-        setCustomers(c.data)
-      })
-      .catch((err) => {
-        setError(err.response?.data?.detail || err.message || 'Failed to load sales data.')
-      })
+      .then(([s, p, c]) => { setSales(s.data); setProducts(p.data); setCustomers(c.data) })
+      .catch((err) => setError(err.response?.data?.detail || err.message || 'Failed to load sales data.'))
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function startFetching() {
-      try {
-        const [s, p, c] = await Promise.all([api.get('/sales/'), api.get('/inventory/products'), api.get('/customers/')])
-        if (!cancelled) {
-          setSales(s.data)
-          setProducts(p.data)
-          setCustomers(c.data)
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.response?.data?.detail || err.message || 'Failed to load sales data.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    startFetching()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  useEffect(() => { load() }, [load])
 
   const handleProductChange = (e) => {
     const pid = e.target.value
@@ -64,30 +38,19 @@ export default function Sales() {
       await api.post('/sales/', {
         product_id: form.product_id ? Number(form.product_id) : null,
         customer_id: form.customer_id ? Number(form.customer_id) : null,
-        quantity: Number(form.quantity),
-        unit_price: Number(form.unit_price),
+        quantity: Number(form.quantity), unit_price: Number(form.unit_price),
       })
       setShowForm(false)
       setForm({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
       load()
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Could not record sale.')
-    }
+    } catch (err) { setError(err.response?.data?.detail || 'Could not record sale.') }
   }
 
   const handleExport = () => {
     const rows = sales.map((s) => {
       const product = products.find((p) => p.id === s.product_id)
       const customer = customers.find((c) => c.id === s.customer_id)
-      return [
-        s.sale_date ? s.sale_date.slice(0, 10) : '',
-        product?.name || '',
-        customer?.name || '',
-        s.quantity,
-        s.unit_price,
-        s.total_amount,
-        s.source,
-      ]
+      return [s.sale_date ? s.sale_date.slice(0, 10) : '', product?.name || '', customer?.name || '', s.quantity, s.unit_price, s.total_amount, s.source]
     })
     downloadCSV('sales.csv', ['Date', 'Product', 'Customer', 'Qty', 'Unit Price', 'Total', 'Source'], rows)
   }
@@ -95,41 +58,59 @@ export default function Sales() {
   const handleUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
-    const data = new FormData()
-    data.append('file', file)
+    const data = new FormData(); data.append('file', file)
     setUploadMsg('Uploading...')
     try {
       const res = await api.post('/sales/upload-csv', data, { headers: { 'Content-Type': 'multipart/form-data' } })
       setUploadMsg(`Uploaded: ${res.data.sales_created} sales created, ${res.data.rows_skipped} rows skipped.`)
       load()
-    } catch (err) {
-      setUploadMsg(err.response?.data?.detail || 'Upload failed.')
-    }
+    } catch (err) { setUploadMsg(err.response?.data?.detail || 'Upload failed.') }
     e.target.value = ''
   }
 
   if (loading) return <Loading label="Loading sales..." />
 
+  const totalRevenue = sales.reduce((s, x) => s + (x.total_amount || 0), 0)
+  const avgSale = sales.length > 0 ? Math.round(totalRevenue / sales.length) : 0
+
+  const columns = [
+    { key: 'sale_date', label: 'Date', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v ? new Date(v).toLocaleDateString() : '—'}</span> },
+    { key: 'product_name', label: 'Product', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v || '—'}</span> },
+    { key: 'customer_name', label: 'Customer' },
+    { key: 'quantity', label: 'Qty' },
+    { key: 'unit_price', label: 'Price', render: (v) => `₹${Number(v || 0).toLocaleString('en-IN')}` },
+    { key: 'total_amount', label: 'Total', render: (v) => <span className="font-semibold">₹{Number(v || 0).toLocaleString('en-IN')}</span> },
+    { key: 'source', label: 'Source', render: (v) => <Badge tone={v === 'csv_upload' ? 'blue' : v === 'seed' ? 'slate' : 'green'}>{v}</Badge> },
+  ]
+
+  const enrichedSales = sales.map(s => ({
+    ...s,
+    product_name: products.find(p => p.id === s.product_id)?.name || `#${s.product_id}`,
+    customer_name: customers.find(c => c.id === s.customer_id)?.name || '—',
+  }))
+
   return (
     <div>
-      <PageHeader
-        title="Sales"
-        subtitle="Sales data upload, transaction records, and history."
+      <PageHeader title="Sales" subtitle="Sales data upload, transaction records, and history."
         action={
           <div className="flex gap-2">
             <label className="btn-secondary cursor-pointer flex items-center gap-2">
               <Upload size={16} /> Upload CSV
               <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
             </label>
-            <button onClick={handleExport} className="btn-secondary flex items-center gap-2">
-              <Download size={16} /> Export CSV
-            </button>
-            <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2">
-              <Plus size={16} /> Add Sale
-            </button>
+            <button onClick={handleExport} className="btn-secondary flex items-center gap-2"><Download size={16} /> Export CSV</button>
+            <button onClick={() => setShowForm(v => !v)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Add Sale</button>
           </div>
         }
       />
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <div className="card text-center p-3"><p className="text-xl font-bold text-slate-900 dark:text-slate-100">{sales.length}</p><p className="text-[10px] text-slate-500 uppercase">Total Sales</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-emerald-600">₹{totalRevenue.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Total Revenue</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-blue-600">₹{avgSale.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Avg Sale Value</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-purple-600">{customers.length}</p><p className="text-[10px] text-slate-500 uppercase">Customers</p></div>
+      </div>
 
       {uploadMsg && <div className="bg-brand-50 text-brand-700 border border-brand-100 rounded-lg px-4 py-3 text-sm mb-4 dark:bg-brand-950/40 dark:text-brand-300 dark:border-brand-900/60">{uploadMsg}</div>}
 
@@ -141,14 +122,14 @@ export default function Sales() {
               <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Product</label>
               <select className="input mt-1" value={form.product_id} onChange={handleProductChange} required>
                 <option value="">Select product</option>
-                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Customer</label>
               <select className="input mt-1" value={form.customer_id} onChange={(e) => setForm({ ...form, customer_id: e.target.value })}>
                 <option value="">Walk-in / none</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
@@ -164,44 +145,30 @@ export default function Sales() {
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        {sales.length === 0 ? (
-          <EmptyState message="No sales recorded yet." />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
-                <th className="py-2 pr-4">Date</th>
-                <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Customer</th>
-                <th className="py-2 pr-4">Qty</th>
-                <th className="py-2 pr-4">Unit Price</th>
-                <th className="py-2 pr-4">Total</th>
-                <th className="py-2 pr-4">Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sales.slice(0, 100).map((s) => {
-                const product = products.find((p) => p.id === s.product_id)
-                const customer = customers.find((c) => c.id === s.customer_id)
-                return (
-                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(s.sale_date).toLocaleDateString()}</td>
-                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{product?.name || `#${s.product_id}`}</td>
-                    <td className="py-2 pr-4">{customer?.name || '—'}</td>
-                    <td className="py-2 pr-4">{s.quantity}</td>
-                    <td className="py-2 pr-4">₹{s.unit_price.toLocaleString('en-IN')}</td>
-                    <td className="py-2 pr-4 font-semibold">₹{s.total_amount.toLocaleString('en-IN')}</td>
-                    <td className="py-2 pr-4">
-                      <Badge tone={s.source === 'csv_upload' ? 'blue' : s.source === 'seed' ? 'slate' : 'green'}>{s.source}</Badge>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+      <div className="card">
+        <InteractiveTable
+          data={enrichedSales}
+          columns={columns}
+          searchableKeys={['product_name', 'customer_name', 'source']}
+          onRowClick={setSelectedSale}
+          emptyMessage="No sales recorded yet."
+        />
       </div>
+
+      {/* Sale Detail Modal */}
+      <DetailModal title={selectedSale ? `Sale #${selectedSale.id}` : ''} subtitle={selectedSale ? new Date(selectedSale.sale_date).toLocaleString() : ''} onClose={() => setSelectedSale(null)}>
+        {selectedSale && (
+          <div>
+            <DetailModal.Row label="Product" value={selectedSale.product_name} icon={ShoppingCart} tone="brand" />
+            <DetailModal.Row label="Customer" value={selectedSale.customer_name} icon={Users} />
+            <DetailModal.Row label="Quantity" value={selectedSale.quantity} />
+            <DetailModal.Row label="Unit Price" value={`₹${Number(selectedSale.unit_price || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
+            <DetailModal.Row label="Total" value={`₹${Number(selectedSale.total_amount || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
+            <DetailModal.Row label="Source" value={<Badge tone={selectedSale.source === 'csv_upload' ? 'blue' : selectedSale.source === 'seed' ? 'slate' : 'green'}>{selectedSale.source}</Badge>} />
+            <DetailModal.Row label="Date" value={new Date(selectedSale.sale_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })} icon={Calendar} />
+          </div>
+        )}
+      </DetailModal>
     </div>
   )
 }

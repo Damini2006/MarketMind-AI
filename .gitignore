@@ -1,0 +1,12 @@
+@"
+.env
+.env.*
+*.db
+backend/.env
+backend/.env.*
+backend/uploads/
+backend/neon_backup_before_migration.json
+backend/preserved_accounts.json
+node_modules/
+__pycache__/
+"@ | Out-File -Encoding utf8 .gitignore

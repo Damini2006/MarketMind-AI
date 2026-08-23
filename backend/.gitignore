@@ -1,14 +1,6 @@
-@"
 __pycache__/
 *.pyc
 *.db
 .env
-.env.neon
 venv/
 .venv/
-
-# Local-only backups/uploads/secrets - never commit
-neon_backup_before_migration.json
-preserved_accounts.json
-uploads/
-"@ | Set-Content backend/.gitignore

@@ -1,205 +1,121 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, EmptyState, ErrorBanner } from '../components/ui.jsx'
-import { Plus, Upload, Search, ArrowUpDown, Download } from 'lucide-react'
-import { useAuth } from '../context/AuthContext.jsx'
-import { downloadCSV } from '../utils/csv'
+import { Loading, PageHeader, EmptyState, Badge, ErrorBanner } from '../components/ui.jsx'
+import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
+import { Plus, Users, Mail, Phone, IndianRupee, ShoppingCart } from 'lucide-react'
 
 export default function Customers() {
-  const { hasRole } = useAuth()
   const [customers, setCustomers] = useState([])
+  const [sales, setSales] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState(null)
-  const [uploadMsg, setUploadMsg] = useState(null)
+  const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
-  
-  const [search, setSearch] = useState('')
-  const [sortField, setSortField] = useState('name')
-  const [sortAsc, setSortAsc] = useState(true)
 
   const load = useCallback(() => {
-    api.get('/customers/')
-      .then((res) => setCustomers(res.data))
-      .catch((err) => {
-        setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
-      })
+    Promise.all([api.get('/customers/'), api.get('/sales/')])
+      .then(([c, s]) => { setCustomers(c.data); setSales(s.data) })
+      .catch((err) => setError(err.response?.data?.detail || 'Failed to load customers.'))
       .finally(() => setLoading(false))
   }, [])
-  useEffect(() => {
-    let cancelled = false
 
-    async function startFetching() {
-      try {
-        const res = await api.get('/customers/')
-        if (!cancelled) setCustomers(res.data)
-      } catch (err) {
-        if (!cancelled) setError(err.response?.data?.detail || err.message || 'Failed to load customers.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    startFetching()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const canCreate = hasRole('business_owner', 'sales_executive', 'admin')
-
-  const handleExport = () => {
-    const rows = customers.map((c) => [
-      c.name,
-      c.email || '',
-      c.phone || '',
-      c.created_at ? c.created_at.slice(0, 10) : '',
-    ])
-    downloadCSV('customers.csv', ['Name', 'Email', 'Phone', 'Joined'], rows)
-  }
-
-  const handleUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const data = new FormData()
-    data.append('file', file)
-    setUploadMsg('Uploading...')
-    try {
-      const res = await api.post('/customers/upload-csv', data, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setUploadMsg(`Uploaded: ${res.data.customers_created} created, ${res.data.rows_skipped} skipped (duplicates/invalid).`)
-      load()
-    } catch (err) {
-      setUploadMsg(err.response?.data?.detail || 'Upload failed.')
-    }
-    e.target.value = ''
-  }
+  useEffect(() => { load() }, [load])
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault(); setError(null)
     try {
       await api.post('/customers/', form)
-      setShowForm(false)
-      setForm({ name: '', email: '', phone: '' })
-      load()
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Could not create customer.')
-    }
+      setForm({ name: '', email: '', phone: '' }); setShowForm(false); load()
+    } catch (err) { setError(err.response?.data?.detail || 'Failed to add customer.') }
   }
 
-  const handleSort = (field) => {
-    if (sortField === field) setSortAsc(!sortAsc)
-    else {
-      setSortField(field)
-      setSortAsc(true)
-    }
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this customer?')) return
+    try { await api.delete(`/customers/${id}`); load() }
+    catch (err) { setError(err.response?.data?.detail || 'Failed to delete customer.') }
   }
-
-  const processedCustomers = customers
-    .filter((c) => 
-      c.name.toLowerCase().includes(search.toLowerCase()) || 
-      c.email?.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => {
-      let valA = a[sortField] || ''
-      let valB = b[sortField] || ''
-      if (sortAsc) return valA > valB ? 1 : -1
-      return valA < valB ? 1 : -1
-    })
 
   if (loading) return <Loading label="Loading customers..." />
 
+  const getCustomerStats = (cid) => {
+    const cSales = sales.filter(s => s.customer_id === cid)
+    const totalSpent = cSales.reduce((sum, s) => sum + (s.total_amount || 0), 0)
+    return { orderCount: cSales.length, totalSpent }
+  }
+
+  const columns = [
+    { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },
+    { key: 'email', label: 'Email', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v || '—'}</span> },
+    { key: 'phone', label: 'Phone' },
+    { key: 'orders', label: 'Orders', render: (v) => <Badge tone={v > 0 ? 'blue' : 'slate'}>{v}</Badge> },
+    { key: 'total_spent', label: 'Total Spent', render: (v) => <span className="font-semibold text-emerald-600">₹{Number(v || 0).toLocaleString('en-IN')}</span> },
+  ]
+
+  const enriched = customers.map(c => {
+    const stats = getCustomerStats(c.id)
+    return { ...c, orders: stats.orderCount, total_spent: stats.totalSpent }
+  })
+
+  const totalSpentAll = enriched.reduce((s, c) => s + c.total_spent, 0)
+  const avgSpend = customers.length > 0 ? Math.round(totalSpentAll / customers.length) : 0
+
   return (
     <div>
-      <PageHeader
-        title="Customers"
-        subtitle="Customer profiles and contact directory."
-        action={
-          canCreate && (
-            <div className="flex gap-2">
-              <label className="btn-secondary cursor-pointer flex items-center gap-2 text-xs">
-                <Upload size={14} /> Upload CSV
-                <input type="file" accept=".csv" onChange={handleUpload} className="hidden" />
-              </label>
-              <button onClick={handleExport} className="btn-secondary flex items-center gap-2 text-xs">
-                <Download size={14} /> Export CSV
-              </button>
-              <button onClick={() => setShowForm((v) => !v)} className="btn-primary flex items-center gap-2 text-xs">
-                <Plus size={14} /> Add Customer
-              </button>
-            </div>
-          )
-        }
+      <PageHeader title="Customers" subtitle="Customer profiles and contact directory."
+        action={<button onClick={() => setShowForm(v => !v)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Add Customer</button>}
       />
 
-      {uploadMsg && <div className="bg-brand-50 text-brand-700 border border-brand-100 rounded-lg px-4 py-3 text-sm mb-4">{uploadMsg}</div>}
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="card text-center p-3"><p className="text-xl font-bold text-slate-900 dark:text-slate-100">{customers.length}</p><p className="text-[10px] text-slate-500 uppercase">Total Customers</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-emerald-600">₹{totalSpentAll.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Total Revenue</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-blue-600">₹{avgSpend.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Avg Spend/Customer</p></div>
+      </div>
+
+      <ErrorBanner message={error} />
 
       {showForm && (
         <div className="card mb-6">
-          <ErrorBanner message={error} />
-          <form onSubmit={handleSubmit} className="grid grid-cols-2 md:grid-cols-3 gap-3 items-end">
-            <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Name</label>
-              <input className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Email</label>
-              <input type="email" className="input mt-1" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone</label>
-              <input className="input mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-            </div>
-            <button type="submit" className="btn-primary col-span-2 md:col-span-1">Save Customer</button>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div><label className="text-xs font-medium text-slate-600 dark:text-slate-300">Name *</label>
+              <input type="text" className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" required /></div>
+            <div><label className="text-xs font-medium text-slate-600 dark:text-slate-300">Email</label>
+              <input type="email" className="input mt-1" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" /></div>
+            <div><label className="text-xs font-medium text-slate-600 dark:text-slate-300">Phone</label>
+              <input type="tel" className="input mt-1" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Phone number" /></div>
+            <button type="submit" className="btn-primary md:col-span-1">Save Customer</button>
           </form>
         </div>
       )}
 
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <div className="relative w-full max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search customers..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="input text-xs pl-8 py-1.5"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          {processedCustomers.length === 0 ? (
-            <EmptyState message="No customers found." />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 border-b border-slate-200 dark:text-slate-400 dark:border-slate-700">
-                  <th className="py-2 pr-4 cursor-pointer" onClick={() => handleSort('name')}>
-                    <div className="flex items-center gap-1">Name <ArrowUpDown size={12} /></div>
-                  </th>
-                  <th className="py-2 pr-4">Email</th>
-                  <th className="py-2 pr-4">Phone</th>
-                  <th className="py-2 pr-4 cursor-pointer" onClick={() => handleSort('created_at')}>
-                    <div className="flex items-center gap-1">Joined <ArrowUpDown size={12} /></div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {processedCustomers.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700/60 dark:hover:bg-slate-800">
-                    <td className="py-2 pr-4 font-medium text-slate-800 dark:text-slate-100">{c.name}</td>
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{c.email || '—'}</td>
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{c.phone || '—'}</td>
-                    <td className="py-2 pr-4 text-slate-500 dark:text-slate-400">{new Date(c.created_at).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+        <InteractiveTable data={enriched} columns={columns} searchableKeys={['name', 'email', 'phone']}
+          onRowClick={setSelected} emptyMessage="No customers found." />
       </div>
+
+      <DetailModal title={selected?.name || ''} subtitle="Customer Profile" onClose={() => setSelected(null)}>
+        {selected && (
+          <div>
+            <DetailModal.Row label="Name" value={selected.name} icon={Users} tone="brand" />
+            <DetailModal.Row label="Email" value={selected.email || 'Not provided'} icon={Mail} />
+            <DetailModal.Row label="Phone" value={selected.phone || 'Not provided'} icon={Phone} />
+            <DetailModal.Row label="Total Orders" value={selected.orders} icon={ShoppingCart} tone="blue" />
+            <DetailModal.Row label="Total Spent" value={`₹${Number(selected.total_spent || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
+            <DetailModal.Row label="Avg Order" value={`₹${selected.orders > 0 ? Math.round(selected.total_spent / selected.orders).toLocaleString('en-IN') : 0}`} />
+            <DetailModal.Section title="Recent Sales">
+              {sales.filter(s => s.customer_id === selected.id).slice(-5).reverse().map(s => (
+                <div key={s.id} className="flex justify-between py-1 text-sm">
+                  <span className="text-slate-500 dark:text-slate-400">{s.sale_date ? new Date(s.sale_date).toLocaleDateString() : '—'}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">₹{Number(s.total_amount || 0).toLocaleString('en-IN')}</span>
+                </div>
+              ))}
+              {sales.filter(s => s.customer_id === selected.id).length === 0 && (
+                <p className="text-xs text-slate-400 py-2">No sales for this customer.</p>
+              )}
+            </DetailModal.Section>
+          </div>
+        )}
+      </DetailModal>
     </div>
   )
 }

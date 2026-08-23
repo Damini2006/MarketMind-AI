@@ -8,7 +8,11 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "marketmind-dev-secret-change-in-produc
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# rounds=10 (vs passlib's default 12) keeps login snappy over high-latency
+# Neon connections while staying above OWASP's recommended minimum.
+pwd_context = CryptContext(
+    schemes=["bcrypt"], bcrypt__rounds=10, deprecated="auto"
+)
 
 
 def hash_password(password: str) -> str:

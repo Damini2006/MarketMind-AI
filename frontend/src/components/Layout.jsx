@@ -8,7 +8,7 @@ import {
   LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   UsersRound, Tags, Truck, Database,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
-  Settings, Bell, ChevronDown, CheckCheck,
+  Settings, Bell, ChevronDown, CheckCheck, ClipboardList,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { to: '/churn', label: 'Churn Risk', icon: UserMinus },
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
   { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
+  { to: '/activity', label: 'Activity Log', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -36,13 +37,30 @@ const ROLE_LABELS = {
   admin: 'System Administrator',
 }
 
-// Pages restricted by role (pre-dev parity). Pages not listed are visible to
-// every logged-in role.
-const ROLE_RESTRICTED = {
-  '/team': ['business_owner', 'admin'],
-  '/forecasting': ['business_owner', 'store_manager', 'admin'],
-  '/churn': ['business_owner', 'store_manager', 'admin'],
-  '/anomalies': ['business_owner', 'store_manager', 'admin'],
+// Pages visible to each role — if a page is missing from a role's list,
+// it is hidden from the sidebar for that role.
+const ROLE_PAGES = {
+  business_owner: [
+    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
+    '/categories', '/suppliers', '/team', '/datasets',
+    '/forecasting', '/segmentation', '/churn', '/recommendations',
+    '/anomalies', '/activity', '/settings',
+  ],
+  store_manager: [
+    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
+    '/categories', '/suppliers', '/forecasting', '/segmentation',
+    '/churn', '/recommendations', '/anomalies', '/activity', '/settings',
+  ],
+  sales_executive: [
+    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
+    '/segmentation', '/recommendations', '/settings',
+  ],
+  admin: [
+    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
+    '/categories', '/suppliers', '/team', '/datasets',
+    '/forecasting', '/segmentation', '/churn', '/recommendations',
+    '/anomalies', '/activity', '/settings',
+  ],
 }
 
 const NOTIF_META = {
@@ -260,10 +278,8 @@ function ProfileMenu({ user, onLogout }) {
 export default function Layout() {
   const { user, logout } = useAuth()
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
-    const allowed = ROLE_RESTRICTED[item.to]
-    return !allowed || allowed.includes(user?.role)
-  })
+  const allowedPages = ROLE_PAGES[user?.role] || ROLE_PAGES.business_owner
+  const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.to))
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
 
   const handleLogout = () => {

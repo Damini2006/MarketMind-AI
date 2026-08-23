@@ -20,6 +20,7 @@ import Suppliers from './pages/Suppliers.jsx'
 import Datasets from './pages/Datasets.jsx'
 import Team from './pages/Team.jsx'
 import Settings from './pages/Settings.jsx'
+import ActivityLog from './pages/ActivityLog.jsx'
 import ForgotPassword from "./pages/ForgotPassword.jsx"
 
 function ProtectedRoute({ children, allowedRoles }) {
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/datasets" element={<Datasets />} />
           <Route path="/team" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
+          <Route path="/activity" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><ActivityLog /></ProtectedRoute>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

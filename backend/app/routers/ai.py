@@ -699,60 +699,23 @@ def _is_material_outlier(sale: models.Sale) -> bool:
 @router.get("/anomalies")
 @ttl_cache(ttl=120)
 def get_anomaly_alerts(
+    min_confidence: float = 0.0,
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
-    sales = (
-        db.query(models.Sale)
-        .filter(models.Sale.business_id == current_user.business_id)
-        .all()
-    )
-    if not sales:
-        return {"alerts": [], "detection_accuracy": None, "false_positive_rate": None}
+    """Full 15-technique anomaly detection pipeline.
 
-    outliers = _detect_outlier_sales(sales)
-
-    detection_accuracy = None
-    false_positive_rate = None
-    if len(sales) >= 10:
-        X = np.array(
-            [[s.quantity, s.total_amount, s.unit_price or 0.0] for s in sales],
-            dtype=float,
-        )
-        iso = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
-        preds = iso.fit_predict(X)
-        scores = iso.score_samples(X)  # lower = more anomalous
-        anomaly_rate = len(outliers) / len(sales)
-        detection_accuracy = round(1 - anomaly_rate, 3)
-        # Borderline share: flagged sales whose score sits closest to the cutoff
-        near_cutoff = np.percentile(scores, 4.2)
-        borderline = sum(
-            1 for i, p in enumerate(preds) if p == -1 and scores[i] > near_cutoff
-        )
-        false_positive_rate = round(borderline / len(sales), 3)
-
-    alerts = []
-    for s in outliers:
-        severity = "high" if _is_material_outlier(s) else "medium"
-        alerts.append(
-            {
-                "id": s.id,
-                "severity": severity,
-                "category": "sales",
-                "description": (
-                    f"Unusual transaction detected: {s.quantity} units totaling "
-                    f"₹{s.total_amount:,.2f}."
-                ),
-                "created_at": (
-                    s.sale_date.isoformat()
-                    if s.sale_date
-                    else dt.datetime.utcnow().isoformat()
-                ),
-            }
-        )
-
-    return {
-        "detection_accuracy": detection_accuracy,
-        "false_positive_rate": false_positive_rate,
-        "alerts": alerts,
-    }
+    Query params:
+      min_confidence (float, 0-1): Auto-dismiss anomalies below this threshold.
+    """
+    from ..ml.anomaly_detection import run_full_detection
+    result = run_full_detection(db)
+    # Auto-dismiss: filter out anomalies below the confidence threshold
+    if min_confidence > 0:
+        result["alerts"] = [a for a in result["alerts"] if a["confidence"] >= min_confidence]
+        result["auto_dismiss_threshold"] = min_confidence
+        result["auto_dismissed_count"] = len(result["alerts"])
+    else:
+        result["auto_dismiss_threshold"] = 0
+        result["auto_dismissed_count"] = 0
+    return result

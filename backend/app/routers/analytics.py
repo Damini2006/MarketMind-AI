@@ -92,9 +92,10 @@ def _compute_kpis(db: Session, business_id: int):
 
 @router.get("/kpis", response_model=schemas.KPIResponse)
 def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    """Dashboard KPIs. Cached 60s — recomputing every poll is wasteful."""
+    """Dashboard KPIs. Cached 300s — recomputing on every page load is
+    wasteful, and the cold compute is ~6s over Neon (5 queries)."""
     return get_or_set(
         f"analytics:{current_user.business_id}:kpis",
-        60,
+        300,
         lambda: _compute_kpis(db, current_user.business_id),
     )

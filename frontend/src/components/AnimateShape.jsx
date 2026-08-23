@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, Component } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Float, MeshDistortMaterial } from "@react-three/drei";
 
@@ -6,8 +6,10 @@ function RotatingBlob() {
   const meshRef = useRef();
 
   useFrame((state, delta) => {
-    meshRef.current.rotation.x += delta * 0.3;
-    meshRef.current.rotation.y += delta * 0.4;
+    if (meshRef.current) {
+      meshRef.current.rotation.x += delta * 0.3;
+      meshRef.current.rotation.y += delta * 0.4;
+    }
   });
 
   return (
@@ -26,18 +28,41 @@ function RotatingBlob() {
   );
 }
 
+class WebGLErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch() {}
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-32 h-32 rounded-full bg-indigo-500/20 animate-pulse" />
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function AnimateShape() {
   return (
     <div className="absolute inset-0 w-full h-full pointer-events-auto">
-      <Canvas
-        camera={{ position: [0, 0, 5], fov: 50 }}
-        gl={{ alpha: true, antialias: true }}
-      >
-        <ambientLight intensity={1.5} />
-        <directionalLight position={[5, 5, 5]} intensity={2.5} />
-        <pointLight position={[-5, -5, -5]} intensity={1} />
-        <RotatingBlob />
-      </Canvas>
+      <WebGLErrorBoundary>
+        <Canvas
+          camera={{ position: [0, 0, 5], fov: 50 }}
+          gl={{ alpha: true, antialias: true }}
+        >
+          <ambientLight intensity={1.5} />
+          <directionalLight position={[5, 5, 5]} intensity={2.5} />
+          <pointLight position={[-5, -5, -5]} intensity={1} />
+          <RotatingBlob />
+        </Canvas>
+      </WebGLErrorBoundary>
     </div>
   );
 }

@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from .. import models, schemas
+from ..cache import get_or_set, invalidate
 from ..database import SessionLocal, get_db
 from ..deps import get_current_user
 from .ai import _detect_outlier_sales, _is_material_outlier
@@ -256,14 +257,11 @@ def _do_sync_notifications(db: Session, business_id: int) -> None:
     db.commit()
 
 
-@router.get("", response_model=schemas.NotificationListResponse)
-def list_notifications(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
-):
-    _sync_notifications(db, current_user.business_id)
+def _read_notifications(db: Session, business_id: int) -> dict:
+    """Build the list response as plain dicts (cacheable) + unread count."""
     items = (
         db.query(models.Notification)
-        .filter(models.Notification.business_id == current_user.business_id)
+        .filter(models.Notification.business_id == business_id)
         .order_by(
             models.Notification.read.asc(),
             models.Notification.created_at.desc(),
@@ -274,26 +272,44 @@ def list_notifications(
     unread = (
         db.query(models.Notification)
         .filter(
-            models.Notification.business_id == current_user.business_id,
+            models.Notification.business_id == business_id,
             models.Notification.read == False,  # noqa: E712
         )
         .count()
     )
-    return {"items": items, "unread_count": unread}
+    return {
+        "items": [
+            schemas.NotificationOut.model_validate(i).model_dump(mode="json")
+            for i in items
+        ],
+        "unread_count": unread,
+    }
+
+
+# Reads are cached for the bell's own poll interval (30s): every poll then
+# hits the cache instead of paying two Neon round-trips (~2s). mark-read /
+# read-all invalidate the cache so the badge still updates instantly.
+READ_TTL = 30
+
+
+@router.get("", response_model=schemas.NotificationListResponse)
+def list_notifications(
+    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+):
+    bid = current_user.business_id
+    _sync_notifications(db, bid)
+    return get_or_set(f"notif:{bid}:list", READ_TTL, lambda: _read_notifications(db, bid))
 
 
 @router.get("/unread-count", response_model=schemas.UnreadCountResponse)
 def unread_count(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    _sync_notifications(db, current_user.business_id)
-    unread = (
-        db.query(models.Notification)
-        .filter(
-            models.Notification.business_id == current_user.business_id,
-            models.Notification.read == False,  # noqa: E712
-        )
-        .count()
+    bid = current_user.business_id
+    _sync_notifications(db, bid)
+    return get_or_set(
+        f"notif:{bid}:unread",
+        READ_TTL,
+        lambda: {"unread_count": _read_notifications(db, bid)["unread_count"]},
     )
-    return {"unread_count": unread}
 
 
 @router.post("/{notification_id}/read", response_model=schemas.NotificationOut)
@@ -314,6 +330,7 @@ def mark_read(
         raise HTTPException(status_code=404, detail="Notification not found")
     n.read = True
     db.commit()
+    invalidate(f"notif:{current_user.business_id}")
     db.refresh(n)
     return n
 
@@ -329,4 +346,5 @@ def mark_all_read(db: Session = Depends(get_db), current_user=Depends(get_curren
         .update({"read": True})
     )
     db.commit()
+    invalidate(f"notif:{current_user.business_id}")
     return {"status": "ok"}

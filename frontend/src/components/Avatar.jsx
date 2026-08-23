@@ -28,14 +28,14 @@ export default function Avatar({ user, size = 'sm', className = '' }) {
       <img
         src={photoUrl}
         alt={user?.full_name || 'avatar'}
-        className={`rounded-full object-cover shrink-0 ${SIZE_CLASSES[size] || SIZE_CLASSES.sm} ${className}`}
+        className={`rounded-full object-cover shrink-0 overflow-hidden ${SIZE_CLASSES[size] || SIZE_CLASSES.sm} ${className}`}
       />
     )
   }
 
   return (
     <div
-      className={`rounded-full ${avatarColorClass(user?.avatar_color)} text-white flex items-center justify-center font-bold shrink-0 ${SIZE_CLASSES[size] || SIZE_CLASSES.sm} ${className}`}
+      className={`rounded-full ${avatarColorClass(user?.avatar_color)} text-white flex items-center justify-center font-bold shrink-0 whitespace-nowrap overflow-hidden ${SIZE_CLASSES[size] || SIZE_CLASSES.sm} ${className}`}
     >
       {initials(user?.full_name)}
     </div>
