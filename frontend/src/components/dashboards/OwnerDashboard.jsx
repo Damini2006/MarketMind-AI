@@ -25,7 +25,7 @@ export default function OwnerDashboard({ user }) {
     api.get('/analytics/kpis').then((res) => setKpis(res.data)).finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <Loading label="Loading dashboard..." />
+  if (loading) return <DashboardSkeleton />
   if (!kpis) return null
 
   const filteredRevenueTrend = (kpis.revenue_by_day || []).slice(-trendDays)
@@ -33,10 +33,10 @@ export default function OwnerDashboard({ user }) {
   return (
     <div className="space-y-6">
       {/* Business Pulse */}
-      <BusinessPulse kpis={kpis} />
+      <div data-tour="business-pulse"><BusinessPulse kpis={kpis} /></div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <ClickableKPI label="Total Revenue" value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" onClick={() => setKpiModal('revenue')} />
         <ClickableKPI label="Total Sales" value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" onClick={() => setKpiModal('sales')} />
         <ClickableKPI label="Customers" value={kpis.total_customers} icon={Users} tone="brand" onClick={() => setKpiModal('customers')} />
@@ -47,7 +47,7 @@ export default function OwnerDashboard({ user }) {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card lg:col-span-2">
+        <div data-tour="revenue-chart" className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">Revenue Trend</h3>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium dark:bg-slate-800">
@@ -192,6 +192,71 @@ function ClickableKPI({ label, value, sub, icon: Icon, tone, onClick }) {
         {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
       </div>
     </button>
+  )
+}
+
+function SkeletonBlock({ className = '' }) {
+  return <div className={`animate-pulse bg-slate-200 dark:bg-slate-700/60 rounded-lg ${className}`} />
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Business Pulse skeleton */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="space-y-2">
+            <SkeletonBlock className="h-5 w-32" />
+            <SkeletonBlock className="h-8 w-16" />
+          </div>
+          <SkeletonBlock className="h-16 w-16 rounded-full" />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <SkeletonBlock className="h-4 w-24" />
+          <SkeletonBlock className="h-4 w-24" />
+          <SkeletonBlock className="h-4 w-24" />
+        </div>
+      </div>
+
+      {/* KPI Cards skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1,2,3,4,5,6].map(i => (
+          <div key={i} className="card flex items-center gap-4">
+            <SkeletonBlock className="h-11 w-11 rounded-lg shrink-0" />
+            <div className="space-y-2 flex-1">
+              <SkeletonBlock className="h-7 w-20" />
+              <SkeletonBlock className="h-4 w-28" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="card lg:col-span-2">
+          <SkeletonBlock className="h-5 w-36 mb-4" />
+          <SkeletonBlock className="h-[280px] w-full rounded-xl" />
+        </div>
+        <div className="card">
+          <SkeletonBlock className="h-5 w-40 mb-4" />
+          <SkeletonBlock className="h-[280px] w-full rounded-xl" />
+        </div>
+      </div>
+
+      {/* Activity skeleton */}
+      <div className="card">
+        <SkeletonBlock className="h-5 w-32 mb-4" />
+        <div className="space-y-3">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className="flex items-center gap-2.5">
+              <SkeletonBlock className="h-2 w-2 rounded-full shrink-0" />
+              <SkeletonBlock className="h-4 flex-1" />
+              <SkeletonBlock className="h-3 w-12 shrink-0" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
