@@ -3,10 +3,10 @@ import api from '../services/api'
 import { Loading, PageHeader, Badge } from '../components/ui.jsx'
 import jsPDF from 'jspdf'
 import {
-  ShieldAlert, AlertOctagon, Filter, LayoutGrid, List,
-  Search, Download, RefreshCw, X, ChevronDown, BarChart3, PieChart,
-  TrendingUp, ArrowUpDown, Sparkles, Info, ExternalLink,
-  Clock, Database, Activity, Eye, EyeOff, CheckCircle2, XCircle,
+  AlertOctagon, LayoutGrid, List,
+  Search, Download, RefreshCw, X, BarChart3, PieChart,
+  TrendingUp, Sparkles, Info,
+  Clock, Database, Activity, EyeOff, CheckCircle2, XCircle,
   TrendingDown, Zap, Target, Layers, Calendar, FileText
 } from 'lucide-react'
 
@@ -119,21 +119,26 @@ function MiniBarChart({ data, maxVal, color }) {
 
 function MiniPieChart({ data }) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1
-  let acc = 0
+  const slices = useMemo(() => {
+    let running = 0
+    const result = []
+    for (const d of data) {
+      const pct = (d.value / total) * 100
+      const offset = 100 - (running / total) * 100
+      running += d.value
+      result.push({ ...d, pct, offset })
+    }
+    return result
+  }, [data, total])
   return (
     <div className="flex items-center gap-3">
       <svg width="80" height="80" viewBox="0 0 36 36">
-        {data.map((d, i) => {
-          const pct = (d.value / total) * 100
-          const offset = 100 - (acc / total) * 100
-          acc += d.value
-          return (
+        {slices.map((d, i) => (
             <circle key={i} cx="18" cy="18" r="15.915" fill="none"
               stroke={d.color} strokeWidth="3.5"
-              strokeDasharray={`${pct} ${100 - pct}`} strokeDashoffset={offset}
+              strokeDasharray={`${d.pct} ${100 - d.pct}`} strokeDashoffset={d.offset}
               className="transition-all duration-500" />
-          )
-        })}
+          ))}
         <text x="18" y="19" textAnchor="middle" className="text-[5px] fill-slate-600 dark:fill-slate-300 font-bold">{total}</text>
       </svg>
       <div className="space-y-1">
@@ -250,19 +255,23 @@ export default function Anomalies() {
   const [minConfidence, setMinConfidence] = useState(0)
   const [autoDismissEnabled, setAutoDismissEnabled] = useState(false)
 
-  const fetchAnomalies = useCallback(() => {
+  const rescanAnomalies = useCallback(() => {
     setScanning(true)
-    const params = {}
-    if (autoDismissEnabled && minConfidence > 0) {
-      params.min_confidence = minConfidence / 100
-    }
-    api.get('/ai/anomalies', { params })
+    api.post('/ai/anomalies/rescan')
       .then((res) => setData(res.data || { alerts: [] }))
       .catch(() => setData({ alerts: [], summary: {} }))
-      .finally(() => { setLoading(false); setScanning(false) })
-  }, [autoDismissEnabled, minConfidence])
+      .finally(() => setScanning(false))
+  }, [])
 
-  useEffect(() => { fetchAnomalies() }, [fetchAnomalies])
+  // Fetch once on mount (async — setState only in .then(), not synchronous)
+  useEffect(() => {
+    let cancelled = false
+    api.get('/ai/anomalies')
+      .then((res) => { if (!cancelled) setData(res.data || { alerts: [] }) })
+      .catch(() => { if (!cancelled) setData({ alerts: [], summary: {} }) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const dismissAnomaly = useCallback((anomaly) => {
     setDismissed(prev => new Set([...prev, `${anomaly.id}-${anomaly.anomaly_type}`]))
@@ -271,6 +280,11 @@ export default function Anomalies() {
 
   const alerts = useMemo(() => {
     let list = Array.isArray(data.alerts) ? [...data.alerts] : []
+
+    // Auto-dismiss: filter out low-confidence anomalies client-side
+    if (autoDismissEnabled && minConfidence > 0) {
+      list = list.filter(a => (a.confidence || 0) * 100 >= minConfidence)
+    }
 
     // Filter dismissed
     if (!showDismissed) {
@@ -298,7 +312,7 @@ export default function Anomalies() {
       return new Date(b.created_at) - new Date(a.created_at)
     })
     return list
-  }, [data.alerts, severityFilter, categoryFilter, methodFilter, search, sortBy, salesOnly, dismissed, showDismissed])
+  }, [data.alerts, severityFilter, categoryFilter, methodFilter, search, sortBy, salesOnly, dismissed, showDismissed, autoDismissEnabled, minConfidence])
 
   const activeFilters = [severityFilter !== 'all', categoryFilter !== 'all', methodFilter !== 'all', salesOnly, !!search].filter(Boolean).length
 
@@ -550,9 +564,9 @@ export default function Anomalies() {
         action={
           <div className="flex items-center gap-2">
             {scanning && <span className="flex items-center gap-1 text-xs text-indigo-500"><RefreshCw size={12} className="animate-spin" /> Scanning...</span>}
-            <button onClick={fetchAnomalies}
-              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-1">
-              <RefreshCw size={12} /> Rescan
+            <button onClick={rescanAnomalies} disabled={scanning}
+              className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors flex items-center gap-1 disabled:opacity-50">
+              <RefreshCw size={12} className={scanning ? 'animate-spin' : ''} /> {scanning ? 'Scanning...' : 'Rescan'}
             </button>
           </div>
         }
