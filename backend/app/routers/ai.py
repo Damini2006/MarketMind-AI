@@ -373,30 +373,13 @@ def get_customer_segmentation(
 
 
 # ---------------------------------------------------------------------------
-# 3) Churn prediction — logistic regression trained on a time split
+# 3) Churn prediction — enhanced with visit-collapsing and personalized recs
 # ---------------------------------------------------------------------------
-CHURN_RECS = {
-    "High": "Offer 15% discount code & send re-engagement email.",
-    "Medium": "Send product recommendations based on past purchases.",
-    "Low": "Maintain regular communication & customer support.",
-}
-
-
-def _rfm_at(purchases: List[models.Sale], cutoff: dt.datetime):
-    """Features for purchases up to `cutoff`: [freq, monetary, avg_gap, recency]."""
-    pre = [p for p in purchases if p.sale_date and p.sale_date <= cutoff]
-    if not pre:
-        return None
-    dates = sorted(p.sale_date for p in pre)
-    gaps = [(dates[i + 1] - dates[i]).days for i in range(len(dates) - 1)]
-    avg_gap = sum(gaps) / len(gaps) if gaps else 0.0
-    return [
-        float(len(pre)),
-        float(sum(p.total_amount for p in pre)),
-        float(avg_gap),
-        float((cutoff - dates[-1]).days),
-    ]
-
+# Uses the dedicated churn module (ml/churn.py) which:
+#   - Collapses same-day multi-item purchases into single "visits"
+#   - Uses adaptive per-customer churn labels (overdue vs their own cadence)
+#   - Trains a Logistic Regression with StratifiedKFold cross-validation
+#   - Generates personalized recommendations from each customer's own signals
 
 @router.get("/churn")
 @ttl_cache(ttl=120)
@@ -404,154 +387,8 @@ def get_churn_predictions(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
-    customers = (
-        db.query(models.Customer)
-        .filter(models.Customer.business_id == current_user.business_id)
-        .all()
-    )
-    sales = (
-        db.query(models.Sale)
-        .filter(models.Sale.business_id == current_user.business_id)
-        .all()
-    )
-    if not customers:
-        return {"rows": [], "accuracy": None, "precision": None, "recall": None, "f1": None}
-    if not sales:
-        return {
-            "rows": [
-                {
-                    "customer_id": c.id,
-                    "customer_name": c.name,
-                    "risk_category": "High",
-                    "churn_probability": 0.9,
-                    "recommendation": CHURN_RECS["High"],
-                }
-                for c in customers
-            ],
-            "accuracy": None,
-            "precision": None,
-            "recall": None,
-            "f1": None,
-        }
-
-    by_cust = defaultdict(list)
-    dated = []
-    for s in sales:
-        by_cust[s.customer_id].append(s)
-        if s.sale_date:
-            dated.append(s.sale_date)
-
-    min_d, max_d = min(dated), max(dated)
-    span_days = max((max_d - min_d).days, 1)
-    train_end = min_d + dt.timedelta(days=span_days * 0.6)
-    observe_end = train_end + dt.timedelta(days=max(30, span_days * 0.25))
-
-    # Build the training set: a customer "churned" if they bought before
-    # train_end but not during the observation window that follows.
-    X_tr, y_tr = [], []
-    for cid, purchases in by_cust.items():
-        f = _rfm_at(purchases, train_end)
-        if f is None:
-            continue
-        bought_in_observe = any(
-            p.sale_date and train_end < p.sale_date <= observe_end for p in purchases
-        )
-        X_tr.append(f)
-        y_tr.append(0 if bought_in_observe else 1)
-
-    model = None
-    scaler = None
-    accuracy = precision = recall = f1 = None
-    if len(X_tr) >= 8 and len(set(y_tr)) == 2:
-        X_arr = np.array(X_tr, dtype=float)
-        X_arr[:, 1] = np.log1p(X_arr[:, 1])
-        scaler = StandardScaler().fit(X_arr)
-        Xs = scaler.transform(X_arr)
-        y_arr = np.array(y_tr)
-        minority = int(min(np.bincount(y_arr)))
-
-        clf = LogisticRegression(max_iter=1000)
-        if minority >= 2:
-            try:
-                cv = StratifiedKFold(
-                    n_splits=min(3, minority), shuffle=True, random_state=42
-                )
-                scores = cross_validate(
-                    clf, Xs, y_arr, cv=cv,
-                    scoring=["accuracy", "precision", "recall", "f1"],
-                    error_score="raise",
-                )
-                accuracy = round(float(np.mean(scores["test_accuracy"])), 3)
-                precision = round(float(np.mean(scores["test_precision"])), 3)
-                recall = round(float(np.mean(scores["test_recall"])), 3)
-                f1 = round(float(np.mean(scores["test_f1"])), 3)
-                clf.fit(Xs, y_arr)
-                model = clf
-            except Exception:
-                model = None
-        else:
-            # Minority too small for CV — train anyway, report no metrics.
-            try:
-                clf.fit(Xs, y_arr)
-                model = clf
-            except Exception:
-                model = None
-
-    rows = []
-    for c in customers:
-        purchases = by_cust.get(c.id, [])
-        f = _rfm_at(purchases, max_d)
-        if f is None:
-            prob, risk = 0.9, "High"
-        elif model is not None:
-            x = np.array([f], dtype=float)
-            x[0, 1] = np.log1p(x[0, 1])
-            x = scaler.transform(x)
-            prob = float(model.predict_proba(x)[0, 1])
-            risk = "High" if prob >= 0.6 else "Medium" if prob >= 0.3 else "Low"
-        else:
-            # No trainable signal — transparent recency-based probability.
-            prob = _logistic((f[3] - 30) / 15.0)
-            prob = min(0.95, max(0.02, prob))
-            risk = "High" if prob >= 0.6 else "Medium" if prob >= 0.3 else "Low"
-
-        rows.append(
-            {
-                "customer_id": c.id,
-                "customer_name": c.name,
-                "risk_category": risk,
-                "churn_probability": round(prob, 4),
-                "recommendation": CHURN_RECS[risk],
-            }
-        )
-
-    # Persist churn predictions (pre-dev parity).
-    try:
-        cids = [r["customer_id"] for r in rows]
-        if cids:
-            db.query(models.ChurnPrediction).filter(
-                models.ChurnPrediction.customer_id.in_(cids)
-            ).delete()
-            for r in rows:
-                db.add(
-                    models.ChurnPrediction(
-                        customer_id=r["customer_id"],
-                        churn_probability=r["churn_probability"],
-                        risk_level=r["risk_category"],
-                        recommendation=r["recommendation"],
-                    )
-                )
-            db.commit()
-    except Exception:
-        db.rollback()
-
-    return {
-        "accuracy": accuracy,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "rows": rows,
-    }
+    from ..ml.churn import run_churn_prediction
+    return run_churn_prediction(db, business_id=current_user.business_id)
 
 
 # ---------------------------------------------------------------------------
