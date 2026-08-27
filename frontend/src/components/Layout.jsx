@@ -11,6 +11,7 @@ import {
   UsersRound, Tags, Truck, Database,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
   Settings, Bell, ChevronDown, CheckCheck, ClipboardList, GitCompare,
+  IndianRupee,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
   { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
   { to: '/comparison', label: 'Compare Periods', icon: GitCompare },
+  { to: '/revenue-prediction', label: 'Revenue Prediction', icon: IndianRupee },
   { to: '/activity', label: 'Activity Log', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -45,12 +47,14 @@ const ROLE_LABELS = {
 const ROLE_PAGES = {
   business_owner: [    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
     '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
-    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
+    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison',
+    '/revenue-prediction', '/activity', '/settings',
   ],
   store_manager: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
     '/categories', '/suppliers', '/forecasting', '/segmentation', '/churn',
-    '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
+    '/recommendations', '/anomalies', '/comparison',
+    '/revenue-prediction', '/activity', '/settings',
   ],
   sales_executive: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
@@ -59,7 +63,8 @@ const ROLE_PAGES = {
   admin: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
     '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
-    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
+    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison',
+    '/revenue-prediction', '/activity', '/settings',
   ],
 }
 

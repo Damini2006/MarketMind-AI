@@ -22,6 +22,7 @@ import Team from './pages/Team.jsx'
 import Settings from './pages/Settings.jsx'
 import ActivityLog from './pages/ActivityLog.jsx'
 import Comparison from './pages/Comparison.jsx'
+import RevenuePrediction from './pages/RevenuePrediction.jsx'
 import ForgotPassword from "./pages/ForgotPassword.jsx"
 
 function ProtectedRoute({ children, allowedRoles }) {
@@ -82,6 +83,7 @@ export default function App() {
           <Route path="/team" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
           <Route path="/activity" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><ActivityLog /></ProtectedRoute>} />
           <Route path="/comparison" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Comparison /></ProtectedRoute>} />
+          <Route path="/revenue-prediction" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><RevenuePrediction /></ProtectedRoute>} />
           <Route path="/settings" element={<Settings />} />
         </Route>
 

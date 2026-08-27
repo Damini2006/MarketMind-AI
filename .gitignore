@@ -1,4 +1,4 @@
-﻿.env
+.env
 .env.*
 *.db
 backend/.env
@@ -6,7 +6,12 @@ backend/.env.*
 backend/uploads/
 backend/neon_backup_before_migration.json
 backend/preserved_accounts.json
+backend/app.db
+backend/marketmind.db
+backend/test.db
 node_modules/
 __pycache__/
-frontend/.env
-frontend/public/MarketMind-AI.zip
+*.pyc
+
+# Local/project datasets
+backend/app/datasets/

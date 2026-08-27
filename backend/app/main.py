@@ -35,6 +35,8 @@ from .routers import (
     datasets,
     users,
     notifications,
+    forecasting,
+    revenue,
 )
 
 # Initialize database tables
@@ -104,6 +106,8 @@ app.include_router(suppliers.router)
 app.include_router(datasets.router)
 app.include_router(users.router)
 app.include_router(notifications.router)
+app.include_router(forecasting.router)
+app.include_router(revenue.router)
 
 
 @app.on_event("startup")
