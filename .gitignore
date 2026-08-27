@@ -15,3 +15,11 @@ __pycache__/
 
 # Local/project datasets
 backend/app/datasets/
+
+# Trained ML model files
+backend/app/trained_models/*.pkl
+models/*.pkl
+
+# Trained ML model files
+backend/app/trained_models/*.pkl
+models/*.pkl
