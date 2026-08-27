@@ -7,8 +7,10 @@ from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 
+
 MODEL_PATH = "app/trained_models/customer_segmentation.pkl"
 SCALER_PATH = "app/trained_models/customer_scaler.pkl"
+
 
 
 FEATURE_COLUMNS = [
