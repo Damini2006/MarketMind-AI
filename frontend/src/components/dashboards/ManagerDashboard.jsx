@@ -47,7 +47,7 @@ export default function ManagerDashboard({ user }) {
       </div>
 
       {/* Primary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Today's Revenue" value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
         <StatCard label="Total Sales" value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" />
         <StatCard label="Avg Sale Value" value={`₹${avgSale.toLocaleString('en-IN')}`} icon={TrendingUp} tone="blue" />
@@ -65,7 +65,7 @@ export default function ManagerDashboard({ user }) {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue Trend */}
-        <div className="card lg:col-span-2">
+        <div data-tour="revenue-chart" className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp size={18} className="text-indigo-600" />

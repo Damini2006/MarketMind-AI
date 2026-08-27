@@ -53,7 +53,7 @@ export default function SalesDashboard({ user }) {
       </div>
 
       {/* Sales Target Progress */}
-      <div className="card">
+      <div data-tour="sales-target" className="card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Target size={18} className="text-green-600" />
@@ -76,7 +76,7 @@ export default function SalesDashboard({ user }) {
       </div>
 
       {/* Primary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Revenue" value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
         <StatCard label="Total Sales" value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" />
         <StatCard label="Avg Sale Value" value={`₹${avgSale.toLocaleString('en-IN')}`} icon={TrendingUp} tone="blue" />
@@ -116,7 +116,7 @@ export default function SalesDashboard({ user }) {
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Revenue by Day */}
-        <div className="card">
+        <div data-tour="revenue-chart" className="card">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp size={18} className="text-green-600" />
             <h3 className="font-semibold text-slate-800 dark:text-slate-100">Revenue Trend (14 Days)</h3>

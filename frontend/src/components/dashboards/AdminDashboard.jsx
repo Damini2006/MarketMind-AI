@@ -42,7 +42,7 @@ export default function AdminDashboard({ user }) {
       </div>
 
       {/* System Health Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Revenue" value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
         <StatCard label="Team Members" value={teamCount} icon={Users} tone="brand" />
         <StatCard label="Total Products" value={kpis.total_products} icon={Boxes} tone="brand" />
@@ -79,7 +79,7 @@ export default function AdminDashboard({ user }) {
 
       {/* Full Analytics Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="card lg:col-span-2">
+        <div data-tour="revenue-chart" className="card lg:col-span-2">
           <h3 className="font-semibold text-slate-800 dark:text-slate-100 mb-4">Revenue Trend (30 Days)</h3>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={(kpis.revenue_by_day || []).slice(-30)}>
