@@ -43,7 +43,7 @@ class AnomalyResult:
 
 # ── Core Detection Methods ───────────────────────────────────────
 
-def zscore_detect(values: List[float], threshold: float = 2.0) -> List[Tuple[int, float]]:
+def zscore_detect(values: List[float], threshold: float = 2.5) -> List[Tuple[int, float]]:
     if len(values) < 3:
         return []
     arr = np.array(values, dtype=float)
@@ -54,7 +54,7 @@ def zscore_detect(values: List[float], threshold: float = 2.0) -> List[Tuple[int
     return [(i, z) for i, z in enumerate(z_scores) if abs(z) > threshold]
 
 
-def iqr_detect(values: List[float], multiplier: float = 1.5) -> List[Tuple[int, float]]:
+def iqr_detect(values: List[float], multiplier: float = 2.0) -> List[Tuple[int, float]]:
     if len(values) < 4:
         return []
     arr = np.array(values, dtype=float)
@@ -64,7 +64,7 @@ def iqr_detect(values: List[float], multiplier: float = 1.5) -> List[Tuple[int, 
     return [(i, v) for i, v in enumerate(values) if v < lower or v > upper]
 
 
-def moving_avg_detect(values: List[float], window: int = 7, threshold: float = 2.0) -> List[Tuple[int, float]]:
+def moving_avg_detect(values: List[float], window: int = 7, threshold: float = 2.5) -> List[Tuple[int, float]]:
     if len(values) < window + 1:
         return []
     anomalies = []
@@ -78,7 +78,7 @@ def moving_avg_detect(values: List[float], window: int = 7, threshold: float = 2
     return anomalies
 
 
-def temporal_detect(daily_values: Dict[str, float], window: int = 7, threshold: float = 2.0) -> List[Tuple[str, float, str]]:
+def temporal_detect(daily_values: Dict[str, float], window: int = 7, threshold: float = 2.5) -> List[Tuple[str, float, str]]:
     if len(daily_values) < 14:
         return []
     sorted_dates = sorted(daily_values.keys())
@@ -137,7 +137,7 @@ def benford_detect(values: List[float], threshold: float = 0.05) -> Dict[str, An
     }
 
 
-def isolation_forest_detect(features: np.ndarray, contamination: float = 0.05) -> Tuple[List[int], np.ndarray]:
+def isolation_forest_detect(features: np.ndarray, contamination: float = 0.03) -> Tuple[List[int], np.ndarray]:
     from sklearn.ensemble import IsolationForest
     if len(features) < 10:
         return [], np.array([])
@@ -314,8 +314,8 @@ def detect_inventory_turnover_anomalies(inventory_items: List[Any], sales: List[
 
     for inv, turnover, sold in turnover_rates:
         z = (turnover - mean_t) / std_t
-        if abs(z) > 2.0:
-            severity = "high" if z > 2 else "medium"
+        if abs(z) > 2.5:
+            severity = "high" if z > 3 else "medium"
             direction = "over-performing" if z > 0 else "under-performing"
             results.append(AnomalyResult(
                 id=inv.id,
@@ -346,7 +346,7 @@ def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
         quantities.append(qty)
 
     # Z-Score on amounts
-    for idx, z in zscore_detect(amounts, 2.0):
+    for idx, z in zscore_detect(amounts, 2.5):
         s = sales[idx]
         severity = "high" if abs(z) > 3 else "medium"
         results.append(AnomalyResult(
@@ -360,7 +360,7 @@ def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
         ))
 
     # IQR on amounts
-    for idx, val in iqr_detect(amounts, 1.5):
+    for idx, val in iqr_detect(amounts, 2.0):
         s = sales[idx]
         if not any(r.id == s.id and r.anomaly_type == "zscore" for r in results):
             arr = np.array(amounts, dtype=float)
@@ -386,7 +386,7 @@ def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
 
     sorted_dates = sorted(daily_revenue.keys())
     revenue_values = [daily_revenue[d] for d in sorted_dates]
-    for idx, deviation in moving_avg_detect(revenue_values, 7, 2.0):
+    for idx, deviation in moving_avg_detect(revenue_values, 7, 2.5):
         d = sorted_dates[idx]
         severity = "high" if deviation > 3 else "medium"
         day_sales = [s for s in sales if s.sale_date and s.sale_date.strftime("%Y-%m-%d") == d]
@@ -403,7 +403,7 @@ def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
             ))
 
     # Temporal anomalies
-    for date_str, z, direction in temporal_detect(daily_revenue, 7, 2.0):
+    for date_str, z, direction in temporal_detect(daily_revenue, 7, 2.5):
         if not any(r.created_at.startswith(date_str) for r in results):
             day_sales = [s for s in sales if s.sale_date and s.sale_date.strftime("%Y-%m-%d") == date_str]
             representative = day_sales[0] if day_sales else None
@@ -424,7 +424,7 @@ def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
     # Isolation Forest
     if len(sales) >= 10:
         X = np.array([[q, a] for q, a in zip(quantities, amounts)], dtype=float)
-        iso_outliers, scores = isolation_forest_detect(X, 0.05)
+        iso_outliers, scores = isolation_forest_detect(X, 0.03)
         for idx in iso_outliers:
             s = sales[idx]
             if not any(r.id == s.id for r in results):
@@ -445,7 +445,7 @@ def detect_inventory_anomalies(inventory_items: List[Any]) -> List[AnomalyResult
     results = []
     quantities = [float(item.quantity_available or 0) for item in inventory_items]
     if len(quantities) >= 3:
-        for idx, z in zscore_detect(quantities, 2.0):
+        for idx, z in zscore_detect(quantities, 2.5):
             item = inventory_items[idx]
             results.append(AnomalyResult(
                 id=item.id, category="inventory",
@@ -489,7 +489,7 @@ def detect_customer_anomalies(customers: List[Any], sales: List[Any]) -> List[An
 
     totals = [t[1] for t in customer_totals if t[2] > 0]
     if len(totals) >= 3:
-        for idx, z in zscore_detect(totals, 2.0):
+        for idx, z in zscore_detect(totals, 2.5):
             c, total, count, avg = customer_totals[idx]
             severity = "high" if z > 3 else "medium"
             results.append(AnomalyResult(
@@ -504,7 +504,7 @@ def detect_customer_anomalies(customers: List[Any], sales: List[Any]) -> List[An
 
     avgs = [t[3] for t in customer_totals if t[2] > 1]
     if len(avgs) >= 4:
-        for idx, val in iqr_detect(avgs, 1.5):
+        for idx, val in iqr_detect(avgs, 2.0):
             c, total, count, avg = customer_totals[idx]
             if not any(r.id == c.id for r in results):
                 arr = np.array(avgs, dtype=float)
@@ -798,6 +798,13 @@ def run_full_detection(db) -> Dict[str, Any]:
             seen.add(key)
             deduped.append(a)
     all_anomalies = deduped
+
+    # Filter out low-confidence results (< 0.6) to reduce noise
+    all_anomalies = [a for a in all_anomalies if a.confidence >= 0.6]
+
+    # Cap total anomalies to keep the dashboard manageable
+    if len(all_anomalies) > 50:
+        all_anomalies = all_anomalies[:50]
 
     # ── Compute breakdowns ──
     category_counts = defaultdict(int)
