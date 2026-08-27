@@ -624,9 +624,9 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-indigo-50/20 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100 font-sans overflow-hidden selection:bg-indigo-500 selection:text-white transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-indigo-50/20 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-300 overflow-x-hidden">
       {/* Top Navigation */}
-      <nav className="flex items-center justify-between px-8 py-5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 sticky top-0 z-50 transition-colors">
+      <nav className="flex items-center justify-between px-8 py-5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl relative z-50 transition-colors">
         <div className="flex items-center gap-3">
           <motion.div
             whileHover={{ rotateY: 180 }}
@@ -656,9 +656,9 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* Main Hero Section */}
-      <main ref={heroRef} className="max-w-7xl mx-auto px-8 py-16 lg:py-24">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative">
+      {/* Main Hero Section — fills viewport, AI Core stays below the fold */}
+      <section ref={heroRef} className="min-h-[calc(100vh-76px)] flex items-center">
+        <div className="max-w-7xl mx-auto px-8 w-full grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center relative">
                 {/* Left Side Content */}
                 <motion.div
                   className="space-y-8"
@@ -709,7 +709,7 @@ export default function LandingPage() {
                 <motion.div
                   ref={rightGridRef}
                   onMouseMove={handleHeroMouseMove}
-                  className="grid grid-cols-2 gap-5 relative"
+                  className="grid grid-cols-2 gap-4 relative overflow-visible"
                   style={{ y: heroVisualY, perspective: 1400 }}
                   initial="hidden"
                   animate="visible"
@@ -731,7 +731,7 @@ export default function LandingPage() {
                         <div className="bg-indigo-50 dark:bg-indigo-950/60 w-12 h-12 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 mb-4 border border-indigo-100 dark:border-indigo-800/60 transition-colors">
                           <BarChart3 className="w-6 h-6" />
                         </div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-xl transition-colors">Sales Forecasting</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg transition-colors">Sales Forecasting</h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed transition-colors">
                           Predict demand accurately using Machine Learning models trained on historical data.
                         </p>
@@ -746,7 +746,7 @@ export default function LandingPage() {
                         <div className="bg-emerald-50 dark:bg-emerald-950/60 w-12 h-12 rounded-2xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-4 border border-emerald-100 dark:border-emerald-800/60 transition-colors">
                           <TrendingUp className="w-6 h-6" />
                         </div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-xl transition-colors">Smart Inventory</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg transition-colors">Smart Inventory</h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed transition-colors">
                           Automated low-stock detection and reorder volume recommendations.
                         </p>
@@ -754,7 +754,7 @@ export default function LandingPage() {
                     </motion.div>
                   </div>
 
-                  <div className="space-y-5 pt-10">
+                  <div className="space-y-5 pt-8">
                     <motion.div variants={fadeInUp}>
                       <TiltCard
                         glowColor="rgba(245,158,11,0.3)"
@@ -763,7 +763,7 @@ export default function LandingPage() {
                         <div className="bg-amber-50 dark:bg-amber-950/60 w-12 h-12 rounded-2xl flex items-center justify-center text-amber-600 dark:text-amber-400 mb-4 border border-amber-100 dark:border-amber-800/60 transition-colors">
                           <Users className="w-6 h-6" />
                         </div>
-                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-xl transition-colors">Customer Churn</h3>
+                        <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg transition-colors">Customer Churn</h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed transition-colors">
                           Spot churn risks early and target high-value VIP customers effectively.
                         </p>
@@ -788,15 +788,16 @@ export default function LandingPage() {
                   </div>
                 </motion.div>
         </div>
+      </section>
 
-        {/* AI Core orbit visual */}
-        <motion.section
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-100px' }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="py-16"
-        >
+      {/* AI Core orbit visual — now below the fold, only visible on scroll */}
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-100px' }}
+        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        className="max-w-7xl mx-auto px-8 py-16"
+      >
           <div className="text-center max-w-2xl mx-auto mb-4">
             <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight transition-colors">
               One AI core, every insight connected
@@ -806,20 +807,19 @@ export default function LandingPage() {
             </p>
           </div>
           <AICoreVisual />
-        </motion.section>
+      </motion.section>
 
-        {/* Product Interactive Demo Section */}
-        <InteractivePreview />
+      {/* Product Interactive Demo Section */}
+      <InteractivePreview />
 
-        {/* Why Choose Us — flip-in feature cards */}
-        <WhyChooseUs />
+      {/* Why Choose Us — flip-in feature cards */}
+      <WhyChooseUs />
 
-        {/* Animated stats */}
-        <StatsSection />
+      {/* Animated stats */}
+      <StatsSection />
 
-        {/* Closing CTA */}
-        <ClosingCTA />
-      </main>
+      {/* Closing CTA */}
+      <ClosingCTA />
 
       {/* Footer */}
       <footer className="border-t border-slate-200/60 dark:border-slate-800/60 mt-8">
