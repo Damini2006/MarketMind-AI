@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
 import Avatar from '../components/Avatar'
-import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2, Calendar } from 'lucide-react'
+import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2, Calendar, RotateCcw } from 'lucide-react'
 import { AVATAR_COLORS } from '../utils/avatar'
 
 const CURRENCIES = [
@@ -264,14 +264,23 @@ const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.business_owner
     (completionItems.filter((i) => i.done).length / completionItems.length) * 100
   )
 
+  const [showTour, setShowTour] = useState(false)
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Settings & Profile</h1>
-        <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
-          Manage your profile credentials, system preferences, and security settings.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Settings & Profile</h1>
+          <p className="text-sm text-slate-500 mt-1 dark:text-slate-400">
+            Manage your profile credentials, system preferences, and security settings.
+          </p>
+        </div>
+        <button onClick={async () => { localStorage.removeItem('marketmind_tour_completed'); try { await api.put('/users/tour-status', { tour_completed: false }) } catch {} window.location.reload() }}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all duration-200 text-sm font-medium active:scale-95 shrink-0">
+          <RotateCcw size={16} />
+          Replay Tour
+        </button>
       </div>
 
       {/* User Header Profile Card */}
