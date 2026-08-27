@@ -1,21 +1,44 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, EmptyState, Badge, ErrorBanner } from '../components/ui.jsx'
+import { Loading, PageHeader, Badge, ErrorBanner } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
-import { Plus, Users, Mail, Phone, IndianRupee, ShoppingCart } from 'lucide-react'
+import {
+  Plus, Users, Mail, Phone, IndianRupee, ShoppingCart,
+  TrendingUp, TrendingDown, AlertTriangle, Crown, Star,
+  Clock, Target, Zap, Activity, RefreshCw,
+} from 'lucide-react'
+
+const SEGMENT_META = {
+  high: { label: 'High Value', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400', icon: Crown, badge: 'emerald' },
+  medium: { label: 'Medium Value', color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400', icon: Star, badge: 'blue' },
+  low: { label: 'Low Value', color: 'text-slate-600 bg-slate-50 dark:bg-slate-800 dark:text-slate-400', icon: Target, badge: 'slate' },
+  at_risk: { label: 'At Risk', color: 'text-red-600 bg-red-50 dark:bg-red-950/30 dark:text-red-400', icon: AlertTriangle, badge: 'red' },
+}
 
 export default function Customers() {
   const [customers, setCustomers] = useState([])
   const [sales, setSales] = useState([])
+  const [clvData, setClvData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const [clvSort, setClvSort] = useState('predicted_6m_clv')
+  const [segmentFilter, setSegmentFilter] = useState('all')
 
   const load = useCallback(() => {
-    Promise.all([api.get('/customers/'), api.get('/sales/')])
-      .then(([c, s]) => { setCustomers(c.data); setSales(s.data) })
+    setLoading(true)
+    Promise.all([
+      api.get('/customers/'),
+      api.get('/sales/'),
+      api.get('/ai/clv').catch(() => ({ data: null })),
+    ])
+      .then(([c, s, clv]) => {
+        setCustomers(c.data)
+        setSales(s.data)
+        setClvData(clv.data)
+      })
       .catch((err) => setError(err.response?.data?.detail || 'Failed to load customers.'))
       .finally(() => setLoading(false))
   }, [])
@@ -36,7 +59,14 @@ export default function Customers() {
     catch (err) { setError(err.response?.data?.detail || 'Failed to delete customer.') }
   }
 
-  if (loading) return <Loading label="Loading customers..." />
+  // Build CLV map for quick lookup
+  const clvMap = useMemo(() => {
+    const map = {}
+    if (clvData?.customers) {
+      clvData.customers.forEach(c => { map[c.customer_id] = c })
+    }
+    return map
+  }, [clvData])
 
   const getCustomerStats = (cid) => {
     const cSales = sales.filter(s => s.customer_id === cid)
@@ -44,38 +74,123 @@ export default function Customers() {
     return { orderCount: cSales.length, totalSpent }
   }
 
-  const columns = [
-    { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },
-    { key: 'email', label: 'Email', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v || '—'}</span> },
-    { key: 'phone', label: 'Phone' },
-    { key: 'orders', label: 'Orders', render: (v) => <Badge tone={v > 0 ? 'blue' : 'slate'}>{v}</Badge> },
-    { key: 'total_spent', label: 'Total Spent', render: (v) => <span className="font-semibold text-emerald-600">₹{Number(v || 0).toLocaleString('en-IN')}</span> },
-  ]
-
-  const enriched = customers.map(c => {
-    const stats = getCustomerStats(c.id)
-    return { ...c, orders: stats.orderCount, total_spent: stats.totalSpent }
-  })
+  const enriched = useMemo(() => {
+    let list = customers.map(c => {
+      const stats = getCustomerStats(c.id)
+      const clv = clvMap[c.id] || {}
+      return {
+        ...c,
+        orders: stats.orderCount,
+        total_spent: stats.totalSpent,
+        clv: clv.clv || 0,
+        predicted_6m_clv: clv.predicted_6m_clv || 0,
+        avg_order_value: clv.avg_order_value || 0,
+        purchase_frequency: clv.purchase_frequency || 0,
+        lifespan_months: clv.lifespan_months || 0,
+        segment: clv.segment || 'at_risk',
+        last_purchase_days: clv.last_purchase_days,
+      }
+    })
+    if (segmentFilter !== 'all') {
+      list = list.filter(c => c.segment === segmentFilter)
+    }
+    list.sort((a, b) => (b[clvSort] || 0) - (a[clvSort] || 0))
+    return list
+  }, [customers, sales, clvMap, clvSort, segmentFilter])
 
   const totalSpentAll = enriched.reduce((s, c) => s + c.total_spent, 0)
   const avgSpend = customers.length > 0 ? Math.round(totalSpentAll / customers.length) : 0
 
+  if (loading) return <Loading label="Loading customers and computing CLV..." />
+
+  const columns = [
+    { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },
+    { key: 'email', label: 'Email', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v || '—'}</span> },
+    { key: 'orders', label: 'Orders', render: (v) => <Badge tone={v > 0 ? 'blue' : 'slate'}>{v}</Badge> },
+    { key: 'total_spent', label: 'Total Spent', render: (v) => <span className="font-semibold text-emerald-600">₹{Number(v || 0).toLocaleString('en-IN')}</span> },
+    {
+      key: 'segment', label: 'Segment', render: (v) => {
+        const meta = SEGMENT_META[v] || SEGMENT_META.low
+        return <Badge tone={meta.badge}>{meta.label}</Badge>
+      }
+    },
+    {
+      key: 'predicted_6m_clv', label: 'Predicted 6M CLV', render: (v) => (
+        <span className="font-semibold text-indigo-600 dark:text-indigo-400">₹{Number(v || 0).toLocaleString('en-IN')}</span>
+      )
+    },
+  ]
+
   return (
-    <div>
-      <PageHeader title="Customers" subtitle="Customer profiles and contact directory."
+    <div className="space-y-5">
+      <PageHeader title="Customers" subtitle="Customer profiles with lifetime value predictions."
         action={<button onClick={() => setShowForm(v => !v)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Add Customer</button>}
       />
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
-        <div className="card text-center p-3"><p className="text-xl font-bold text-slate-900 dark:text-slate-100">{customers.length}</p><p className="text-[10px] text-slate-500 uppercase">Total Customers</p></div>
-        <div className="card text-center p-3"><p className="text-xl font-bold text-emerald-600">₹{totalSpentAll.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Total Revenue</p></div>
-        <div className="card text-center p-3"><p className="text-xl font-bold text-blue-600">₹{avgSpend.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">Avg Spend/Customer</p></div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="card p-4">
+          <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Customers</p>
+          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{customers.length}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Revenue</p>
+          <p className="text-2xl font-bold text-emerald-600">₹{totalSpentAll.toLocaleString('en-IN')}</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-1 mb-1">
+            <IndianRupee size={10} className="text-indigo-500" />
+            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg CLV</p>
+          </div>
+          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">₹{Number(clvData?.summary?.avg_clv || 0).toLocaleString('en-IN')}</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-1 mb-1">
+            <Crown size={10} className="text-emerald-500" />
+            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">High Value</p>
+          </div>
+          <p className="text-2xl font-bold text-emerald-600">{clvData?.summary?.high_value || 0}</p>
+        </div>
+        <div className="card p-4">
+          <div className="flex items-center gap-1 mb-1">
+            <AlertTriangle size={10} className="text-red-500" />
+            <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">At Risk</p>
+          </div>
+          <p className="text-2xl font-bold text-red-600">{clvData?.summary?.at_risk || 0}</p>
+        </div>
       </div>
+
+      {/* Segment Breakdown */}
+      {clvData?.summary && (
+        <div className="flex items-center gap-3 flex-wrap">
+          {Object.entries(SEGMENT_META).map(([key, meta]) => {
+            const count = clvData.summary[key === 'high' ? 'high_value' : key === 'medium' ? 'medium_value' : key === 'low' ? 'low_value' : 'at_risk'] || 0
+            const Icon = meta.icon
+            return (
+              <button key={key} onClick={() => setSegmentFilter(segmentFilter === key ? 'all' : key)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                  segmentFilter === key
+                    ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                }`}>
+                <Icon size={12} className={meta.color.split(' ')[0]} />
+                {meta.label}
+                <span className="text-[10px] text-slate-400">({count})</span>
+              </button>
+            )
+          })}
+          {segmentFilter !== 'all' && (
+            <button onClick={() => setSegmentFilter('all')} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium">
+              Clear filter
+            </button>
+          )}
+        </div>
+      )}
 
       <ErrorBanner message={error} />
 
       {showForm && (
-        <div className="card mb-6">
+        <div className="card">
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
             <div><label className="text-xs font-medium text-slate-600 dark:text-slate-300">Name *</label>
               <input type="text" className="input mt-1" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Full name" required /></div>
@@ -89,20 +204,66 @@ export default function Customers() {
       )}
 
       <div className="card">
-        <InteractiveTable data={enriched} columns={columns} searchableKeys={['name', 'email', 'phone']}
+        <InteractiveTable data={enriched} columns={columns} searchableKeys={['name', 'email']}
           onRowClick={setSelected} emptyMessage="No customers found." />
       </div>
 
-      <DetailModal title={selected?.name || ''} subtitle="Customer Profile" onClose={() => setSelected(null)}>
+      {/* Detail Modal with CLV */}
+      <DetailModal title={selected?.name || ''} subtitle="Customer Profile & Lifetime Value" onClose={() => setSelected(null)}>
         {selected && (
-          <div>
-            <DetailModal.Row label="Name" value={selected.name} icon={Users} tone="brand" />
-            <DetailModal.Row label="Email" value={selected.email || 'Not provided'} icon={Mail} />
-            <DetailModal.Row label="Phone" value={selected.phone || 'Not provided'} icon={Phone} />
-            <DetailModal.Row label="Total Orders" value={selected.orders} icon={ShoppingCart} tone="blue" />
-            <DetailModal.Row label="Total Spent" value={`₹${Number(selected.total_spent || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
-            <DetailModal.Row label="Avg Order" value={`₹${selected.orders > 0 ? Math.round(selected.total_spent / selected.orders).toLocaleString('en-IN') : 0}`} />
-            <DetailModal.Section title="Recent Sales">
+          <div className="space-y-4">
+            {/* Basic Info */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Contact</p>
+              <DetailModal.Row label="Name" value={selected.name} icon={Users} tone="brand" />
+              <DetailModal.Row label="Email" value={selected.email || 'Not provided'} icon={Mail} />
+              <DetailModal.Row label="Phone" value={selected.phone || 'Not provided'} icon={Phone} />
+            </div>
+
+            {/* Purchase Stats */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Purchase History</p>
+              <DetailModal.Row label="Total Orders" value={selected.orders} icon={ShoppingCart} tone="blue" />
+              <DetailModal.Row label="Total Spent" value={`₹${Number(selected.total_spent || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
+              <DetailModal.Row label="Avg Order Value" value={`₹${Number(selected.avg_order_value || 0).toLocaleString('en-IN')}`} />
+              <DetailModal.Row label="Purchase Frequency" value={`${selected.purchase_frequency || 0}/month`} />
+              <DetailModal.Row label="Customer Since" value={`${Math.round(selected.lifespan_months || 0)} months`} icon={Clock} />
+            </div>
+
+            {/* CLV Section */}
+            <div className="bg-indigo-50 dark:bg-indigo-950/20 rounded-xl p-4 border border-indigo-200 dark:border-indigo-800/50">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp size={14} className="text-indigo-500" />
+                <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase">Customer Lifetime Value</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-slate-500 uppercase">Historical CLV</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100">₹{Number(selected.clv || 0).toLocaleString('en-IN')}</p>
+                </div>
+                <div className="bg-white dark:bg-slate-800 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-slate-500 uppercase">Predicted 6M</p>
+                  <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">₹{Number(selected.predicted_6m_clv || 0).toLocaleString('en-IN')}</p>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                  SEGMENT_META[selected.segment]?.color || 'text-slate-500 bg-slate-50'
+                }`}>
+                  {(() => { const M = SEGMENT_META[selected.segment]; return M ? <M.icon size={10} /> : null })()}
+                  {SEGMENT_META[selected.segment]?.label || selected.segment}
+                </span>
+                {selected.last_purchase_days !== null && selected.last_purchase_days !== undefined && (
+                  <span className="text-[10px] text-slate-400">
+                    Last purchase: {selected.last_purchase_days === 0 ? 'Today' : `${selected.last_purchase_days}d ago`}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Sales */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Recent Sales</p>
               {sales.filter(s => s.customer_id === selected.id).slice(-5).reverse().map(s => (
                 <div key={s.id} className="flex justify-between py-1 text-sm">
                   <span className="text-slate-500 dark:text-slate-400">{s.sale_date ? new Date(s.sale_date).toLocaleDateString() : '—'}</span>
@@ -112,7 +273,7 @@ export default function Customers() {
               {sales.filter(s => s.customer_id === selected.id).length === 0 && (
                 <p className="text-xs text-slate-400 py-2">No sales for this customer.</p>
               )}
-            </DetailModal.Section>
+            </div>
           </div>
         )}
       </DetailModal>

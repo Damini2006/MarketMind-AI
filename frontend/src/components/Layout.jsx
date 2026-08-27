@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
 import ThemeToggle from '../components/ThemeToggle'
 import Avatar from '../components/Avatar'
+import ChatBot from '../components/ChatBot'
+import GuidedTour, { useTourAutoShow } from '../components/GuidedTour'
 import {
   LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   UsersRound, Tags, Truck, Database,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
-  Settings, Bell, ChevronDown, CheckCheck, ClipboardList,
+  Settings, Bell, ChevronDown, CheckCheck, ClipboardList, GitCompare,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -26,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/churn', label: 'Churn Risk', icon: UserMinus },
   { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
   { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
+  { to: '/comparison', label: 'Compare Periods', icon: GitCompare },
   { to: '/activity', label: 'Activity Log', icon: ClipboardList },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
@@ -40,16 +43,14 @@ const ROLE_LABELS = {
 // Pages visible to each role — if a page is missing from a role's list,
 // it is hidden from the sidebar for that role.
 const ROLE_PAGES = {
-  business_owner: [
-    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
-    '/categories', '/suppliers', '/team', '/datasets',
-    '/forecasting', '/segmentation', '/churn', '/recommendations',
-    '/anomalies', '/activity', '/settings',
+  business_owner: [    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
+    '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
+    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
   ],
   store_manager: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
-    '/categories', '/suppliers', '/forecasting', '/segmentation',
-    '/churn', '/recommendations', '/anomalies', '/activity', '/settings',
+    '/categories', '/suppliers', '/forecasting', '/segmentation', '/churn',
+    '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
   ],
   sales_executive: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
@@ -57,9 +58,8 @@ const ROLE_PAGES = {
   ],
   admin: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
-    '/categories', '/suppliers', '/team', '/datasets',
-    '/forecasting', '/segmentation', '/churn', '/recommendations',
-    '/anomalies', '/activity', '/settings',
+    '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
+    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison', '/activity', '/settings',
   ],
 }
 
@@ -156,6 +156,7 @@ function NotificationBell() {
   return (
     <div className="relative" ref={ref}>
       <button
+        data-tour="notifications"
         onClick={toggleDropdown}
         className="relative p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         aria-label="Notifications"
@@ -282,6 +283,8 @@ export default function Layout() {
   const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.to))
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
 
+  const { showTour, closeTour } = useTourAutoShow(user?.role)
+
   const handleLogout = () => {
     logout()
   }
@@ -294,7 +297,7 @@ export default function Layout() {
           <h1 className="text-xl font-bold tracking-tight text-white">MarketMind AI</h1>
           <p className="text-xs text-brand-100/70 dark:text-slate-400 mt-1">Sales Intelligence Platform</p>
         </div>
-        <nav className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        <nav data-tour="sidebar" className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-1">
           {visibleItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -346,6 +349,8 @@ export default function Layout() {
           </div>
         </main>
       </div>
+      <div data-tour="chatbot"><ChatBot /></div>
+      <GuidedTour show={showTour} onClose={closeTour} role={user?.role} />
     </div>
   )
 }
