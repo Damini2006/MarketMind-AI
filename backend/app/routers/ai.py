@@ -305,35 +305,45 @@ def get_churn_predictions(
     return {"accuracy": 0.91, "precision": 0.88, "f1": 0.89, "rows": rows}
 
 
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db), current_user=Depends(get_current_user)
+# ) -> Dict[str, Any]:
+#     customers = db.query(models.Customer).all()
+#     products = db.query(models.Product).all()
+
+#     if not customers or not products:
+#         return {"rows": []}
+
+#     rows = []
+#     prod_names = [p.name for p in products]
+
+#     for i, c in enumerate(customers):
+#         p1 = prod_names[i % len(prod_names)]
+#         p2 = prod_names[(i + 1) % len(prod_names)]
+
+#         rows.append(
+#             {
+#                 "customer_id": c.id,
+#                 "customer_name": c.name,
+#                 "recommended_products": [p1, p2],
+#                 "reason": "Based on frequent co-purchases by similar customers in their demographic.",
+#             }
+#         )
+
+#     return {"rows": rows}
+
 @router.get("/recommendations")
 def get_product_recommendations(
     db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ) -> Dict[str, Any]:
-    customers = db.query(models.Customer).all()
-    products = db.query(models.Product).all()
+    from ..ml.recommendation import generate_product_recommendations
 
-    if not customers or not products:
-        return {"rows": []}
-
-    rows = []
-    prod_names = [p.name for p in products]
-
-    for i, c in enumerate(customers):
-        p1 = prod_names[i % len(prod_names)]
-        p2 = prod_names[(i + 1) % len(prod_names)]
-
-        rows.append(
-            {
-                "customer_id": c.id,
-                "customer_name": c.name,
-                "recommended_products": [p1, p2],
-                "reason": "Based on frequent co-purchases by similar customers in their demographic.",
-            }
-        )
-
-    return {"rows": rows}
-
-
+    try:
+        return generate_product_recommendations(db)
+    except Exception as e:
+        return {"error": str(e), "rows": []}
+    
 @router.get("/anomalies")
 def get_anomaly_alerts(
     db: Session = Depends(get_db), current_user=Depends(get_current_user)
