@@ -11,6 +11,7 @@ from ..cache import get_or_set, invalidate
 from ..database import get_db
 from ..deps import get_current_user, require_roles
 from .inventory import _check_and_create_alert, _ensure_inventory_row, _record_inventory_transaction
+from ..ml.business_alerts import check_sale_business_rules
 
 router = APIRouter(prefix="/api/sales", tags=["Sales"])
 
@@ -84,12 +85,27 @@ def create_sale(
         )
         if product:
             product.stock_quantity = max(0, product.stock_quantity - payload.quantity)
+            stock_before = product.stock_quantity
             _ensure_inventory_row(db, product)
             _record_inventory_transaction(
                 db, product.id, current_user.id, "OUT", payload.quantity, f"Sale #{sale.id}"
             )
             db.commit()
             _check_and_create_alert(db, product)
+            # Business-rule alerts: large quantity sale, significant stock depletion
+            stock_after = max(0, stock_before - payload.quantity)
+            try:
+                check_sale_business_rules(
+                    db=db,
+                    product=product,
+                    quantity_sold=payload.quantity,
+                    stock_before=stock_before,
+                    stock_after=stock_after,
+                    business_id=current_user.business_id,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
     db.commit()
     db.refresh(sale)
     invalidate("sales_list:")
