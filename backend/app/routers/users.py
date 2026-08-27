@@ -187,3 +187,15 @@ def remove_user(
     db.delete(user)
     db.commit()
     return None
+
+
+@router.get("/tour-status")
+def get_tour_status(current_user=Depends(get_current_user)):
+    return {"tour_completed": getattr(current_user, "tour_completed", False)}
+
+
+@router.put("/tour-status")
+def update_tour_status(body: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.tour_completed = body.get("tour_completed", True)
+    db.commit()
+    return {"tour_completed": current_user.tour_completed}

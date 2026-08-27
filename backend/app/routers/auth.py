@@ -131,10 +131,7 @@ def register(
     )
     db.add(user)
     db.flush()
-
-    # Seed demo data (products, customers, sales, invoices) so a brand-new
-    # business is not an empty dashboard. seed_business_demo_data commits.
-    seed_business_demo_data(db, business)
+    db.commit()
 
     db.refresh(user)
     return user

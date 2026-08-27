@@ -57,6 +57,8 @@ class User(Base):
     avatar_color = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)  # served from /uploads/avatars
     bio = Column(Text, nullable=True)
+    tour_completed = Column(Boolean, default=False)
+    dob = Column(Date, nullable=True)
 
     # Multi-tenancy
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
