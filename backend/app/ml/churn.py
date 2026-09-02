@@ -255,7 +255,7 @@ def run_churn_prediction(db: Session, business_id: int = None) -> dict:
             continue
         features.append(result["features"])
         labels.append(result["churned"])
-        names.append(c.full_name)
+        names.append(c.name)
         ids.append(c.id)
         recencies.append(result["recency_days"])
         frequencies.append(result["frequency"])
