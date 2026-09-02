@@ -144,9 +144,9 @@ def update_stock(
     return product
 
 
-@router.get("/alerts", response_model=List[schemas.InventoryAlertOut])
+@router.get("/alerts")
 def list_alerts(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    return (
+    alerts = (
         db.query(models.InventoryAlert)
         .filter(
             models.InventoryAlert.resolved == False,  # noqa: E712
@@ -155,6 +155,22 @@ def list_alerts(db: Session = Depends(get_db), current_user=Depends(get_current_
         .order_by(models.InventoryAlert.created_at.desc())
         .all()
     )
+    # Enrich with product name and stock_quantity for the frontend
+    result = []
+    for a in alerts:
+        product = db.query(models.Product).filter(models.Product.id == a.product_id).first()
+        result.append({
+            "id": a.id,
+            "product_id": a.product_id,
+            "name": product.name if product else "Unknown",
+            "stock_quantity": product.stock_quantity if product else 0,
+            "reorder_threshold": product.reorder_threshold if product else 0,
+            "message": a.message,
+            "level": a.level,
+            "created_at": a.created_at,
+            "resolved": a.resolved,
+        })
+    return result
 
 
 @router.post("/products/upload-csv")
