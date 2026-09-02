@@ -13,14 +13,21 @@ export default function Suppliers() {
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ supplier_name: '', phone: '', email: '', address: '' })
 
+  useEffect(() => {
+    let cancelled = false
+    api.get('/suppliers/')
+      .then(res => { if (!cancelled) setSuppliers(res.data) })
+      .catch(err => { if (!cancelled) setError(err.response?.data?.detail || 'Failed to load suppliers.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try { const res = await api.get('/suppliers/'); setSuppliers(res.data) }
     catch (err) { setError(err.response?.data?.detail || 'Failed to load suppliers.') }
     finally { setLoading(false) }
   }, [])
-
-  useEffect(() => { load() }, [load])
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
 
@@ -30,14 +37,14 @@ export default function Suppliers() {
     try {
       setSaving(true); setError('')
       await api.post('/suppliers/', { supplier_name: form.supplier_name.trim(), phone: form.phone.trim() || null, email: form.email.trim() || null, address: form.address.trim() || null })
-      setForm({ supplier_name: '', phone: '', email: '', address: '' }); setShowForm(false); load()
+      setForm({ supplier_name: '', phone: '', email: '', address: '' }); setShowForm(false); setLoading(true); load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to create supplier.') }
     finally { setSaving(false) }
   }
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this supplier?')) return
-    try { setError(''); await api.delete(`/suppliers/${id}`); load() }
+    try { setError(''); setLoading(true); await api.delete(`/suppliers/${id}`); load() }
     catch (err) { setError(err.response?.data?.detail || 'Failed to delete supplier.') }
   }
 

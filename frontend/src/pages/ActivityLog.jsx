@@ -311,7 +311,6 @@ export default function ActivityLog() {
 
 
   const fetchActivities = useCallback(async () => {
-    setLoading(true)
     try {
       const params = { limit, offset: page * limit }
       if (filters.action) params.action = filters.action
@@ -376,7 +375,9 @@ export default function ActivityLog() {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetchActivities is a shared useCallback used by auto-refresh interval
   useEffect(() => { fetchActivities() }, [fetchActivities])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- stats/heatmap/users are independent one-shot fetches
   useEffect(() => { fetchStats(); fetchHeatmap(); fetchUsers() }, [fetchStats, fetchHeatmap, fetchUsers])
 
   // Auto-refresh

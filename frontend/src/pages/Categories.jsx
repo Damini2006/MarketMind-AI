@@ -14,6 +14,14 @@ export default function Categories() {
   const [message, setMessage] = useState('')
   const [selected, setSelected] = useState(null)
 
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api.get('/categories/'), api.get('/inventory/products').catch(() => ({ data: [] }))])
+      .then(([c, p]) => { if (!cancelled) { setCategories(c.data); setProducts(p.data) } })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const load = useCallback(() => {
     setLoading(true)
     Promise.all([api.get('/categories/'), api.get('/inventory/products').catch(() => ({ data: [] }))])
@@ -21,21 +29,19 @@ export default function Categories() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
-
   const handleCreate = async (e) => {
     e.preventDefault()
     setMessage('')
     if (!categoryName.trim()) { setMessage('Category name is required.'); return }
     try {
       await api.post('/categories/', { category_name: categoryName.trim(), description: description.trim() || null })
-      setCategoryName(''); setDescription(''); setShowForm(false); setMessage('Category added successfully.'); load()
+      setCategoryName(''); setDescription(''); setShowForm(false); setMessage('Category added successfully.'); setLoading(true); load()
     } catch (err) { setMessage(err.response?.data?.detail || 'Failed to add category.') }
   }
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this category?')) return
-    try { await api.delete(`/categories/${id}`); load() }
+    try { setLoading(true); await api.delete(`/categories/${id}`); load() }
     catch (err) { setMessage(err.response?.data?.detail || 'Failed to delete category.') }
   }
 

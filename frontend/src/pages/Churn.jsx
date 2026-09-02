@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../services/api'
 import {
   Loading,
@@ -27,7 +27,6 @@ import {
   UserPlus,
   Copy,
   Check,
-  Flame,
 } from 'lucide-react'
 
 /* ============================================================
@@ -128,6 +127,21 @@ function median(sortedArr) {
 
 function initials(name) {
   return String(name || 'C').trim().charAt(0).toUpperCase()
+}
+
+function SortHeader({ label, sortKey, sortConfig, onToggle, className = '' }) {
+  const active = sortConfig.key === sortKey
+  return (
+    <th
+      className={`py-3.5 pr-5 font-semibold cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors ${className}`}
+      onClick={() => onToggle(sortKey)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <ArrowUpDown size={12} className={active ? 'text-indigo-500' : 'text-slate-300 dark:text-slate-600'} />
+      </span>
+    </th>
+  )
 }
 
 /* ============================================================
@@ -275,20 +289,7 @@ export default function Churn() {
     )
   }
 
-  function SortHeader({ label, sortKey, className = '' }) {
-    const active = sortConfig.key === sortKey
-    return (
-      <th
-        className={`py-3.5 pr-5 font-semibold cursor-pointer select-none hover:text-slate-700 dark:hover:text-slate-200 transition-colors ${className}`}
-        onClick={() => toggleSort(sortKey)}
-      >
-        <span className="inline-flex items-center gap-1">
-          {label}
-          <ArrowUpDown size={12} className={active ? 'text-indigo-500' : 'text-slate-300 dark:text-slate-600'} />
-        </span>
-      </th>
-    )
-  }
+
 
   /* -------- NEW: CSV export -------- */
   function exportCSV() {
@@ -318,10 +319,6 @@ export default function Churn() {
       setTimeout(() => setCopiedId(null), 1500)
     })
   }
-
-  const topAtRisk = [...visibleRows]
-    .sort((a, b) => Number(b.churn_probability || 0) - Number(a.churn_probability || 0))
-    .slice(0, 3)
 
   return (
     <div className="min-h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
@@ -599,10 +596,10 @@ export default function Churn() {
             <thead className="bg-slate-50 dark:bg-slate-800/50">
               <tr className="text-left text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                 <th className="py-3.5 px-5 font-semibold">Customer</th>
-                <SortHeader label="Risk" sortKey="risk_category" />
-                <SortHeader label="Probability" sortKey="churn_probability" />
-                <SortHeader label="Inactive" sortKey="recency_days" />
-                <SortHeader label="Orders" sortKey="order_count" />
+                <SortHeader label="Risk" sortKey="risk_category" sortConfig={sortConfig} onToggle={toggleSort} />
+                <SortHeader label="Probability" sortKey="churn_probability" sortConfig={sortConfig} onToggle={toggleSort} />
+                <SortHeader label="Inactive" sortKey="recency_days" sortConfig={sortConfig} onToggle={toggleSort} />
+                <SortHeader label="Orders" sortKey="order_count" sortConfig={sortConfig} onToggle={toggleSort} />
                 <th className="py-3.5 pr-5 font-semibold min-w-[380px]">AI Recommendation</th>
               </tr>
             </thead>

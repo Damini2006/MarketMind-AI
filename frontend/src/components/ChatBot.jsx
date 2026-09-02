@@ -237,7 +237,7 @@ export default function ChatBot() {
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
   const [recording, setRecording] = useState(false)
-  const [voiceSupported, setVoiceSupported] = useState(true)
+  const [voiceSupported] = useState(() => !!(window.SpeechRecognition || window.webkitSpeechRecognition))
   const recognitionRef = useRef(null)
   const endRef = useRef(null)
   const inpRef = useRef(null)
@@ -277,13 +277,13 @@ export default function ChatBot() {
   // Voice
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { setVoiceSupported(false); return }
+    if (!SR) return
     const r = new SR()
     r.continuous = false; r.interimResults = true; r.lang = 'en-US'
     r.onresult = (e) => { let t = ''; for (let i = e.resultIndex; i < e.results.length; i++) t += e.results[i][0].transcript; setInput(t); if (e.results[e.results.length - 1].isFinished) { setRecording(false); setTimeout(() => setInput(prev => { if (prev.trim()) send(prev); return prev }), 150) } }
     r.onerror = () => setRecording(false); r.onend = () => setRecording(false)
     recognitionRef.current = r
-  }, [send]) // eslint-disable-line
+  }, [send])
 
   const toggleRecording = useCallback(() => { if (!recognitionRef.current) return; if (recording) { recognitionRef.current.stop(); setRecording(false) } else { setInput(''); recognitionRef.current.start(); setRecording(true) } }, [recording])
 

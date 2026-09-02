@@ -27,6 +27,25 @@ export default function Customers() {
   const [clvSort] = useState('predicted_6m_clv')
   const [segmentFilter, setSegmentFilter] = useState('all')
 
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      api.get('/customers/'),
+      api.get('/sales/'),
+      api.get('/ai/clv').catch(() => ({ data: null })),
+    ])
+      .then(([c, s, clv]) => {
+        if (!cancelled) {
+          setCustomers(c.data)
+          setSales(s.data)
+          setClvData(clv.data)
+        }
+      })
+      .catch((err) => { if (!cancelled) setError(err.response?.data?.detail || 'Failed to load customers.') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const load = useCallback(() => {
     setLoading(true)
     Promise.all([
@@ -43,13 +62,11 @@ export default function Customers() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { load() }, [load])
-
   const handleSubmit = async (e) => {
     e.preventDefault(); setError(null)
     try {
       await api.post('/customers/', form)
-      setForm({ name: '', email: '', phone: '' }); setShowForm(false); load()
+      setForm({ name: '', email: '', phone: '' }); setShowForm(false); setLoading(true); load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to add customer.') }
   }
 
