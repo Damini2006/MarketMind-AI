@@ -392,121 +392,74 @@ def get_churn_predictions(
 
 
 # ---------------------------------------------------------------------------
-# 4) Product recommendations — item-based collaborative filtering
+# 4) Product recommendations — intelligent collaborative filtering
 # ---------------------------------------------------------------------------
+from pydantic import BaseModel
+from ..ml import recommendations as ml_recs
+
+@router.post("/recommendations/train")
+def train_recommendations(
+    db: Session = Depends(get_db), current_user=Depends(require_roles("business_owner", "admin"))
+) -> Dict[str, Any]:
+    """Train the collaborative filtering model for the business."""
+    return ml_recs.train_recommendation_model(db, current_user.business_id)
+
 @router.get("/recommendations")
 @ttl_cache(ttl=120)
-def get_product_recommendations(
+def get_all_recommendations(
     db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ) -> Dict[str, Any]:
+    """Get recommendations for a sample of top customers."""
+    # Order customers by total sales amount (Customer model has no total_spent column)
+    from sqlalchemy import func as sa_func
+    cust_spending = (
+        db.query(
+            models.Sale.customer_id,
+            sa_func.coalesce(sa_func.sum(models.Sale.total_amount), 0).label("total")
+        )
+        .filter(models.Sale.business_id == current_user.business_id)
+        .group_by(models.Sale.customer_id)
+        .subquery()
+    )
     customers = (
         db.query(models.Customer)
+        .outerjoin(cust_spending, models.Customer.id == cust_spending.c.customer_id)
         .filter(models.Customer.business_id == current_user.business_id)
+        .order_by(sa_func.coalesce(cust_spending.c.total, 0).desc())
+        .limit(10)
         .all()
     )
-    products = (
-        db.query(models.Product)
-        .filter(models.Product.business_id == current_user.business_id)
-        .all()
-    )
-    sales = (
-        db.query(models.Sale)
-        .filter(models.Sale.business_id == current_user.business_id)
-        .all()
-    )
-    if not customers or not products:
-        return {"rows": []}
-
-    # customer -> set of purchased product ids
-    bought = defaultdict(set)
-    for s in sales:
-        if s.product_id and s.customer_id:
-            bought[s.customer_id].add(s.product_id)
-
-    # co-purchase counts across all customers
-    co = defaultdict(int)
-    for prods in bought.values():
-        plist = list(prods)
-        for i in range(len(plist)):
-            for j in range(i + 1, len(plist)):
-                a, b = plist[i], plist[j]
-                co[(a, b)] += 1
-
-    def co_count(a, b):
-        return co.get((a, b), co.get((b, a), 0))
-
-    name_by_id = {p.id: p.name for p in products}
-    sell_counts = defaultdict(int)
-    for s in sales:
-        if s.product_id:
-            sell_counts[s.product_id] += 1
-    top_sellers = sorted(products, key=lambda p: sell_counts[p.id], reverse=True)
 
     rows = []
     for c in customers:
-        own = bought.get(c.id, set())
-        if not own:
-            recs = [p.name for p in top_sellers[:2]]
-            reason = "Top-selling products across your store — great for first-time engagement."
-        else:
-            scores = {}
-            for p in products:
-                if p.id in own:
-                    continue
-                score = sum(co_count(p.id, b) for b in own)
-                if score > 0:
-                    scores[p.id] = score
-            if scores:
-                ranked = sorted(scores, key=scores.get, reverse=True)[:3]
-                recs = [name_by_id[pid] for pid in ranked]
-                bought_names = [name_by_id[pid] for pid in list(own)[:2]]
-                reason = (
-                    f"Frequently bought together with {', '.join(bought_names)} "
-                    f"by other customers."
-                )
-            else:
-                # No unseen co-purchase candidates — point them at bestsellers.
-                recs = [p.name for p in top_sellers if p.id not in own][:3]
-                if not recs:
-                    recs = [p.name for p in top_sellers[:2]]
-                    reason = "You've bought nearly everything — revisit bestsellers to restock or reorder."
-                else:
-                    reason = "Popular products other similar customers also purchase."
-
-        rows.append(
-            {
+        recs = ml_recs.get_personalized_recommendations(db, current_user.business_id, c.id, limit=3)
+        if recs:
+            rows.append({
                 "customer_id": c.id,
                 "customer_name": c.name,
-                "recommended_products": recs[:3],
-                "reason": reason,
-            }
-        )
-
-    # Persist recommendations (pre-dev parity), mapping product names → ids.
-    try:
-        pid_by_name = {p.name: p.id for p in products}
-        cids = [r["customer_id"] for r in rows]
-        if cids:
-            db.query(models.ProductRecommendation).filter(
-                models.ProductRecommendation.customer_id.in_(cids)
-            ).delete()
-            for r in rows:
-                for name in r["recommended_products"]:
-                    pid = pid_by_name.get(name)
-                    if pid is not None:
-                        db.add(
-                            models.ProductRecommendation(
-                                customer_id=r["customer_id"],
-                                product_id=pid,
-                                recommendation_type="cross_sell",
-                                score=1.0,
-                            )
-                        )
-            db.commit()
-    except Exception:
-        db.rollback()
-
+                "recommended_products": [r["name"] for r in recs],
+                "reason": "Based on purchase history and similar customers."
+            })
     return {"rows": rows}
+
+@router.get("/recommendations/customer/{customer_id}")
+def get_personalized_recs(
+    customer_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Get personalized product recommendations for a specific customer."""
+    recs = ml_recs.get_personalized_recommendations(db, current_user.business_id, customer_id)
+    return {"recommendations": recs}
+
+class CrossSellRequest(BaseModel):
+    product_ids: List[int]
+
+@router.post("/recommendations/cross-sell")
+def get_cross_sell_recs(
+    req: CrossSellRequest, db: Session = Depends(get_db), current_user=Depends(get_current_user)
+) -> Dict[str, Any]:
+    """Get products frequently bought with the provided items."""
+    recs = ml_recs.get_cross_sell_recommendations(db, current_user.business_id, req.product_ids)
+    return {"recommendations": recs}
 
 
 # ---------------------------------------------------------------------------
@@ -540,13 +493,31 @@ def get_anomaly_alerts(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
 ) -> Dict[str, Any]:
-    """Full 15-technique anomaly detection pipeline.
+    """Full anomaly detection pipeline including statistical/ML detection
+    AND business-rule alerts (large quantity sales, stock depletion).
 
     Query params:
       min_confidence (float, 0-1): Auto-dismiss anomalies below this threshold.
     """
     from ..ml.anomaly_detection import run_full_detection
+    from ..ml.business_rule_anomalies import get_business_rule_alerts
+
     result = run_full_detection(db)
+
+    # Merge business-rule alerts into the same alert list
+    biz_alerts = get_business_rule_alerts(db, current_user.business_id)
+    result["alerts"].extend(biz_alerts)
+
+    # Update summary counts to include business-rule alerts
+    for a in biz_alerts:
+        sev = a.get("severity", "medium")
+        cat = a.get("category", "sales")
+        result["summary"]["total_anomalies"] += 1
+        result["summary"][f"{sev}_severity"] = result["summary"].get(f"{sev}_severity", 0) + 1
+        result["summary"]["category_breakdown"][cat] = result["summary"]["category_breakdown"].get(cat, 0) + 1
+        result["summary"]["method_breakdown"][a.get("anomaly_type", "business_rule")] = \
+            result["summary"]["method_breakdown"].get(a.get("anomaly_type", "business_rule"), 0) + 1
+
     # Auto-dismiss: filter out anomalies below the confidence threshold
     if min_confidence > 0:
         result["alerts"] = [a for a in result["alerts"] if a["confidence"] >= min_confidence]
