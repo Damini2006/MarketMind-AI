@@ -332,6 +332,100 @@ def detect_inventory_turnover_anomalies(inventory_items: List[Any], sales: List[
     return results
 
 
+# ── Business Rule Detection (from business_alerts.py) ─────────────
+
+def detect_business_rule_anomalies(sales: List[Any], products: List[Any]) -> List[AnomalyResult]:
+    """Detect business-rule violations: large quantity sales and stock depletion.
+
+    Integrates the logic from business_alerts.py into the anomaly detection
+    pipeline so both statistical/ML anomalies and business-rule alerts appear
+    together on the Anomalies page.
+    """
+    results = []
+    product_map = {p.id: p for p in products}
+    # Large quantity threshold (matches business_alerts.LARGE_QUANTITY_THRESHOLD)
+    LARGE_QTY_THRESHOLD = 20
+    # Stock depletion threshold (matches business_alerts.STOCK_DEPLETION_THRESHOLD)
+    DEPLETION_THRESHOLD = 0.50
+    MIN_DEPLETION_QTY = 5
+
+    for s in sales:
+        if not s.sale_items:
+            continue
+        for item in s.sale_items:
+            product = product_map.get(item.product_id)
+            if not product:
+                continue
+            qty = item.quantity or s.quantity or 0
+            # Large quantity sale
+            if qty >= LARGE_QTY_THRESHOLD:
+                severity = "high" if qty >= 2 * LARGE_QTY_THRESHOLD else "medium"
+                results.append(AnomalyResult(
+                    id=s.id,
+                    category="sales",
+                    severity=severity,
+                    anomaly_type="business_rule_large_qty",
+                    confidence=0.95,
+                    description=(
+                        f"Large quantity sale: {qty} units of '{product.name}' "
+                        f"(threshold: {LARGE_QTY_THRESHOLD} units)"
+                    ),
+                    details={
+                        "product_id": item.product_id,
+                        "product_name": product.name,
+                        "quantity_sold": qty,
+                        "threshold": LARGE_QTY_THRESHOLD,
+                        "sale_id": s.id,
+                    },
+                    created_at=(
+                        s.sale_date.isoformat() if s.sale_date
+                        else dt.datetime.utcnow().isoformat()
+                    ),
+                    suggested_action=(
+                        f"Verify this large sale of {qty} units. "
+                        "May indicate bulk order or data entry error."
+                    ),
+                    affected_entity=f"Product '{product.name}'",
+                ))
+            # Stock depletion check
+            stock_before = product.stock_quantity or 0
+            if stock_before > 0 and qty >= MIN_DEPLETION_QTY:
+                depletion_ratio = qty / stock_before
+                if depletion_ratio >= DEPLETION_THRESHOLD:
+                    severity = "high" if depletion_ratio >= 0.80 else "medium"
+                    pct = round(depletion_ratio * 100, 1)
+                    results.append(AnomalyResult(
+                        id=s.id,
+                        category="inventory",
+                        severity=severity,
+                        anomaly_type="business_rule_depletion",
+                        confidence=0.92,
+                        description=(
+                            f"Stock depletion: sale of {qty} units consumed "
+                            f"{pct}% of '{product.name}' stock "
+                            f"({stock_before} → {max(0, stock_before - qty)})"
+                        ),
+                        details={
+                            "product_id": item.product_id,
+                            "product_name": product.name,
+                            "quantity_sold": qty,
+                            "stock_before": stock_before,
+                            "depletion_pct": pct,
+                            "sale_id": s.id,
+                        },
+                        created_at=(
+                            s.sale_date.isoformat() if s.sale_date
+                            else dt.datetime.utcnow().isoformat()
+                        ),
+                        suggested_action=(
+                            f"Restock '{product.name}' — "
+                            f"{pct}% of inventory consumed in one sale."
+                        ),
+                        affected_entity=f"Product '{product.name}'",
+                    ))
+    return results
+
+
 # ── Main Detection Pipeline ──────────────────────────────────────
 
 def detect_sales_anomalies(sales: List[Any]) -> List[AnomalyResult]:
@@ -722,7 +816,7 @@ def detect_duplicate_transactions(sales: List[Any]) -> List[AnomalyResult]:
             results.append(AnomalyResult(
                 id=ids[0],
                 category="sales",
-                severity="high" if len(group_sales) >= 3 else "medium",
+                severity="high" if len(group_sales) >= 4 else "medium",
                 anomaly_type="duplicate",
                 confidence=min(0.95, 0.8 + len(group_sales) * 0.03),
                 description=(
@@ -777,6 +871,10 @@ def run_full_detection(db) -> Dict[str, Any]:
     all_anomalies.extend(detect_revenue_gaps(sales))
     all_anomalies.extend(detect_seasonal_anomalies(sales))
     all_anomalies.extend(detect_duplicate_transactions(sales))
+
+    # ── Business-rule anomalies (large qty sales, stock depletion) ──
+    # Integrates business_alerts.py logic so both outputs appear together
+    all_anomalies.extend(detect_business_rule_anomalies(sales, products))
 
     # ── Benford's Law analysis ──
     benford = benford_detect(
