@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
+import { Loading, PageHeader, Badge, ErrorBanner } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Upload, Plus, Download, ShoppingCart, IndianRupee, Users, Calendar } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'

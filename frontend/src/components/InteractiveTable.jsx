@@ -12,7 +12,7 @@ import { Search, X, ChevronDown, Eye } from 'lucide-react'
  *     emptyMessage="No items found."
  *   />
  */
-export default function InteractiveTable({ data = [], columns = [], searchableKeys = [], onRowClick, emptyMessage = 'No items found.', title }) {
+export default function InteractiveTable({ data = [], columns = [], searchableKeys = [], onRowClick, emptyMessage = 'No items found.' }) {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')

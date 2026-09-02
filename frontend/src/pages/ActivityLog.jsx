@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import api from '../services/api'
 import {
   Activity, LogIn, LogOut, ShoppingCart, Package, FileText,
-  Users, Settings, Upload, AlertTriangle, RefreshCw, Filter,
-  Clock, User, ChevronLeft, ChevronRight, Search, X, Download,
-  Calendar, BarChart3, PieChart, TrendingUp, Eye, Zap,
-  Shield, Database, CheckCircle2, ArrowUpRight, ArrowDownRight,
+  Users, Settings, Upload, AlertTriangle, RefreshCw,
+  Clock, ChevronLeft, ChevronRight, Search, X, Download,
+  Calendar, BarChart3, PieChart, Eye, Zap,
+  CheckCircle2, ArrowUpRight,
 } from 'lucide-react'
 
 const ACTION_ICONS = {
@@ -272,6 +272,27 @@ function ActivityDetailModal({ activity, onClose }) {
   )
 }
 
+const now = Date.now()
+const DEMO_ACTIVITIES = [
+  { id: 1, user_name: 'Neelam', action: 'login', entity_type: null, description: 'Logged into the system', created_at: new Date(now - 300000).toISOString() },
+  { id: 2, user_name: 'Rishika', action: 'create_sale', entity_type: 'sale', description: 'Created sale #INV-0042 for ₹12,500', created_at: new Date(now - 900000).toISOString() },
+  { id: 3, user_name: 'Damini', action: 'update_inventory', entity_type: 'inventory', description: 'Updated stock for Whole Wheat Atta 10kg (-5 units)', created_at: new Date(now - 1800000).toISOString() },
+  { id: 4, user_name: 'Neelam', action: 'create_customer', entity_type: 'customer', description: 'Added new customer Priya Sharma', created_at: new Date(now - 3600000).toISOString() },
+  { id: 5, user_name: 'Rishika', action: 'create_invoice', entity_type: 'invoice', description: 'Generated invoice #INV-0041 for sale #41', created_at: new Date(now - 5400000).toISOString() },
+  { id: 6, user_name: 'Damini', action: 'update_product', entity_type: 'product', description: 'Updated price for Organic Basmati Rice 5kg to ₹450', created_at: new Date(now - 7200000).toISOString() },
+  { id: 7, user_name: 'Neelam', action: 'upload_dataset', entity_type: 'dataset', description: 'Uploaded sales_data_august.csv (245 records)', created_at: new Date(now - 10800000).toISOString() },
+  { id: 8, user_name: 'Rishika', action: 'update_profile', entity_type: 'profile', description: 'Updated avatar color and bio', created_at: new Date(now - 14400000).toISOString() },
+  { id: 9, user_name: 'Damini', action: 'create_product', entity_type: 'product', description: 'Added new product Stainless Steel Water Bottle', created_at: new Date(now - 18000000).toISOString() },
+  { id: 10, user_name: 'Neelam', action: 'login', entity_type: null, description: 'Logged into the system', created_at: new Date(now - 21600000).toISOString() },
+]
+const DEMO_STATS = { total: 10, today: 3, this_week: 8, this_month: 10, active_users: 3 }
+const DEMO_HEATMAP = Array.from({ length: 30 }, (_, i) => ({
+  date: new Date(now - (29 - i) * 86400000).toISOString().slice(0, 10),
+  count: Math.floor(Math.random() * 8),
+}))
+const DEMO_HOURLY = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: h >= 9 && h <= 18 ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 3) }))
+const DEMO_ACTION_DIST = { login: 15, create_sale: 12, update_inventory: 8, create_customer: 5, create_invoice: 4, update_product: 3 }
+
 // ── Main Component ──
 export default function ActivityLog() {
   const [activities, setActivities] = useState([])
@@ -288,25 +309,6 @@ export default function ActivityLog() {
   const [filters, setFilters] = useState({ action: '', entity_type: '', user_id: '', date_from: '', date_to: '' })
   const limit = 20
 
-  const DEMO_ACTIVITIES = [
-    { id: 1, user_name: 'Neelam', action: 'login', entity_type: null, description: 'Logged into the system', created_at: new Date(Date.now() - 300000).toISOString() },
-    { id: 2, user_name: 'Rishika', action: 'create_sale', entity_type: 'sale', description: 'Created sale #INV-0042 for ₹12,500', created_at: new Date(Date.now() - 900000).toISOString() },
-    { id: 3, user_name: 'Damini', action: 'update_inventory', entity_type: 'inventory', description: 'Updated stock for Whole Wheat Atta 10kg (-5 units)', created_at: new Date(Date.now() - 1800000).toISOString() },
-    { id: 4, user_name: 'Neelam', action: 'create_customer', entity_type: 'customer', description: 'Added new customer Priya Sharma', created_at: new Date(Date.now() - 3600000).toISOString() },
-    { id: 5, user_name: 'Rishika', action: 'create_invoice', entity_type: 'invoice', description: 'Generated invoice #INV-0041 for sale #41', created_at: new Date(Date.now() - 5400000).toISOString() },
-    { id: 6, user_name: 'Damini', action: 'update_product', entity_type: 'product', description: 'Updated price for Organic Basmati Rice 5kg to ₹450', created_at: new Date(Date.now() - 7200000).toISOString() },
-    { id: 7, user_name: 'Neelam', action: 'upload_dataset', entity_type: 'dataset', description: 'Uploaded sales_data_august.csv (245 records)', created_at: new Date(Date.now() - 10800000).toISOString() },
-    { id: 8, user_name: 'Rishika', action: 'update_profile', entity_type: 'profile', description: 'Updated avatar color and bio', created_at: new Date(Date.now() - 14400000).toISOString() },
-    { id: 9, user_name: 'Damini', action: 'create_product', entity_type: 'product', description: 'Added new product Stainless Steel Water Bottle', created_at: new Date(Date.now() - 18000000).toISOString() },
-    { id: 10, user_name: 'Neelam', action: 'login', entity_type: null, description: 'Logged into the system', created_at: new Date(Date.now() - 21600000).toISOString() },
-  ]
-  const DEMO_STATS = { total: 10, today: 3, this_week: 8, this_month: 10, active_users: 3 }
-  const DEMO_HEATMAP = Array.from({ length: 30 }, (_, i) => ({
-    date: new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10),
-    count: Math.floor(Math.random() * 8),
-  }))
-  const DEMO_HOURLY = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: h >= 9 && h <= 18 ? Math.floor(Math.random() * 10) + 1 : Math.floor(Math.random() * 3) }))
-  const DEMO_ACTION_DIST = { login: 15, create_sale: 12, update_inventory: 8, create_customer: 5, create_invoice: 4, update_product: 3 }
 
   const fetchActivities = useCallback(async () => {
     setLoading(true)
@@ -602,7 +604,6 @@ export default function ActivityLog() {
                 </div>
                 <div className="relative ml-4 border-l-2 border-slate-200 dark:border-slate-700 pl-4 space-y-3">
                   {items.map((item) => {
-                    const Icon = getIcon(item.action)
                     const color = getColor(item.action)
                     const label = getLabel(item.action)
                     return (

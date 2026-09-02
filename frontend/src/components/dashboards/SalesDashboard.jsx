@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts'
 import api from '../../services/api'
 import { StatCard, Loading } from '../ui.jsx'
-import { IndianRupee, ShoppingCart, Users, FileText, TrendingUp, Target, Award, Calendar, ArrowUpRight, ArrowDownRight, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
+import { IndianRupee, ShoppingCart, Users, FileText, TrendingUp, Target, Award, Calendar, CheckCircle, Clock, AlertTriangle } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext.jsx'
 
 const COLORS = ['#3b5bdb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']

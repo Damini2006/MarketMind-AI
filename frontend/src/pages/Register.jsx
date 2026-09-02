@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, User, Building2, ArrowRight, Sparkles, CheckCircle2, Eye, EyeOff, ShieldCheck, UserCog, Crown, Briefcase, UserCheck, Shield } from "lucide-react";
+import { Mail, Lock, User, Building2, ArrowRight, Sparkles, CheckCircle2, Eye, EyeOff, ShieldCheck, Crown, Briefcase, UserCheck, Shield } from "lucide-react";
 import api from "../services/api.js";
 import { ErrorBanner } from "../components/ui.jsx";
 import AnimateShape from "../components/AnimateShape.jsx";

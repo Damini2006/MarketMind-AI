@@ -4,8 +4,8 @@ import { Loading, PageHeader, Badge, ErrorBanner } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import {
   Plus, Users, Mail, Phone, IndianRupee, ShoppingCart,
-  TrendingUp, TrendingDown, AlertTriangle, Crown, Star,
-  Clock, Target, Zap, Activity, RefreshCw,
+  TrendingUp, AlertTriangle, Crown, Star,
+  Clock, Target,
 } from 'lucide-react'
 
 const SEGMENT_META = {
@@ -24,7 +24,7 @@ export default function Customers() {
   const [error, setError] = useState(null)
   const [selected, setSelected] = useState(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
-  const [clvSort, setClvSort] = useState('predicted_6m_clv')
+  const [clvSort] = useState('predicted_6m_clv')
   const [segmentFilter, setSegmentFilter] = useState('all')
 
   const load = useCallback(() => {
@@ -53,11 +53,6 @@ export default function Customers() {
     } catch (err) { setError(err.response?.data?.detail || 'Failed to add customer.') }
   }
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Delete this customer?')) return
-    try { await api.delete(`/customers/${id}`); load() }
-    catch (err) { setError(err.response?.data?.detail || 'Failed to delete customer.') }
-  }
 
   // Build CLV map for quick lookup
   const clvMap = useMemo(() => {
@@ -99,7 +94,6 @@ export default function Customers() {
   }, [customers, sales, clvMap, clvSort, segmentFilter])
 
   const totalSpentAll = enriched.reduce((s, c) => s + c.total_spent, 0)
-  const avgSpend = customers.length > 0 ? Math.round(totalSpentAll / customers.length) : 0
 
   if (loading) return <Loading label="Loading customers and computing CLV..." />
 

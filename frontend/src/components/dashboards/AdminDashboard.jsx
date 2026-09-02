@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import api from '../../services/api'
 import { StatCard, Loading } from '../ui.jsx'
-import { IndianRupee, ShoppingCart, Users, Boxes, ShieldCheck, Database, AlertTriangle, FileWarning } from 'lucide-react'
+import { IndianRupee, Users, Boxes, ShieldCheck, Database, AlertTriangle, FileWarning } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext.jsx'
 
-export default function AdminDashboard({ user }) {
+export default function AdminDashboard() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const axisColor = isDark ? '#94a3b8' : '#64748b'

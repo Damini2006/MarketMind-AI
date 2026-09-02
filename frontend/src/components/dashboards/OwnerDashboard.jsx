@@ -2,13 +2,22 @@ import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { Link } from 'react-router-dom'
 import api from '../../services/api'
-import { StatCard, Loading } from '../ui.jsx'
+
 import DetailModal from '../DetailModal.jsx'
 import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import BusinessPulse from '../BusinessPulse.jsx'
 
-export default function OwnerDashboard({ user }) {
+function timeAgo(d) {
+  if (!d) return ''
+  const diff = (Date.now() - new Date(d).getTime()) / 1000
+  if (diff < 60) return 'Just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
+export default function OwnerDashboard() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   const axisColor = isDark ? '#94a3b8' : '#64748b'
@@ -270,14 +279,6 @@ function RecentActivityWidget() {
 
   if (!items.length) return null
 
-  const timeAgo = (d) => {
-    if (!d) return ''
-    const diff = (Date.now() - new Date(d).getTime()) / 1000
-    if (diff < 60) return 'Just now'
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return `${Math.floor(diff / 86400)}d ago`
-  }
 
   return (
     <div className="card">

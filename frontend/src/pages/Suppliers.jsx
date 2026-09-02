@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, EmptyState } from '../components/ui.jsx'
+import { Loading, PageHeader } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Plus, Trash2, Truck, Mail, Phone, MapPin } from 'lucide-react'
 

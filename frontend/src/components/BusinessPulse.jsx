@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import api from '../services/api'
-import { Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 const BAND_COLORS = {
   good: { bg: 'bg-emerald-50 dark:bg-emerald-950/30', border: 'border-emerald-200 dark:border-emerald-800', text: 'text-emerald-700 dark:text-emerald-400', ring: 'text-emerald-500' },
