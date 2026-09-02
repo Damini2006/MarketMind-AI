@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
 import Avatar from '../components/Avatar'
-import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Trash2, Loader2, Calendar, RotateCcw } from 'lucide-react'
+import { User, Lock, ShieldCheck, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Loader2, Calendar, RotateCcw } from 'lucide-react'
 import { AVATAR_COLORS } from '../utils/avatar'
 
 const CURRENCIES = [
@@ -70,7 +70,7 @@ export default function Settings() {
   const [bio, setBio] = useState(user?.bio || '')
   const [dob, setDob] = useState(user?.dob || '')
   const [business, setBusiness] = useState(null)
-  const [avatarMsg, setAvatarMsg] = useState({ type: '', text: '' })
+  const [, setAvatarMsg] = useState({ type: '', text: '' })
   const [avatarLoading, setAvatarLoading] = useState(false)
   const fileInputRef = useRef(null)
   const [prefsMsg, setPrefsMsg] = useState({ type: '', text: '' })
@@ -166,24 +166,6 @@ export default function Settings() {
     }
   }
 
-  const handleAvatarRemove = async () => {
-    setAvatarMsg({ type: '', text: '' })
-    setAvatarLoading(true)
-    try {
-      const res = await api.delete('/users/avatar')
-      if (setUser && res.data) {
-        setUser((prev) => ({ ...prev, ...res.data }))
-      }
-      setAvatarMsg({ type: 'success', text: 'Profile photo removed.' })
-    } catch (err) {
-      setAvatarMsg({
-        type: 'error',
-        text: err.response?.data?.detail || 'Failed to remove photo.',
-      })
-    } finally {
-      setAvatarLoading(false)
-    }
-  }
 
   // Preferences Save Handler (shares the profile endpoint)
   const handleSavePreferences = async () => {
@@ -264,7 +246,6 @@ const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.business_owner
     (completionItems.filter((i) => i.done).length / completionItems.length) * 100
   )
 
-  const [showTour, setShowTour] = useState(false)
 
   return (
     <div className="space-y-6">
@@ -276,7 +257,7 @@ const roleColor = ROLE_COLORS[user?.role] || ROLE_COLORS.business_owner
             Manage your profile credentials, system preferences, and security settings.
           </p>
         </div>
-        <button onClick={async () => { localStorage.removeItem('marketmind_tour_completed'); try { await api.put('/users/tour-status', { tour_completed: false }) } catch {} window.location.reload() }}
+        <button onClick={async () => { localStorage.removeItem('marketmind_tour_seen'); try { await api.put('/users/tour-status', { tour_completed: false }) } catch (e) { void e } window.location.reload() }}
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all duration-200 text-sm font-medium active:scale-95 shrink-0">
           <RotateCcw size={16} />
           Replay Tour

@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { X, ChevronRight, ChevronLeft, Sparkles, RotateCcw } from 'lucide-react'
-import api from '../services/api'
+import { ChevronRight, ChevronLeft, Sparkles, RotateCcw } from 'lucide-react'
 
-const TOUR_KEY = 'marketmind_tour_completed'
 
 // ── Role-Specific Tour Steps ──
 const STEPS_BY_ROLE = {
@@ -41,18 +39,24 @@ const STEPS_BY_ROLE = {
 }
 
 // Hook to check first visit + backend sync
-export function useTourAutoShow(role) {
+const TOUR_STORAGE_KEY = 'marketmind_tour_seen'
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useTourAutoShow() {
   const [showTour, setShowTour] = useState(false)
-  const [canReplay, setCanReplay] = useState(true)
+  const [canReplay] = useState(true)
 
   useEffect(() => {
-    // Always show the tour on dashboard load
-    const timer = setTimeout(() => setShowTour(true), 2500)
-    return () => clearTimeout(timer)
+    const alreadySeen = localStorage.getItem(TOUR_STORAGE_KEY)
+    if (!alreadySeen) {
+      const timer = setTimeout(() => setShowTour(true), 2500)
+      return () => clearTimeout(timer)
+    }
   }, [])
 
   const closeTour = useCallback(async () => {
     setShowTour(false)
+    localStorage.setItem(TOUR_STORAGE_KEY, '1')
   }, [])
 
   return { showTour, closeTour, canReplay }
@@ -82,7 +86,7 @@ export default function GuidedTour({ show, onClose, role }) {
 
   useEffect(() => {
     if (!show) return
-    if (isCenter) { setHighlightRect(null); return }
+    if (isCenter) { if (highlightRect) setTimeout(() => setHighlightRect(null), 0); return }
     let retries = 0
     const maxRetries = 15
     const updatePos = () => {
