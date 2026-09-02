@@ -607,11 +607,11 @@ def detect_customer_anomalies(customers: List[Any], sales: List[Any]) -> List[An
                 results.append(AnomalyResult(
                     id=c.id, category="customer", severity="medium", anomaly_type="iqr",
                     confidence=0.7,
-                    description=f"Customer '{c.name or c.full_name or f'#{c.id}'}' avg order ₹{avg:,.2f} outside normal range [₹{q1:,.2f} – ₹{q3:,.2f}]",
+                    description=f"Customer '{c.name or f'#{c.id}'}' avg order ₹{avg:,.2f} outside normal range [₹{q1:,.2f} – ₹{q3:,.2f}]",
                     details={"avg_order": avg, "orders": count, "q1": round(q1, 2), "q3": round(q3, 2)},
                     created_at=dt.datetime.utcnow().isoformat(),
                     suggested_action="Investigate unusual ordering pattern.",
-                    affected_entity=f"Customer '{c.name or c.full_name or f'#{c.id}'}'",
+                    affected_entity=f"Customer '{c.name or f'#{c.id}'}'",
                 ))
     return results
 
