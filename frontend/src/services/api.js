@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8005/api";
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
 
 // Origin that serves user-uploaded files (/uploads/...) — derived from the
 // API base so it stays correct when VITE_API_BASE_URL is overridden.
