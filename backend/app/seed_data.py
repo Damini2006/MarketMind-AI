@@ -217,6 +217,28 @@ def seed_business_demo_data(db: Session, business: models.Business):
                 )
                 db.add(sale)
 
+        # Ensure every non-lapsed customer has recent purchases (last 10 days)
+        # so the churn model has enough non-churned labels for cross-validation.
+        active_customers = [c for c in customers if c not in lapsed]
+        for c in active_customers:
+            for _ in range(random.randint(2, 4)):
+                product = random.choice(products)
+                recent_day = random.randint(110, 119)
+                qty = max(1, int(random.gauss(3, 2)))
+                sale = models.Sale(
+                    customer_id=c.id,
+                    product_id=product.id,
+                    quantity=qty,
+                    unit_price=product.price,
+                    total_amount=qty * product.price,
+                    sale_date=(start_date + dt.timedelta(days=recent_day)).replace(
+                        hour=random.randint(9, 20), minute=random.randint(0, 59)
+                    ),
+                    source="seed",
+                    business_id=business.id,
+                )
+                db.add(sale)
+
         # Inject outlier sales transactions for Anomaly Detection
         for _ in range(4):
             product = random.choice(products)
