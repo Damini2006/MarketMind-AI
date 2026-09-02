@@ -207,10 +207,11 @@ def detect_velocity_anomalies(sales: List[Any]) -> List[AnomalyResult]:
                 gap_minutes = (t2 - t1).total_seconds() / 60
                 if gap_minutes < 10 and gap_minutes >= 0:
                     total_in_window = sum(float(x.total_amount or 0) for x in sorted_sales[i - 2:i + 1])
+                    severity = "high" if gap_minutes < 3 else "medium"
                     results.append(AnomalyResult(
                         id=sorted_sales[i].id,
                         category="sales",
-                        severity="high",
+                        severity=severity,
                         anomaly_type="velocity",
                         confidence=0.88,
                         description=f"3 sales within {gap_minutes:.0f} min for customer #{cid} totaling ₹{total_in_window:,.2f}",
@@ -589,11 +590,11 @@ def detect_customer_anomalies(customers: List[Any], sales: List[Any]) -> List[An
             results.append(AnomalyResult(
                 id=c.id, category="customer", severity=severity, anomaly_type="zscore",
                 confidence=min(0.95, 0.7 + abs(z) * 0.05),
-                description=f"Customer '{c.name or c.full_name or f'#{c.id}'}' total spend ₹{total:,.2f} is {abs(z):.1f}σ from average (₹{np.mean(totals):,.2f})",
+                description=f"Customer '{c.name or f'#{c.id}'}' total spend ₹{total:,.2f} is {abs(z):.1f}σ from average (₹{np.mean(totals):,.2f})",
                 details={"total_spent": total, "orders": count, "z_score": round(z, 2), "avg_customer_spend": round(float(np.mean(totals)), 2)},
                 created_at=dt.datetime.utcnow().isoformat(),
                 suggested_action="Review this customer's purchase pattern.",
-                affected_entity=f"Customer '{c.name or c.full_name or f'#{c.id}'}'",
+                affected_entity=f"Customer '{c.name or f'#{c.id}'}'",
             ))
 
     avgs = [t[3] for t in customer_totals if t[2] > 1]
@@ -900,9 +901,26 @@ def run_full_detection(db) -> Dict[str, Any]:
     # Filter out low-confidence results (< 0.6) to reduce noise
     all_anomalies = [a for a in all_anomalies if a.confidence >= 0.6]
 
-    # Cap total anomalies to keep the dashboard manageable
+    # Cap total anomalies to keep the dashboard manageable, but ensure
+    # a mix of severities (don't let 'high' crowd out 'medium' and 'low').
     if len(all_anomalies) > 50:
-        all_anomalies = all_anomalies[:50]
+        high = [a for a in all_anomalies if a.severity == "high"]
+        medium = [a for a in all_anomalies if a.severity == "medium"]
+        low = [a for a in all_anomalies if a.severity == "low"]
+        budget = 50
+        h_take = min(len(high), 20)
+        m_take = min(len(medium), 20)
+        l_take = min(len(low), budget - h_take - m_take)
+        capped = high[:h_take] + medium[:m_take] + low[:l_take]
+        # Fill remaining budget from leftovers sorted by confidence
+        remaining = budget - len(capped)
+        if remaining > 0:
+            leftover_ids = {(a.id, a.anomaly_type) for a in capped}
+            leftovers = [a for a in all_anomalies
+                         if (a.id, a.anomaly_type) not in leftover_ids]
+            leftovers.sort(key=lambda a: -a.confidence)
+            capped.extend(leftovers[:remaining])
+        all_anomalies = capped
 
     # ── Compute breakdowns ──
     category_counts = defaultdict(int)

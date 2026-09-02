@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge } from '../components/ui.jsx'
 import jsPDF from 'jspdf'
@@ -7,7 +7,7 @@ import {
   Search, Download, RefreshCw, X, BarChart3, PieChart,
   TrendingUp, Sparkles, Info,
   Clock, Database, Activity, EyeOff, CheckCircle2, XCircle,
-  TrendingDown, Zap, Target, Layers, Calendar, FileText
+  TrendingDown, Zap, Target, Layers, Calendar, FileText, ShoppingCart
 } from 'lucide-react'
 
 const SEVERITY_TONE = { high: 'red', medium: 'amber', low: 'blue' }
@@ -27,6 +27,8 @@ const METHOD_LABELS = {
   margin: 'Margin Analysis', turnover: 'Turnover Rate', out_of_stock: 'Out of Stock',
   round_number: 'Round-Number Bias', revenue_gap: 'Revenue Gap',
   seasonal: 'Seasonal Deviation', duplicate: 'Duplicate Transaction',
+  business_rule_large_qty: 'Large Quantity Sale',
+  business_rule_depletion: 'Stock Depletion',
 }
 const METHOD_ICONS = {
   zscore: Target, iqr: Layers, isolation_forest: Zap,
@@ -35,9 +37,11 @@ const METHOD_ICONS = {
   margin: BarChart3, turnover: RefreshCw, out_of_stock: AlertOctagon,
   round_number: Info, revenue_gap: XCircle,
   seasonal: TrendingUp, duplicate: AlertOctagon,
+  business_rule_large_qty: ShoppingCart,
+  business_rule_depletion: AlertOctagon,
 }
 
-function TimelineChart({ data, onBarClick }) {
+function TimelineChart({ data, onBarClick, selectedDate }) {
   if (!data || data.length === 0) return null
   const maxVal = Math.max(...data.map(d => d.total || 0), 1)
   return (
@@ -46,13 +50,14 @@ function TimelineChart({ data, onBarClick }) {
         <div className="flex items-center gap-2">
           <BarChart3 size={14} className="text-indigo-500" />
           <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Anomaly Timeline</span>
+          {selectedDate && <span className="text-[10px] text-indigo-500 font-medium">— filtering {selectedDate}</span>}
         </div>
         <span className="text-[10px] text-slate-400">{data.length} days with anomalies</span>
       </div>
       <div className="flex items-end gap-1 h-32 overflow-x-auto">
         {data.map((d, i) => (
           <button key={i} onClick={() => onBarClick(d.date)}
-            className="flex flex-col items-center gap-1 min-w-[28px] flex-1 group" title={d.date}>
+            className={`flex flex-col items-center gap-1 min-w-[28px] flex-1 group rounded transition-all ${selectedDate === d.date ? 'bg-indigo-100 dark:bg-indigo-900/30 ring-1 ring-indigo-400' : ''}`} title={d.date}>
             <div className="w-full flex flex-col items-stretch" style={{ height: `${Math.max(4, (d.total / maxVal) * 100)}%` }}>
               {d.low > 0 && <div className="w-full bg-blue-400 rounded-t transition-all" style={{ height: `${(d.low / d.total) * 100}%`, minHeight: '2px' }} />}
               {d.medium > 0 && <div className="w-full bg-amber-400 transition-all" style={{ height: `${(d.medium / d.total) * 100}%`, minHeight: '2px' }} />}
@@ -104,15 +109,17 @@ function ConfidenceChart({ data }) {
 function MiniBarChart({ data, maxVal, color }) {
   const max = maxVal || Math.max(...data.map(d => d.value), 1)
   return (
-    <div className="flex items-end gap-1 h-24">
-      {data.map((d, i) => (
-        <div key={i} className="flex flex-col items-center gap-1 flex-1">
-          <div className="w-full rounded-t transition-all duration-500 hover:opacity-80"
-            style={{ height: `${Math.max(4, (d.value / max) * 100)}%`, backgroundColor: color || '#3b5bdb', minHeight: '4px' }}
-            title={`${d.label}: ${d.value}`} />
-          <span className="text-[9px] text-slate-400 dark:text-slate-500 truncate w-full text-center">{d.label}</span>
-        </div>
-      ))}
+    <div className="overflow-x-auto">
+      <div className="flex items-end gap-1.5 h-24" style={{ minWidth: `${data.length * 48}px` }}>
+        {data.map((d, i) => (
+          <div key={i} className="flex flex-col items-center gap-1 flex-1 min-w-[36px]">
+            <div className="w-full rounded-t transition-all duration-500 hover:opacity-80"
+              style={{ height: `${Math.max(4, (d.value / max) * 100)}%`, backgroundColor: color || '#3b5bdb', minHeight: '4px' }}
+              title={`${d.label}: ${d.value}`} />
+            <span className="text-[9px] text-slate-400 dark:text-slate-500 w-full text-center leading-tight">{d.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -252,8 +259,7 @@ export default function Anomalies() {
   const [dismissed, setDismissed] = useState(new Set())
   const [showDismissed, setShowDismissed] = useState(false)
   const [scanning, setScanning] = useState(false)
-  const [minConfidence, setMinConfidence] = useState(0)
-  const [autoDismissEnabled, setAutoDismissEnabled] = useState(false)
+  const [dateFilter, setDateFilter] = useState('')
 
   const rescanAnomalies = useCallback(() => {
     setScanning(true)
@@ -281,11 +287,6 @@ export default function Anomalies() {
   const alerts = useMemo(() => {
     let list = Array.isArray(data.alerts) ? [...data.alerts] : []
 
-    // Auto-dismiss: filter out low-confidence anomalies client-side
-    if (autoDismissEnabled && minConfidence > 0) {
-      list = list.filter(a => (a.confidence || 0) * 100 >= minConfidence)
-    }
-
     // Filter dismissed
     if (!showDismissed) {
       list = list.filter(a => !dismissed.has(`${a.id}-${a.anomaly_type}`))
@@ -304,6 +305,14 @@ export default function Anomalies() {
         (a.suggested_action || '').toLowerCase().includes(q)
       )
     }
+    if (dateFilter) {
+      list = list.filter(a => {
+        if (!a.created_at) return false
+        const d = new Date(a.created_at)
+        const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        return ymd === dateFilter
+      })
+    }
 
     const sevOrder = { high: 0, medium: 1, low: 2 }
     list.sort((a, b) => {
@@ -312,9 +321,9 @@ export default function Anomalies() {
       return new Date(b.created_at) - new Date(a.created_at)
     })
     return list
-  }, [data.alerts, severityFilter, categoryFilter, methodFilter, search, sortBy, salesOnly, dismissed, showDismissed, autoDismissEnabled, minConfidence])
+  }, [data.alerts, severityFilter, categoryFilter, methodFilter, search, sortBy, salesOnly, dismissed, showDismissed, dateFilter])
 
-  const activeFilters = [severityFilter !== 'all', categoryFilter !== 'all', methodFilter !== 'all', salesOnly, !!search].filter(Boolean).length
+  const activeFilters = [severityFilter !== 'all', categoryFilter !== 'all', methodFilter !== 'all', salesOnly, !!search, !!dateFilter].filter(Boolean).length
 
   const categoryData = useMemo(() => {
     const counts = {}
@@ -686,7 +695,7 @@ export default function Anomalies() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Timeline */}
         <div className="lg:col-span-2">
-          <TimelineChart data={data.timeline} onBarClick={(date) => setSearch(date)} />
+          <TimelineChart data={data.timeline} onBarClick={(date) => setDateFilter(dateFilter === date ? '' : date)} selectedDate={dateFilter} />
         </div>
         {/* Confidence Distribution */}
         <ConfidenceChart data={data.confidence_distribution} />
@@ -744,45 +753,137 @@ export default function Anomalies() {
         </div>
       )}
 
-      {/* Auto-Dismiss Settings */}
+      {/* Severity Heatmap: Category × Detection Method */}
       <div className="card">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => { setAutoDismissEnabled(!autoDismissEnabled) }}
-              className={`relative w-10 h-5 rounded-full transition-colors ${autoDismissEnabled ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'}`}>
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${autoDismissEnabled ? 'left-5.5 translate-x-0' : 'left-0.5'}`} style={{ transform: autoDismissEnabled ? 'translateX(20px)' : 'translateX(0)' }} />
-            </button>
-            <div>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Auto-Dismiss Low Confidence</p>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500">Automatically filter out anomalies below the confidence threshold</p>
+        <div className="flex items-center gap-2 mb-3">
+          <Layers size={14} className="text-indigo-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Severity Heatmap</span>
+          <span className="text-[10px] text-slate-400 ml-auto">Category × Detection Method</span>
+        </div>
+        {(() => {
+          const allAlerts = data.alerts || []
+          const cats = [...new Set(allAlerts.map(a => a.category))].sort()
+          const methods = [...new Set(allAlerts.map(a => a.anomaly_type))].sort()
+          const grid = {}
+          allAlerts.forEach(a => {
+            const key = `${a.category}|${a.anomaly_type}`
+            if (!grid[key]) grid[key] = { high: 0, medium: 0, low: 0 }
+            grid[key][a.severity]++
+          })
+          if (cats.length === 0 || methods.length === 0) return <p className="text-xs text-slate-400">No data</p>
+          return (
+            <div className="overflow-x-auto">
+              <div className="min-w-[500px]">
+                <div className="grid gap-px" style={{ gridTemplateColumns: `120px repeat(${methods.length}, 1fr)` }}>
+                  <div />{methods.map(m => (
+                    <div key={m} className="text-[9px] text-slate-500 dark:text-slate-400 text-center px-1 py-1 truncate" title={METHOD_LABELS[m] || m}>{METHOD_LABELS[m] || m}</div>
+                  ))}
+                  {cats.map(cat => (
+                    <React.Fragment key={cat}>
+                      <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium pr-2 py-1 truncate">{CATEGORY_LABELS[cat] || cat}</div>
+                      {methods.map(m => {
+                        const cell = grid[`${cat}|${m}`]
+                        const total = cell ? cell.high + cell.medium + cell.low : 0
+                        const intensity = Math.min(total / 8, 1)
+                        const bg = total === 0 ? 'transparent' : cell.high > cell.medium ? `rgba(239,68,68,${0.15 + intensity * 0.6})` : cell.medium > 0 ? `rgba(245,158,11,${0.15 + intensity * 0.5})` : `rgba(59,130,246,${0.15 + intensity * 0.5})`
+                        return (
+                          <button key={m} onClick={() => { setCategoryFilter(cat); setMethodFilter(m); setActiveChart(null) }}
+                            className="rounded text-center py-1.5 transition-all hover:ring-1 hover:ring-indigo-400"
+                            style={{ backgroundColor: bg }}
+                            title={`${CATEGORY_LABELS[cat]} × ${METHOD_LABELS[m] || m}: ${total} anomalies`}>
+                            {total > 0 && <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{total}</span>}
+                          </button>
+                        )
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
             </div>
+          )
+        })()}
+      </div>
+
+      {/* Top Affected Entities + Anomaly Freshness */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Top Affected Entities */}
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={14} className="text-red-500" />
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Most Flagged Entities</span>
           </div>
-          {autoDismissEnabled && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-500 dark:text-slate-400">Min: {minConfidence}%</span>
-              <input type="range" min="0" max="90" step="5" value={minConfidence}
-                onChange={(e) => setMinConfidence(Number(e.target.value))}
-                className="w-32 accent-indigo-500" />
-              <div className="flex gap-1">
-                {[0, 30, 50, 70].map(v => (
-                  <button key={v} onClick={() => setMinConfidence(v)}
-                    className={`px-2 py-0.5 text-[10px] rounded border transition-colors ${minConfidence === v ? 'bg-indigo-500 text-white border-indigo-500' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-indigo-300'}`}>
-                    {v}%
+          {(() => {
+            const allAlerts = data.alerts || []
+            const entityCounts = {}
+            allAlerts.forEach(a => {
+              const entity = a.affected_entity || 'Unknown'
+              if (!entityCounts[entity]) entityCounts[entity] = { total: 0, high: 0, methods: new Set() }
+              entityCounts[entity].total++
+              if (a.severity === 'high') entityCounts[entity].high++
+              entityCounts[entity].methods.add(a.anomaly_type)
+            })
+            const sorted = Object.entries(entityCounts)
+              .sort((a, b) => b[1].total - a[1].total)
+              .slice(0, 5)
+            if (sorted.length === 0) return <p className="text-xs text-slate-400">No data</p>
+            const maxCount = sorted[0][1].total
+            return (
+              <div className="space-y-2">
+                {sorted.map(([entity, info]) => (
+                  <button key={entity} onClick={() => { setSearch(entity); setActiveChart(null) }}
+                    className="w-full text-left group">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] text-slate-700 dark:text-slate-300 font-medium truncate max-w-[200px]" title={entity}>{entity}</span>
+                      <span className="text-[10px] text-slate-400">{info.total} alerts{info.high > 0 ? ` · ${info.high} high` : ''}</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 to-indigo-600 transition-all duration-500"
+                        style={{ width: `${(info.total / maxCount) * 100}%` }} />
+                    </div>
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
-        {autoDismissEnabled && minConfidence > 0 && (
-          <div className="mt-2 flex items-center gap-2 text-[11px]">
-            <span className="text-indigo-500 font-medium">Active:</span>
-            <span className="text-slate-500 dark:text-slate-400">Anomalies below {minConfidence}% confidence will be hidden from results</span>
-            {data.auto_dismissed_count != null && (
-              <span className="text-slate-400">({data.auto_dismissed_count} shown after filtering)</span>
-            )}
+
+        {/* Anomaly Freshness */}
+        <div className="card">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock size={14} className="text-amber-500" />
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Anomaly Freshness</span>
           </div>
-        )}
+          {(() => {
+            const allAlerts = data.alerts || []
+            const now = new Date()
+            const buckets = { 'Last 7 days': 0, '7-30 days': 0, '30-90 days': 0, 'Older than 90 days': 0 }
+            allAlerts.forEach(a => {
+              if (!a.created_at) return
+              const age = (now - new Date(a.created_at)) / (1000 * 60 * 60 * 24)
+              if (age <= 7) buckets['Last 7 days']++
+              else if (age <= 30) buckets['7-30 days']++
+              else if (age <= 90) buckets['30-90 days']++
+              else buckets['Older than 90 days']++
+            })
+            const entries = Object.entries(buckets)
+            const maxAge = Math.max(...entries.map(([, v]) => v), 1)
+            const colors = { 'Last 7 days': '#22c55e', '7-30 days': '#f59e0b', '30-90 days': '#f97316', 'Older than 90 days': '#ef4444' }
+            return (
+              <div className="space-y-2">
+                {entries.map(([label, count]) => (
+                  <div key={label} className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 w-28 shrink-0 text-right">{label}</span>
+                    <div className="flex-1 h-5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${(count / maxAge) * 100}%`, backgroundColor: colors[label], minWidth: count > 0 ? '18px' : '0' }} />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 w-6 text-right">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </div>
       </div>
 
       {/* Filters + Alerts */}
@@ -831,9 +932,15 @@ export default function Anomalies() {
         </div>
 
         {activeFilters > 0 && (
-          <div className="flex items-center gap-2 mb-3 text-[11px]">
+          <div className="flex items-center gap-2 mb-3 text-[11px] flex-wrap">
             <span className="text-slate-400">{visibleCount} results · {activeFilters} filter{activeFilters > 1 ? 's' : ''} active</span>
-            <button onClick={() => { setSeverityFilter('all'); setCategoryFilter('all'); setMethodFilter('all'); setSalesOnly(false); setSearch('') }}
+            {dateFilter && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-full">
+                <Calendar size={10} /> {dateFilter}
+                <button onClick={() => setDateFilter('')} className="hover:text-indigo-900 dark:hover:text-indigo-200"><X size={10} /></button>
+              </span>
+            )}
+            <button onClick={() => { setSeverityFilter('all'); setCategoryFilter('all'); setMethodFilter('all'); setSalesOnly(false); setSearch(''); setDateFilter('') }}
               className="text-indigo-500 hover:text-indigo-700 font-medium">Clear all</button>
           </div>
         )}
