@@ -38,6 +38,7 @@ from .routers import (
     forecasting,
     revenue,
 )
+from .routers.websocket_alerts import router as ws_router
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -108,6 +109,7 @@ app.include_router(users.router)
 app.include_router(notifications.router)
 app.include_router(forecasting.router)
 app.include_router(revenue.router)
+app.include_router(ws_router)
 
 
 @app.on_event("startup")
