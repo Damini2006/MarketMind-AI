@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import api from '../../services/api'
 
 import DetailModal from '../DetailModal.jsx'
-import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight } from 'lucide-react'
+import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight, Download, FileText } from 'lucide-react'
+import { exportToPDF, exportToExcel } from '../../utils/exportUtils'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import BusinessPulse from '../BusinessPulse.jsx'
 
@@ -19,6 +21,7 @@ function timeAgo(d) {
 
 export default function OwnerDashboard() {
   const { theme } = useTheme()
+  const { t } = useTranslation()
   const isDark = theme === 'dark'
   const axisColor = isDark ? '#94a3b8' : '#64748b'
   const gridColor = isDark ? '#334155' : '#e2e8f0'
@@ -46,19 +49,57 @@ export default function OwnerDashboard() {
 
       {/* KPI Cards */}
       <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <ClickableKPI label="Total Revenue" value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" onClick={() => setKpiModal('revenue')} />
-        <ClickableKPI label="Total Sales" value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" onClick={() => setKpiModal('sales')} />
-        <ClickableKPI label="Customers" value={kpis.total_customers} icon={Users} tone="brand" onClick={() => setKpiModal('customers')} />
-        <ClickableKPI label="Products" value={kpis.total_products} icon={Boxes} tone="brand" onClick={() => setKpiModal('products')} />
-        <ClickableKPI label="Low Stock Items" value={kpis.low_stock_count} icon={AlertTriangle} tone="amber" onClick={() => setKpiModal('lowstock')} />
-        <ClickableKPI label="Overdue Invoices" value={kpis.overdue_invoices} sub={`${kpis.pending_invoices} pending`} icon={FileWarning} tone="red" onClick={() => setKpiModal('invoices')} />
+        <ClickableKPI label={t('dashboard.totalRevenue')} value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" onClick={() => setKpiModal('revenue')} />
+        <ClickableKPI label={t('dashboard.totalSales')} value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" onClick={() => setKpiModal('sales')} />
+        <ClickableKPI label={t('dashboard.customers')} value={kpis.total_customers} icon={Users} tone="brand" onClick={() => setKpiModal('customers')} />
+        <ClickableKPI label={t('dashboard.products')} value={kpis.total_products} icon={Boxes} tone="brand" onClick={() => setKpiModal('products')} />
+        <ClickableKPI label={t('dashboard.lowStock')} value={kpis.low_stock_count} icon={AlertTriangle} tone="amber" onClick={() => setKpiModal('lowstock')} />
+        <ClickableKPI label={t('dashboard.overdueInvoices')} value={kpis.overdue_invoices} sub={`${kpis.pending_invoices} ${t('dashboard.pendingLabel')}`} icon={FileWarning} tone="red" onClick={() => setKpiModal('invoices')} />
+      </div>
+
+      {/* Export Buttons */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => {
+            const headers = ['Metric', 'Value']
+            const rows = [
+              ['Total Revenue', `₹${kpis.total_revenue.toLocaleString('en-IN')}`],
+              ['Total Sales', String(kpis.total_sales)],
+              ['Customers', String(kpis.total_customers)],
+              ['Products', String(kpis.total_products)],
+              ['Low Stock Items', String(kpis.low_stock_count)],
+              ['Overdue Invoices', String(kpis.overdue_invoices)],
+            ]
+            exportToPDF({ title: 'Dashboard Summary', subtitle: 'Key Performance Indicators', headers, rows, filename: 'dashboard-summary' })
+          }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          <Download size={14} /> {t('common.exportPDF')}
+        </button>
+        <button
+          onClick={() => {
+            const headers = ['Metric', 'Value']
+            const rows = [
+              ['Total Revenue', `₹${kpis.total_revenue.toLocaleString('en-IN')}`],
+              ['Total Sales', String(kpis.total_sales)],
+              ['Customers', String(kpis.total_customers)],
+              ['Products', String(kpis.total_products)],
+              ['Low Stock Items', String(kpis.low_stock_count)],
+              ['Overdue Invoices', String(kpis.overdue_invoices)],
+            ]
+            exportToExcel({ title: 'Dashboard Summary', headers, rows, filename: 'dashboard-summary' })
+          }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        >
+          <FileText size={14} /> {t('common.exportExcel')}
+        </button>
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div data-tour="revenue-chart" className="card lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-slate-800 dark:text-slate-100">Revenue Trend</h3>
+            <h3 className="font-semibold text-slate-800 dark:text-slate-100">{t('dashboard.revenueTrend')}</h3>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium dark:bg-slate-800">
               {[7, 14, 30].map((days) => (
                 <button
@@ -84,7 +125,7 @@ export default function OwnerDashboard() {
           </ResponsiveContainer>
         </div>
         <div className="card">
-          <h3 className="font-semibold text-slate-800 mb-4 dark:text-slate-100">Top Products by Revenue</h3>
+          <h3 className="font-semibold text-slate-800 mb-4 dark:text-slate-100">{t('dashboard.topProducts')}</h3>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={kpis.top_products} layout="vertical" margin={{ left: 10 }}>
               <XAxis type="number" tick={{ fontSize: 11, fill: axisColor }} />

@@ -1,38 +1,46 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.jsx'
 import api from '../services/api'
 import ThemeToggle from '../components/ThemeToggle'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 import Avatar from '../components/Avatar'
 import ChatBot from '../components/ChatBot'
+import UndoRedoControls from '../components/UndoRedoControls'
+import LiveAlerts from '../components/LiveAlerts'
 import GuidedTour, { useTourAutoShow } from '../components/GuidedTour'
 import {
   LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   UsersRound, Tags, Truck, Database,
   TrendingUp, PieChart, UserMinus, Sparkles, ShieldAlert, LogOut,
   Settings, Bell, ChevronDown, CheckCheck, ClipboardList, GitCompare,
-  IndianRupee,
+  IndianRupee, Filter, LayoutTemplate, Clock,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/sales', label: 'Sales', icon: ShoppingCart },
-  { to: '/inventory', label: 'Inventory', icon: Boxes },
-  { to: '/invoices', label: 'Invoices', icon: FileText },
-  { to: '/customers', label: 'Customers', icon: Users },
-  { to: '/team', label: 'Team', icon: UsersRound },
-  { to: '/categories', label: 'Categories', icon: Tags },
-  { to: '/suppliers', label: 'Suppliers', icon: Truck },
-  { to: '/datasets', label: 'Datasets', icon: Database },
-  { to: '/forecasting', label: 'Forecasting', icon: TrendingUp },
-  { to: '/segmentation', label: 'Segmentation', icon: PieChart },
-  { to: '/churn', label: 'Churn Risk', icon: UserMinus },
-  { to: '/recommendations', label: 'Recommendations', icon: Sparkles },
-  { to: '/anomalies', label: 'Anomaly Alerts', icon: ShieldAlert },
-  { to: '/comparison', label: 'Compare Periods', icon: GitCompare },
-  { to: '/revenue-prediction', label: 'Revenue Prediction', icon: IndianRupee },
-  { to: '/activity', label: 'Activity Log', icon: ClipboardList },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+  { to: '/sales', labelKey: 'nav.sales', icon: ShoppingCart },
+  { to: '/inventory', labelKey: 'nav.inventory', icon: Boxes },
+  { to: '/invoices', labelKey: 'nav.invoices', icon: FileText },
+  { to: '/customers', labelKey: 'nav.customers', icon: Users },
+  { to: '/team', labelKey: 'nav.team', icon: UsersRound },
+  { to: '/categories', labelKey: 'nav.categories', icon: Tags },
+  { to: '/suppliers', labelKey: 'nav.suppliers', icon: Truck },
+  { to: '/datasets', labelKey: 'nav.datasets', icon: Database },
+  { to: '/forecasting', labelKey: 'nav.forecasting', icon: TrendingUp },
+  { to: '/segmentation', labelKey: 'nav.segmentation', icon: PieChart },
+  { to: '/churn', labelKey: 'nav.churn', icon: UserMinus },
+  { to: '/recommendations', labelKey: 'nav.recommendations', icon: Sparkles },
+  { to: '/anomalies', labelKey: 'nav.anomalies', icon: ShieldAlert },
+  { to: '/comparison', labelKey: 'nav.comparison', icon: GitCompare },
+  { to: '/funnel', labelKey: 'nav.funnel', icon: Filter },
+  { to: '/reports', labelKey: 'nav.reports', icon: LayoutTemplate },
+  { to: '/scheduled-reports', labelKey: 'nav.scheduledReports', icon: Clock },
+  { to: '/dashboard-builder', labelKey: 'nav.dashboardBuilder', icon: LayoutTemplate },
+  { to: '/revenue-prediction', labelKey: 'nav.revenuePrediction', icon: IndianRupee },
+  { to: '/activity', labelKey: 'nav.activity', icon: ClipboardList },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings },
 ]
 
 const ROLE_LABELS = {
@@ -47,8 +55,8 @@ const ROLE_LABELS = {
 const ROLE_PAGES = {
   business_owner: [    '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
     '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
-    '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison',
-    '/revenue-prediction', '/activity', '/settings',
+    '/segmentation', '/churn',    '/recommendations', '/anomalies', '/comparison',
+    '/revenue-prediction', '/activity', '/funnel', '/reports', '/scheduled-reports', '/dashboard-builder', '/settings',
   ],
   store_manager: [
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
@@ -64,7 +72,7 @@ const ROLE_PAGES = {
     '/dashboard', '/sales', '/inventory', '/invoices', '/customers',
     '/categories', '/suppliers', '/team', '/datasets', '/forecasting',
     '/segmentation', '/churn', '/recommendations', '/anomalies', '/comparison',
-    '/revenue-prediction', '/activity', '/settings',
+    '/revenue-prediction', '/activity', '/funnel', '/reports', '/scheduled-reports', '/dashboard-builder', '/settings',
   ],
 }
 
@@ -283,11 +291,14 @@ function ProfileMenu({ user, onLogout }) {
 
 export default function Layout() {
   const { user, logout } = useAuth()
+  const { t } = useTranslation()
+  const location = useLocation()
 
-  const allowedPages = ROLE_PAGES[user?.role] || ROLE_PAGES.business_owner
-  const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.to))
+  const userRole = typeof user?.role === 'string' ? user?.role : user?.role?.role_name;
+  const allowedPages = ROLE_PAGES[userRole] || ROLE_PAGES.business_owner;
+  const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.to));
+
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })
-
   const { showTour, closeTour } = useTourAutoShow(user?.role)
 
   const handleLogout = () => {
@@ -296,14 +307,14 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
-      {/* Sidebar with Dark Mode Theme Support */}
-      <aside className="w-64 bg-brand-900 dark:bg-slate-900 text-white flex flex-col shrink-0 h-screen border-r border-transparent dark:border-slate-800 transition-colors duration-300">
+      {/* Sidebar */}
+      <aside className="w-64 bg-brand-900 dark:bg-slate-900 text-white flex flex-col shrink-0 h-screen border-r border-transparent dark:border-slate-800">
         <div className="px-6 py-5 border-b border-white/10 dark:border-slate-800 shrink-0">
           <h1 className="text-xl font-bold tracking-tight text-white">MarketMind AI</h1>
           <p className="text-xs text-brand-100/70 dark:text-slate-400 mt-1">Sales Intelligence Platform</p>
         </div>
         <nav data-tour="sidebar" className="sidebar-scroll flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {visibleItems.map(({ to, label, icon: Icon }) => (
+          {visibleItems.map(({ to, labelKey, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
@@ -316,7 +327,7 @@ export default function Layout() {
               }
             >
               <Icon size={18} />
-              {label}
+              {t(labelKey)}
             </NavLink>
           ))}
         </nav>
@@ -325,7 +336,7 @@ export default function Layout() {
             <Avatar user={user} size="sm" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate">{user?.full_name}</p>
-              <p className="text-xs text-brand-100/70 dark:text-slate-400">{ROLE_LABELS[user?.role] || user?.role}</p>
+              <p className="text-xs text-brand-100/70 dark:text-slate-400">{ROLE_LABELS[userRole] || userRole}</p>
             </div>
           </div>
           <button
@@ -339,11 +350,15 @@ export default function Layout() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-end px-6 md:px-8 z-10 transition-colors duration-300">
-          <div className="flex items-center gap-4">
+        <header className="h-16 shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 md:px-8 z-10 transition-colors duration-300">
+          <div className="flex items-center gap-3">
             <span className="text-sm text-slate-500 dark:text-slate-400 hidden sm:block">{today}</span>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4">
+            <LanguageSwitcher />
             <ThemeToggle />
             <NotificationBell />
+            <LiveAlerts showIcon={false} />
             <ProfileMenu user={user} onLogout={handleLogout} />
           </div>
         </header>
@@ -355,6 +370,7 @@ export default function Layout() {
         </main>
       </div>
       <div data-tour="chatbot"><ChatBot /></div>
+      <UndoRedoControls />
       <GuidedTour show={showTour} onClose={closeTour} role={user?.role} />
     </div>
   )

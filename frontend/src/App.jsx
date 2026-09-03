@@ -1,5 +1,13 @@
+import { useState, useEffect } from 'react'
+import { UndoRedoProvider } from './context/UndoRedoContext.jsx'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
 import { useAuth } from './context/AuthContext.jsx'
+import './i18n'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
+import CommandPalette from './components/CommandPalette.jsx'
+import InstallBanner from './components/InstallBanner.jsx'
+import OnboardingWizard from './components/OnboardingWizard.jsx'
 import ThemeToggle from './components/ThemeToggle.jsx'
 import LandingPage from './pages/LandingPage';
 import Layout from './components/Layout.jsx'
@@ -21,6 +29,11 @@ import Datasets from './pages/Datasets.jsx'
 import Team from './pages/Team.jsx'
 import Settings from './pages/Settings.jsx'
 import ActivityLog from './pages/ActivityLog.jsx'
+import AuditTrail from './pages/AuditTrail.jsx'
+import FunnelAnalysis from './pages/FunnelAnalysis.jsx'
+import ReportTemplates from './pages/ReportTemplates.jsx'
+import ScheduledReports from './pages/ScheduledReports.jsx'
+import DashboardBuilder from './pages/DashboardBuilder.jsx'
 import Comparison from './pages/Comparison.jsx'
 import RevenuePrediction from './pages/RevenuePrediction.jsx'
 import ForgotPassword from "./pages/ForgotPassword.jsx"
@@ -28,7 +41,8 @@ import ForgotPassword from "./pages/ForgotPassword.jsx"
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
+  const userRole = typeof user.role === 'string' ? user.role : user.role?.role_name;
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
     return <Navigate to="/dashboard" replace />
   }
   return children
@@ -37,59 +51,98 @@ function ProtectedRoute({ children, allowedRoles }) {
 export default function App() {
   const { user } = useAuth()
   const location = useLocation()
+  const [cmdOpen, setCmdOpen] = useState(false)
+
+  // Ctrl+K command palette
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen((v) => !v)
+      }
+      if (e.key === 'Escape') setCmdOpen(false)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   // Routes where Layout header is NOT present
   const isPublicAuthPage = ['/login', '/register', '/forgot-password'].includes(location.pathname)
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* Floating Theme Toggle on Login / Register / Forgot Password */}
-      {isPublicAuthPage && (
-        <div className="fixed top-5 right-6 z-50">
-          <ThemeToggle />
-        </div>
-      )}
+    <ErrorBoundary>
+      <UndoRedoProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: { fontSize: '14px', borderRadius: '12px' },
+          success: { style: { background: '#10b981', color: '#fff' } },
+          error: { style: { background: '#ef4444', color: '#fff' } },
+        }}
+      />
 
-      <Routes>
-        {/* Public Landing Page */}
-        <Route path="/" element={<LandingPage />} />
+      {/* Command Palette (Ctrl+K) */}
+      <CommandPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} />
 
-        {/* Public Auth Routes */}
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
-        <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
+      {/* PWA Install Banner */}
+      <InstallBanner />
+      <OnboardingWizard />
 
-        {/* Protected Dashboard App Routes (All share Layout & Header ThemeToggle) */}
-        <Route
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/inventory" element={<Inventory />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/forecasting" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Forecasting /></ProtectedRoute>} />
-          <Route path="/segmentation" element={<Segmentation />} />
-          <Route path="/churn" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Churn /></ProtectedRoute>} />
-          <Route path="/recommendations" element={<Recommendations />} />
-          <Route path="/anomalies" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Anomalies /></ProtectedRoute>} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/suppliers" element={<Suppliers />} />
-          <Route path="/datasets" element={<Datasets />} />
-          <Route path="/team" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
-          <Route path="/activity" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><ActivityLog /></ProtectedRoute>} />
-          <Route path="/comparison" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Comparison /></ProtectedRoute>} />
-          <Route path="/revenue-prediction" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><RevenuePrediction /></ProtectedRoute>} />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+        {/* Floating Theme Toggle on Login / Register / Forgot Password */}
+        {isPublicAuthPage && (
+          <div className="fixed top-5 right-6 z-50">
+            <ThemeToggle />
+          </div>
+        )}
 
-        {/* Catch-all Wildcard Route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+        <Routes>
+          {/* Public Landing Page */}
+          <Route path="/" element={<LandingPage />} />
+
+          {/* Public Auth Routes */}
+          <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+          <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPassword />} />
+
+          {/* Protected Dashboard App Routes (All share Layout & Header ThemeToggle) */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/sales" element={<Sales />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/invoices" element={<Invoices />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/forecasting" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Forecasting /></ProtectedRoute>} />
+            <Route path="/segmentation" element={<Segmentation />} />
+            <Route path="/churn" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Churn /></ProtectedRoute>} />
+            <Route path="/recommendations" element={<Recommendations />} />
+            <Route path="/anomalies" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Anomalies /></ProtectedRoute>} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/datasets" element={<Datasets />} />
+            <Route path="/team" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><Team /></ProtectedRoute>} />
+            <Route path="/activity" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><AuditTrail /></ProtectedRoute>} />
+            <Route path="/comparison" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><Comparison /></ProtectedRoute>} />
+            <Route path="/funnel" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><FunnelAnalysis /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><ReportTemplates /></ProtectedRoute>} />
+            <Route path="/scheduled-reports" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><ScheduledReports /></ProtectedRoute>} />
+            <Route path="/dashboard-builder" element={<ProtectedRoute allowedRoles={['business_owner', 'admin']}><DashboardBuilder /></ProtectedRoute>} />
+            <Route path="/revenue-prediction" element={<ProtectedRoute allowedRoles={['business_owner', 'store_manager', 'admin']}><RevenuePrediction /></ProtectedRoute>} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+
+          {/* Catch-all Wildcard Route */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+      </UndoRedoProvider>
+    </ErrorBoundary>
   )
 }
