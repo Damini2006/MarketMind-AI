@@ -48,8 +48,9 @@ export function useTourAutoShow() {
 
   useEffect(() => {
     const alreadySeen = localStorage.getItem(TOUR_STORAGE_KEY)
-    if (!alreadySeen) {
-      const timer = setTimeout(() => setShowTour(true), 2500)
+    const onboardingComplete = localStorage.getItem('marketmind_onboarding_complete')
+    if (!alreadySeen && onboardingComplete) {
+      const timer = setTimeout(() => setShowTour(true), 1500)
       return () => clearTimeout(timer)
     }
   }, [])
