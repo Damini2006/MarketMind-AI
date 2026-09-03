@@ -39,6 +39,8 @@ from .routers import (
     revenue,
 )
 from .routers.websocket_alerts import router as ws_router
+from .routers.audit import router as audit_router
+from .routers.user_data import router as user_data_router
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -64,30 +66,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# For remote databases (e.g. Neon Postgres), pre-warm the connection pool so
-# the first requests don't pay a cold connection, and keep a background ping
-# alive so the serverless compute doesn't sleep mid-session (which is what
-# caused multi-second stalls). SQLite needs none of this.
-if not DATABASE_URL.startswith("sqlite"):
+# Neon PostgreSQL: pre-warm connection pool and keep the serverless
+# compute alive with periodic pings so connections don't go cold.
+def _ping() -> None:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
-    def _ping() -> None:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+def _keepalive() -> None:
+    while True:
+        time.sleep(120)
+        try:
+            _ping()
+        except Exception:
+            pass
 
-    def _keepalive() -> None:
-        while True:
-            time.sleep(120)
-            try:
-                _ping()
-            except Exception:
-                pass
-
-    try:
-        _ping()
-        _ping()
-    except Exception:
-        pass
-    threading.Thread(target=_keepalive, daemon=True).start()
+try:
+    _ping()
+    _ping()
+except Exception:
+    pass
+threading.Thread(target=_keepalive, daemon=True).start()
 
 # Serve uploaded files (avatars) — must be mounted before routers that
 # define /api routes; StaticFiles only matches paths under /uploads.
@@ -110,6 +108,8 @@ app.include_router(notifications.router)
 app.include_router(forecasting.router)
 app.include_router(revenue.router)
 app.include_router(ws_router)
+app.include_router(audit_router)
+app.include_router(user_data_router)
 
 
 @app.on_event("startup")

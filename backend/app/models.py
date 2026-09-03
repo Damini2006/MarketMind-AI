@@ -359,3 +359,93 @@ class ProductRecommendation(Base):
 
     customer = relationship("Customer", back_populates="recommendations")
     product = relationship("Product", back_populates="recommendations")
+
+
+class AuditLog(Base):
+    """Tracks user actions for compliance and security auditing."""
+
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    user_name = Column(String, nullable=True)
+    action = Column(String, nullable=False)
+    action_type = Column(String, nullable=False)  # create, update, delete, login, export, view
+    resource = Column(String, nullable=True)
+    resource_id = Column(Integer, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(Text, nullable=True)
+    details = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
+
+
+class ScheduledReport(Base):
+    """Scheduled report configurations stored in Neon."""
+
+    __tablename__ = "scheduled_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    report_type = Column(String, nullable=False)
+    frequency = Column(String, nullable=False)  # daily, weekly, monthly
+    format = Column(String, default="pdf")  # pdf, excel, both
+    recipients = Column(Text, nullable=True)  # JSON array of emails
+    enabled = Column(Boolean, default=True)
+    last_run = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+
+
+class DashboardLayout(Base):
+    """Custom dashboard layouts stored in Neon."""
+
+    __tablename__ = "dashboard_layouts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    name = Column(String, nullable=False)
+    layout_json = Column(Text, nullable=False)  # JSON grid layout
+    is_active = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+
+
+class CustomReportTemplate(Base):
+    """User-created report templates stored in Neon."""
+
+    __tablename__ = "custom_report_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    sections = Column(Text, nullable=False)  # JSON array of section configs
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
+
+
+class PredictionHistory(Base):
+    """Revenue prediction history stored in Neon."""
+
+    __tablename__ = "prediction_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    predicted_revenue = Column(Float, nullable=False)
+    actual_revenue = Column(Float, nullable=True)
+    horizon_days = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
+
+
+class ChatHistory(Base):
+    """Chat conversation history stored in Neon."""
+
+    __tablename__ = "chat_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    messages_json = Column(Text, nullable=False)  # JSON array of messages
+    created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=dt.datetime.utcnow, onupdate=dt.datetime.utcnow)
