@@ -29,3 +29,6 @@ backend/.freebuff/
 backend/*.user-backup-*.db
 backend/import-test.db
 backend/marketmind-preview.db
+
+# Local runtime logs
+*.log

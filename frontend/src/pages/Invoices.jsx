@@ -3,8 +3,11 @@ import api from '../services/api'
 import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
 import { DetailModal } from '../components/InteractiveTable.jsx'
 import { FileText, IndianRupee, Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
+import QRCodeGenerator from '../components/QRCodeGenerator'
+import { useUndoRedo, markInvoicePaidAction } from '../context/UndoRedoContext'
 
 export default function Invoices() {
+  const { pushAction } = useUndoRedo()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -22,8 +25,12 @@ export default function Invoices() {
   useEffect(() => { load() }, [load])
 
   const markPaid = async (id) => {
-    try { await api.patch(`/invoices/${id}/status`, { status: 'paid' }); load() }
-    catch (err) { setError(err.response?.data?.detail || 'Failed to update status.') }
+    try {
+      const inv = invoices.find(i => i.id === id)
+      await api.patch(`/invoices/${id}/status`, { status: 'paid' })
+      pushAction(markInvoicePaidAction(id, inv?.invoice_number || `#${id}`, load))
+      load()
+    } catch (err) { setError(err.response?.data?.detail || 'Failed to update status.') }
   }
 
   if (loading) return <Loading label="Loading invoices..." />
@@ -123,6 +130,16 @@ export default function Invoices() {
             <DetailModal.Row label="Status" value={<Badge tone={selected.status === 'paid' ? 'green' : selected.status === 'overdue' ? 'red' : 'amber'}>{selected.status}</Badge>}
               icon={selected.status === 'paid' ? CheckCircle : selected.status === 'overdue' ? AlertTriangle : Clock}
               tone={selected.status === 'paid' ? 'green' : selected.status === 'overdue' ? 'red' : 'amber'} />
+            {/* QR Code */}
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-3">Invoice QR Code</p>
+              <QRCodeGenerator
+                value={`INV:${selected.invoice_number}|AMT:${selected.amount}|STATUS:${selected.status}|DUE:${selected.due_date || ''}`}
+                label={selected.invoice_number}
+                size={120}
+                filename={`invoice-${selected.invoice_number}`}
+              />
+            </div>
             {selected.status !== 'paid' && (
               <div className="mt-4">
                 <button onClick={() => { markPaid(selected.id); setSelected(null) }} className="w-full btn-primary flex items-center justify-center gap-2">

@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { useTranslation } from 'react-i18next';
 import { Mail, Lock, Sparkles, CheckCircle2, ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { ErrorBanner } from "../components/ui.jsx";
 import AnimateShape from "../components/AnimateShape.jsx"; // Import the 3D visual component
 
 export default function Login() {
+  const { t } = useTranslation();
   const { login, loading, error } = useAuth();
   const navigate = useNavigate();
 
@@ -90,10 +92,10 @@ export default function Login() {
         <div className="md:col-span-7 p-8 md:p-12 flex flex-col justify-center bg-white dark:bg-slate-900 transition-colors duration-300">
           <div className="mb-6">
             <h2 className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-              Sign In
+              {t('login.title')}
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Enter your credentials to access your account.
+              {t('login.subtitle')}
             </p>
           </div>
 

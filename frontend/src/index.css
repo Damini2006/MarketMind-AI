@@ -56,3 +56,61 @@ body {
 .badge {
   @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
 }
+
+/* Mobile-friendly: prevent horizontal overflow on tables */
+table {
+  @apply w-full;
+}
+
+/* Touch-friendly tap targets on mobile */
+@media (max-width: 1023px) {
+  .card {
+    @apply p-4;
+  }
+  .btn-primary, .btn-secondary {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* Smooth sidebar transition */
+aside {
+  will-change: transform;
+}
+
+/* react-grid-layout */
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
+}
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-color: transparent;
+  border-right-color: rgb(148 163 184 / 0.5);
+  border-bottom-color: rgb(148 163 184 / 0.5);
+}
+.react-grid-item > .react-resizable-handle:hover::after {
+  border-color: transparent;
+  border-right-color: rgb(99 102 241);
+  border-bottom-color: rgb(99 102 241);
+}
+.react-grid-placeholder {
+  background: rgb(99 102 241 / 0.15) !important;
+  border: 2px dashed rgb(99 102 241 / 0.4) !important;
+  border-radius: 12px;
+  opacity: 1 !important;
+}

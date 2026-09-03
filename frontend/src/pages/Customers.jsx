@@ -5,8 +5,10 @@ import InteractiveTable, { DetailModal } from '../components/InteractiveTable.js
 import {
   Plus, Users, Mail, Phone, IndianRupee, ShoppingCart,
   TrendingUp, AlertTriangle, Crown, Star,
-  Clock, Target,
+  Clock, Target, Download, FileText,
 } from 'lucide-react'
+import { exportToPDF, exportToExcel } from '../utils/exportUtils'
+import { useUndoRedo, createCustomerAction } from '../context/UndoRedoContext'
 
 const SEGMENT_META = {
   high: { label: 'High Value', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400', icon: Crown, badge: 'emerald' },
@@ -16,6 +18,7 @@ const SEGMENT_META = {
 }
 
 export default function Customers() {
+  const { pushAction } = useUndoRedo()
   const [customers, setCustomers] = useState([])
   const [sales, setSales] = useState([])
   const [clvData, setClvData] = useState(null)
@@ -26,25 +29,8 @@ export default function Customers() {
   const [form, setForm] = useState({ name: '', email: '', phone: '' })
   const [clvSort] = useState('predicted_6m_clv')
   const [segmentFilter, setSegmentFilter] = useState('all')
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      api.get('/customers/'),
-      api.get('/sales/'),
-      api.get('/ai/clv').catch(() => ({ data: null })),
-    ])
-      .then(([c, s, clv]) => {
-        if (!cancelled) {
-          setCustomers(c.data)
-          setSales(s.data)
-          setClvData(clv.data)
-        }
-      })
-      .catch((err) => { if (!cancelled) setError(err.response?.data?.detail || 'Failed to load customers.') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
+  const [recommendations, setRecommendations] = useState(null)
+  const [loadingRecs, setLoadingRecs] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -62,14 +48,36 @@ export default function Customers() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => { load() }, [load]) // eslint-disable-line react-hooks/set-state-in-effect
+
   const handleSubmit = async (e) => {
     e.preventDefault(); setError(null)
     try {
       await api.post('/customers/', form)
-      setForm({ name: '', email: '', phone: '' }); setShowForm(false); setLoading(true); load()
+      pushAction(createCustomerAction(form, load))
+      setForm({ name: '', email: '', phone: '' }); setShowForm(false); load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to add customer.') }
   }
 
+  // Fetch AI recommendations for selected customer
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      if (selected?.id) {
+        setLoadingRecs(true)
+        try {
+          const res = await api.get(`/ai/recommendations/customer/${selected.id}`)
+          setRecommendations(res.data.recommendations)
+        } catch (err) {
+          console.error('Recs error', err)
+        } finally {
+          setLoadingRecs(false)
+        }
+      } else {
+        setRecommendations(null)
+      }
+    }
+    fetchRecommendations()
+  }, [selected?.id])
 
   // Build CLV map for quick lookup
   const clvMap = useMemo(() => {
@@ -80,13 +88,13 @@ export default function Customers() {
     return map
   }, [clvData])
 
-  const getCustomerStats = (cid) => {
-    const cSales = sales.filter(s => s.customer_id === cid)
-    const totalSpent = cSales.reduce((sum, s) => sum + (s.total_amount || 0), 0)
-    return { orderCount: cSales.length, totalSpent }
-  }
-
   const enriched = useMemo(() => {
+    const getCustomerStats = (cid) => {
+      const cSales = sales.filter(s => s.customer_id === cid)
+      const totalSpent = cSales.reduce((sum, s) => sum + (s.total_amount || 0), 0)
+      return { orderCount: cSales.length, totalSpent }
+    }
+
     let list = customers.map(c => {
       const stats = getCustomerStats(c.id)
       const clv = clvMap[c.id] || {}
@@ -116,9 +124,9 @@ export default function Customers() {
 
   const columns = [
     { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },
-    { key: 'email', label: 'Email', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v || '—'}</span> },
+    { key: 'email', label: 'Email', render: (v) => <span className="text-slate-500 dark:text-slate-400">{v || '\u2014'}</span> },
     { key: 'orders', label: 'Orders', render: (v) => <Badge tone={v > 0 ? 'blue' : 'slate'}>{v}</Badge> },
-    { key: 'total_spent', label: 'Total Spent', render: (v) => <span className="font-semibold text-emerald-600">₹{Number(v || 0).toLocaleString('en-IN')}</span> },
+    { key: 'total_spent', label: 'Total Spent', render: (v) => <span className="font-semibold text-emerald-600">{'\u20B9'}{Number(v || 0).toLocaleString('en-IN')}</span> },
     {
       key: 'segment', label: 'Segment', render: (v) => {
         const meta = SEGMENT_META[v] || SEGMENT_META.low
@@ -127,7 +135,7 @@ export default function Customers() {
     },
     {
       key: 'predicted_6m_clv', label: 'Predicted 6M CLV', render: (v) => (
-        <span className="font-semibold text-indigo-600 dark:text-indigo-400">₹{Number(v || 0).toLocaleString('en-IN')}</span>
+        <span className="font-semibold text-indigo-600 dark:text-indigo-400">{'\u20B9'}{Number(v || 0).toLocaleString('en-IN')}</span>
       )
     },
   ]
@@ -135,7 +143,21 @@ export default function Customers() {
   return (
     <div className="space-y-5">
       <PageHeader title="Customers" subtitle="Customer profiles with lifetime value predictions."
-        action={<button onClick={() => setShowForm(v => !v)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Add Customer</button>}
+        action={
+          <div className="flex gap-2">
+            <button onClick={() => {
+              const headers = ['Name', 'Email', 'Phone', 'Orders', 'Total Spent', 'Segment', 'Predicted 6M CLV']
+              const rows = enriched.map(c => [c.name, c.email || '', c.phone || '', c.orders, c.total_spent, c.segment, c.predicted_6m_clv])
+              exportToPDF({ title: 'Customer Report', subtitle: `${enriched.length} customers`, headers, rows, filename: 'customer-report' })
+            }} className="btn-secondary flex items-center gap-2 text-xs"><FileText size={14} /> PDF</button>
+            <button onClick={() => {
+              const headers = ['Name', 'Email', 'Phone', 'Orders', 'Total Spent', 'Segment', 'Predicted 6M CLV']
+              const rows = enriched.map(c => [c.name, c.email || '', c.phone || '', c.orders, c.total_spent, c.segment, c.predicted_6m_clv])
+              exportToExcel({ title: 'Customer Report', headers, rows, filename: 'customer-report' })
+            }} className="btn-secondary flex items-center gap-2 text-xs text-green-600 dark:text-green-400"><Download size={14} /> Excel</button>
+            <button onClick={() => setShowForm(v => !v)} className="btn-primary flex items-center gap-2"><Plus size={16} /> Add Customer</button>
+          </div>
+        }
       />
 
       {/* Summary Cards */}
@@ -146,14 +168,14 @@ export default function Customers() {
         </div>
         <div className="card p-4">
           <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Total Revenue</p>
-          <p className="text-2xl font-bold text-emerald-600">₹{totalSpentAll.toLocaleString('en-IN')}</p>
+          <p className="text-2xl font-bold text-emerald-600">{'\u20B9'}{totalSpentAll.toLocaleString('en-IN')}</p>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-1 mb-1">
             <IndianRupee size={10} className="text-indigo-500" />
             <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Avg CLV</p>
           </div>
-          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">₹{Number(clvData?.summary?.avg_clv || 0).toLocaleString('en-IN')}</p>
+          <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{'\u20B9'}{Number(clvData?.summary?.avg_clv || 0).toLocaleString('en-IN')}</p>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-1 mb-1">
@@ -235,8 +257,8 @@ export default function Customers() {
             <div>
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Purchase History</p>
               <DetailModal.Row label="Total Orders" value={selected.orders} icon={ShoppingCart} tone="blue" />
-              <DetailModal.Row label="Total Spent" value={`₹${Number(selected.total_spent || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
-              <DetailModal.Row label="Avg Order Value" value={`₹${Number(selected.avg_order_value || 0).toLocaleString('en-IN')}`} />
+              <DetailModal.Row label="Total Spent" value={`\u20B9${Number(selected.total_spent || 0).toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" />
+              <DetailModal.Row label="Avg Order Value" value={`\u20B9${Number(selected.avg_order_value || 0).toLocaleString('en-IN')}`} />
               <DetailModal.Row label="Purchase Frequency" value={`${selected.purchase_frequency || 0}/month`} />
               <DetailModal.Row label="Customer Since" value={`${Math.round(selected.lifespan_months || 0)} months`} icon={Clock} />
             </div>
@@ -250,11 +272,11 @@ export default function Customers() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white dark:bg-slate-800 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-slate-500 uppercase">Historical CLV</p>
-                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100">₹{Number(selected.clv || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100">{'\u20B9'}{Number(selected.clv || 0).toLocaleString('en-IN')}</p>
                 </div>
                 <div className="bg-white dark:bg-slate-800 rounded-lg p-3 text-center">
                   <p className="text-[10px] text-slate-500 uppercase">Predicted 6M</p>
-                  <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">₹{Number(selected.predicted_6m_clv || 0).toLocaleString('en-IN')}</p>
+                  <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">{'\u20B9'}{Number(selected.predicted_6m_clv || 0).toLocaleString('en-IN')}</p>
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between">
@@ -277,12 +299,34 @@ export default function Customers() {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">Recent Sales</p>
               {sales.filter(s => s.customer_id === selected.id).slice(-5).reverse().map(s => (
                 <div key={s.id} className="flex justify-between py-1 text-sm">
-                  <span className="text-slate-500 dark:text-slate-400">{s.sale_date ? new Date(s.sale_date).toLocaleDateString() : '—'}</span>
-                  <span className="font-medium text-slate-800 dark:text-slate-100">₹{Number(s.total_amount || 0).toLocaleString('en-IN')}</span>
+                  <span className="text-slate-500 dark:text-slate-400">{s.sale_date ? new Date(s.sale_date).toLocaleDateString() : '\u2014'}</span>
+                  <span className="font-medium text-slate-800 dark:text-slate-100">{'\u20B9'}{Number(s.total_amount || 0).toLocaleString('en-IN')}</span>
                 </div>
               ))}
               {sales.filter(s => s.customer_id === selected.id).length === 0 && (
                 <p className="text-xs text-slate-400 py-2">No sales for this customer.</p>
+              )}
+            </div>
+
+            {/* AI Recommendations */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">{'\u2728'} AI Recommendations</p>
+              {loadingRecs ? (
+                <p className="text-xs text-slate-400 py-2 animate-pulse">Analyzing purchase history...</p>
+              ) : recommendations && recommendations.length > 0 ? (
+                <div className="grid grid-cols-1 gap-2 mt-2">
+                  {recommendations.map((r) => (
+                    <div key={r.product_id} className="flex justify-between items-center p-2 rounded-lg bg-gradient-to-r from-indigo-50 to-white dark:from-slate-800 dark:to-slate-900 border border-indigo-100 dark:border-indigo-900/30 shadow-sm hover:shadow transition-all duration-300">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-sm text-indigo-900 dark:text-indigo-100">{r.name}</span>
+                        <span className="text-[10px] text-indigo-500 uppercase tracking-wider font-semibold">Recommended Match</span>
+                      </div>
+                      <span className="font-bold text-indigo-700 dark:text-indigo-300">{'\u20B9'}{r.price}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 py-2">No recommendations available.</p>
               )}
             </div>
           </div>

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import { Loading, PageHeader, EmptyState, Badge } from '../components/ui.jsx'
 import { ShoppingBag } from 'lucide-react'
 
 export default function Recommendations() {
+  const { t } = useTranslation()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -23,8 +25,8 @@ export default function Recommendations() {
   if (rows.length === 0) {
     return (
       <div>
-        <PageHeader title="Product Recommendations" subtitle="Personalized cross-sell and upsell suggestions." />
-        <EmptyState message="Not enough purchase history to generate recommendations yet." />
+        <PageHeader title={t('recommendations.title')} subtitle={t('recommendations.subtitle')} />
+        <EmptyState message={t('recommendations.noHistory')} />
       </div>
     )
   }
@@ -32,8 +34,8 @@ export default function Recommendations() {
   return (
     <div>
       <PageHeader
-        title="Product Recommendations"
-        subtitle="Collaborative filtering + association-rule mining across customer purchase history."
+        title={t('recommendations.title')}
+        subtitle={t('recommendations.cardSubtitle')}
       />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {rows.map((r) => (

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import { Loading, PageHeader, Badge } from '../components/ui.jsx'
 import jsPDF from 'jspdf'
@@ -42,6 +43,7 @@ const METHOD_ICONS = {
 }
 
 function TimelineChart({ data, onBarClick, selectedDate }) {
+  const { t } = useTranslation()
   if (!data || data.length === 0) return null
   const maxVal = Math.max(...data.map(d => d.total || 0), 1)
   return (
@@ -49,10 +51,10 @@ function TimelineChart({ data, onBarClick, selectedDate }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <BarChart3 size={14} className="text-indigo-500" />
-          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Anomaly Timeline</span>
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.timeline')}</span>
           {selectedDate && <span className="text-[10px] text-indigo-500 font-medium">— filtering {selectedDate}</span>}
         </div>
-        <span className="text-[10px] text-slate-400">{data.length} days with anomalies</span>
+        <span className="text-[10px] text-slate-400">{data.length} {t('anomalies.daysWithAnomalies')}</span>
       </div>
       <div className="flex items-end gap-1 h-32 overflow-x-auto">
         {data.map((d, i) => (
@@ -69,16 +71,16 @@ function TimelineChart({ data, onBarClick, selectedDate }) {
           </button>
         ))}
       </div>
-      <div className="flex items-center gap-3 mt-2 justify-center">
-        <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-red-400" /> High</span>
-        <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-amber-400" /> Medium</span>
-        <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-400" /> Low</span>
+      <div className="flex items-center gap-3 mt-2 justify-center">            <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-red-400" /> {t('anomalies.highLabel')}</span>
+        <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-amber-400" /> {t('anomalies.mediumLabel')}</span>
+        <span className="flex items-center gap-1 text-[10px] text-slate-500"><span className="w-2 h-2 rounded-full bg-blue-400" /> {t('anomalies.lowLabel')}</span>
       </div>
     </div>
   )
 }
 
 function ConfidenceChart({ data }) {
+  const { t } = useTranslation()
   if (!data) return null
   const entries = Object.entries(data)
   const total = entries.reduce((s, [, v]) => s + v, 0) || 1
@@ -87,7 +89,7 @@ function ConfidenceChart({ data }) {
     <div className="card">
       <div className="flex items-center gap-2 mb-3">
         <Target size={14} className="text-emerald-500" />
-        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Confidence Distribution</span>
+        <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.confidenceDist')}</span>
       </div>
       <div className="space-y-2">
         {entries.map(([label, count]) => (
@@ -162,6 +164,7 @@ function MiniPieChart({ data }) {
 }
 
 function DetailModal({ anomaly, onClose, onDismiss }) {
+  const { t } = useTranslation()
   if (!anomaly) return null
   const meta = anomaly.details || {}
   const MethodIcon = METHOD_ICONS[anomaly.anomaly_type] || AlertOctagon
@@ -191,7 +194,7 @@ function DetailModal({ anomaly, onClose, onDismiss }) {
           {/* Confidence meter */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">Confidence</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">{t('common.confidence')}</span>
               <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{(anomaly.confidence * 100).toFixed(0)}%</span>
             </div>
             <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -205,25 +208,25 @@ function DetailModal({ anomaly, onClose, onDismiss }) {
 
           {anomaly.suggested_action && (
             <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800/50 mb-4">
-              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1"><Sparkles size={12} /> Suggested Action</p>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1"><Sparkles size={12} /> {t('anomalies.suggestedAction')}</p>
               <p className="text-sm text-amber-800 dark:text-amber-300">{anomaly.suggested_action}</p>
             </div>
           )}
 
           {anomaly.affected_entity && (
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-              Affected: <span className="font-medium text-slate-700 dark:text-slate-300">{anomaly.affected_entity}</span>
+              {t('anomalies.affected')} <span className="font-medium text-slate-700 dark:text-slate-300">{anomaly.affected_entity}</span>
             </p>
           )}
 
           <div className="border-t border-slate-100 dark:border-slate-700 pt-3">
-            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-2">Technical Details</p>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-400 uppercase mb-2">{t('anomalies.technicalDetails')}</p>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(meta).map(([key, val]) => (
                 <div key={key} className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2">
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">{key.replace(/_/g, ' ')}</p>
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">
-                    {typeof val === 'number' ? val.toLocaleString() : Array.isArray(val) ? val.length + ' items' : String(val)}
+                    {typeof val === 'number' ? val.toLocaleString() : Array.isArray(val) ? val.length + ' ' + t('anomalies.items') : String(val)}
                   </p>
                 </div>
               ))}
@@ -232,10 +235,10 @@ function DetailModal({ anomaly, onClose, onDismiss }) {
 
           <div className="flex items-center gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-700">
             <button onClick={() => onDismiss(anomaly)} className="flex-1 px-3 py-2 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-1">
-              <CheckCircle2 size={12} /> Mark Reviewed
+              <CheckCircle2 size={12} /> {t('anomalies.markReviewed')}
             </button>
             <button onClick={onClose} className="flex-1 px-3 py-2 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
-              Close
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -245,6 +248,7 @@ function DetailModal({ anomaly, onClose, onDismiss }) {
 }
 
 export default function Anomalies() {
+  const { t } = useTranslation()
   const [data, setData] = useState({ alerts: [], summary: {}, detection_accuracy: null, false_positive_rate: null, benford_analysis: null, timeline: [], confidence_distribution: null, scan_timestamp: null, total_records_scanned: 0 })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -563,19 +567,19 @@ export default function Anomalies() {
     doc.save('anomaly-report.pdf')
   }
 
-  if (loading) return <Loading label="Scanning for anomalies across all data..." />
+  if (loading) return <Loading label={t('anomalies.loadingMessage')} />
 
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Anomaly Detection"
+        title={t('anomalies.title')}
         subtitle={`${visibleCount} anomalies${dismissedCount > 0 ? ` (${dismissedCount} dismissed)` : ''} · ${methodsUsed} detection techniques · ${(data.total_records_scanned || 0).toLocaleString()} records scanned`}
         action={
           <div className="flex items-center gap-2">
             {scanning && <span className="flex items-center gap-1 text-xs text-indigo-500"><RefreshCw size={12} className="animate-spin" /> Scanning...</span>}
             <button onClick={rescanAnomalies} disabled={scanning}
               className="px-3 py-1.5 text-xs font-medium rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors flex items-center gap-1 disabled:opacity-50">
-              <RefreshCw size={12} className={scanning ? 'animate-spin' : ''} /> {scanning ? 'Scanning...' : 'Rescan'}
+              <RefreshCw size={12} className={scanning ? 'animate-spin' : ''} /> {scanning ? t('anomalies.scanning') : t('anomalies.rescan')}
             </button>
           </div>
         }
@@ -585,17 +589,17 @@ export default function Anomalies() {
       {data.scan_timestamp && (
         <div className="flex items-center gap-4 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50">
           <span className="flex items-center gap-1 text-[10px] text-slate-500">
-            <Clock size={10} /> Last scan: {new Date(data.scan_timestamp).toLocaleString()}
+            <Clock size={10} /> {t('anomalies.lastScan')} {new Date(data.scan_timestamp).toLocaleString()}
           </span>
           <span className="flex items-center gap-1 text-[10px] text-slate-500">
-            <Database size={10} /> {(data.total_records_scanned || 0).toLocaleString()} records scanned
+            <Database size={10} /> {(data.total_records_scanned || 0).toLocaleString()} {t('anomalies.recordsScanned')}
           </span>
           <span className="flex items-center gap-1 text-[10px] text-slate-500">
-            <Zap size={10} /> {methodsUsed} techniques active
+            <Zap size={10} /> {methodsUsed} {t('anomalies.techniquesActive')}
           </span>
           {data.detection_accuracy != null && (
             <span className="flex items-center gap-1 text-[10px] text-slate-500">
-              <Target size={10} /> {(data.detection_accuracy * 100).toFixed(0)}% accuracy
+              <Target size={10} /> {(data.detection_accuracy * 100).toFixed(0)}% {t('anomalies.accuracy')}
             </span>
           )}
         </div>
@@ -605,35 +609,35 @@ export default function Anomalies() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
         <button onClick={() => setSeverityFilter('all')} className="card text-center p-3 hover:shadow-md transition-all cursor-pointer">
           <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{totalCount}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Total</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.total')}</p>
         </button>
         <button onClick={() => setSeverityFilter(severityFilter === 'high' ? 'all' : 'high')}
           className={`card text-center p-3 hover:shadow-md transition-all cursor-pointer border-2 ${severityFilter === 'high' ? 'border-red-400' : 'border-transparent'}`}>
           <p className="text-2xl font-bold text-red-600">{highCount}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">High</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.high')}</p>
         </button>
         <button onClick={() => setSeverityFilter(severityFilter === 'medium' ? 'all' : 'medium')}
           className={`card text-center p-3 hover:shadow-md transition-all cursor-pointer border-2 ${severityFilter === 'medium' ? 'border-amber-400' : 'border-transparent'}`}>
           <p className="text-2xl font-bold text-amber-600">{medCount}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Medium</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.medium')}</p>
         </button>
         <button onClick={() => setSeverityFilter(severityFilter === 'low' ? 'all' : 'low')}
           className={`card text-center p-3 hover:shadow-md transition-all cursor-pointer border-2 ${severityFilter === 'low' ? 'border-blue-400' : 'border-transparent'}`}>
           <p className="text-2xl font-bold text-blue-600">{lowCount}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Low</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.low')}</p>
         </button>
         <div className="card text-center p-3">
           <p className="text-2xl font-bold text-emerald-600">{data.detection_accuracy != null ? `${(data.detection_accuracy * 100).toFixed(0)}%` : '—'}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Accuracy</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.accuracy')}</p>
         </div>
         <div className="card text-center p-3">
           <p className="text-2xl font-bold text-slate-600">{data.false_positive_rate != null ? `${(data.false_positive_rate * 100).toFixed(1)}%` : '—'}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">False Pos.</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.falsePos')}</p>
         </div>
         <button onClick={() => setShowDismissed(!showDismissed)}
           className={`card text-center p-3 hover:shadow-md transition-all cursor-pointer border-2 ${showDismissed ? 'border-slate-400' : 'border-transparent'}`}>
           <p className="text-2xl font-bold text-slate-600">{dismissedCount}</p>
-          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">Dismissed</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase">{t('anomalies.dismissed')}</p>
         </button>
       </div>
 
@@ -652,17 +656,17 @@ export default function Anomalies() {
                   weekComparison.direction === 'decreasing' ? 'text-emerald-500 rotate-180' :
                   'text-slate-400'
                 } transition-transform`} />
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Week-over-Week</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-200">{t('anomalies.weekOverWeek')}</span>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-center">
                   <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{weekComparison.thisCount}</p>
-                  <p className="text-[9px] text-slate-400 uppercase">This Week</p>
+                  <p className="text-[9px] text-slate-400 uppercase">{t('anomalies.thisWeek')}</p>
                 </div>
                 <span className="text-slate-300 dark:text-slate-600">→</span>
                 <div className="text-center">
                   <p className="text-lg font-bold text-slate-500 dark:text-slate-400">{weekComparison.lastCount}</p>
-                  <p className="text-[9px] text-slate-400 uppercase">Last Week</p>
+                  <p className="text-[9px] text-slate-400 uppercase">{t('anomalies.lastWeek')}</p>
                 </div>
               </div>
             </div>
@@ -677,16 +681,16 @@ export default function Anomalies() {
               </span>
               <div className="text-right hidden sm:block">
                 <div className="flex items-center gap-2 text-[10px]">
-                  <span className="text-red-500">High: {weekComparison.thisHigh} vs {weekComparison.lastHigh}</span>
-                  <span className="text-amber-500">Med: {weekComparison.thisMed} vs {weekComparison.lastMed}</span>
+                  <span className="text-red-500">{t('anomalies.highVs')} {weekComparison.thisHigh} {t('anomalies.vs')} {weekComparison.lastHigh}</span>
+                  <span className="text-amber-500">{t('anomalies.medVs')} {weekComparison.thisMed} {t('anomalies.vs')} {weekComparison.lastMed}</span>
                 </div>
               </div>
             </div>
           </div>
           <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5">
-            {weekComparison.direction === 'increasing' && `Anomaly count is increasing — ${weekComparison.thisCount - weekComparison.lastCount > 0 ? '+' : ''}${weekComparison.thisCount - weekComparison.lastCount} more anomalies this week. Investigate potential data quality issues.`}
-            {weekComparison.direction === 'decreasing' && `Anomaly count is decreasing — ${weekComparison.lastCount - weekComparison.thisCount} fewer anomalies this week. Data quality improving.`}
-            {weekComparison.direction === 'stable' && 'Anomaly count is stable week-over-week. No significant change detected.'}
+            {weekComparison.direction === 'increasing' && t('anomalies.countIncreasing')}
+            {weekComparison.direction === 'decreasing' && t('anomalies.countDecreasing')}
+            {weekComparison.direction === 'stable' && t('anomalies.countStable')}
           </p>
         </div>
       )}
@@ -707,7 +711,7 @@ export default function Anomalies() {
           className={`card text-left hover:shadow-md transition-all cursor-pointer ${activeChart === 'category' ? 'ring-2 ring-indigo-400' : ''}`}>
           <div className="flex items-center gap-2 mb-3">
             <PieChart size={14} className="text-indigo-500" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">By Category</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.byCategory')}</span>
           </div>
           <MiniPieChart data={categoryData} />
         </button>
@@ -715,7 +719,7 @@ export default function Anomalies() {
           className={`card text-left hover:shadow-md transition-all cursor-pointer ${activeChart === 'method' ? 'ring-2 ring-indigo-400' : ''}`}>
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 size={14} className="text-indigo-500" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">By Detection Method</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.byMethod')}</span>
           </div>
           <MiniBarChart data={methodData} color="#3b5bdb" />
         </button>
@@ -724,7 +728,7 @@ export default function Anomalies() {
       {/* Expanded Charts */}
       {activeChart === 'category' && (
         <div className="card">
-          <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-100 mb-3">Category Breakdown</h3>
+          <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-100 mb-3">{t('anomalies.categoryBreakdown')}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {categoryData.map(d => (
               <button key={d.label} onClick={() => { setCategoryFilter(d.label.toLowerCase()); setActiveChart(null) }}
@@ -740,7 +744,7 @@ export default function Anomalies() {
 
       {activeChart === 'method' && (
         <div className="card">
-          <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-100 mb-3">Method Breakdown</h3>
+          <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-100 mb-3">{t('anomalies.methodBreakdown')}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {methodData.sort((a, b) => b.value - a.value).map(d => (
               <button key={d.label} onClick={() => { setMethodFilter(Object.keys(METHOD_LABELS).find(k => (METHOD_LABELS[k] === d.label)) || d.label); setActiveChart(null) }}
@@ -757,8 +761,8 @@ export default function Anomalies() {
       <div className="card">
         <div className="flex items-center gap-2 mb-3">
           <Layers size={14} className="text-indigo-500" />
-          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Severity Heatmap</span>
-          <span className="text-[10px] text-slate-400 ml-auto">Category × Detection Method</span>
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.severityHeatmap')}</span>
+          <span className="text-[10px] text-slate-400 ml-auto">{t('anomalies.categoryMethod')}</span>
         </div>
         {(() => {
           const allAlerts = data.alerts || []
@@ -770,7 +774,7 @@ export default function Anomalies() {
             if (!grid[key]) grid[key] = { high: 0, medium: 0, low: 0 }
             grid[key][a.severity]++
           })
-          if (cats.length === 0 || methods.length === 0) return <p className="text-xs text-slate-400">No data</p>
+          if (cats.length === 0 || methods.length === 0) return <p className="text-xs text-slate-400">{t('common.noData')}</p>
           return (
             <div className="overflow-x-auto">
               <div className="min-w-[500px]">
@@ -810,7 +814,7 @@ export default function Anomalies() {
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <Target size={14} className="text-red-500" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Most Flagged Entities</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.mostFlagged')}</span>
           </div>
           {(() => {
             const allAlerts = data.alerts || []
@@ -825,7 +829,7 @@ export default function Anomalies() {
             const sorted = Object.entries(entityCounts)
               .sort((a, b) => b[1].total - a[1].total)
               .slice(0, 5)
-            if (sorted.length === 0) return <p className="text-xs text-slate-400">No data</p>
+            if (sorted.length === 0) return <p className="text-xs text-slate-400">{t('common.noData')}</p>
             const maxCount = sorted[0][1].total
             return (
               <div className="space-y-2">
@@ -851,7 +855,7 @@ export default function Anomalies() {
         <div className="card">
           <div className="flex items-center gap-2 mb-3">
             <Clock size={14} className="text-amber-500" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Anomaly Freshness</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('anomalies.freshness')}</span>
           </div>
           {(() => {
             const allAlerts = data.alerts || []
@@ -892,31 +896,31 @@ export default function Anomalies() {
           <div className="flex items-center gap-2 flex-1 w-full">
             <div className="relative flex-1 max-w-xs">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search anomalies..."
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}              placeholder={t('anomalies.search')}
                 className="w-full pl-8 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 dark:text-slate-100" />
               {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={12} /></button>}
             </div>
             <button onClick={() => setSalesOnly(!salesOnly)}
               className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${salesOnly ? 'bg-green-50 border-green-400 text-green-700 dark:bg-green-950/30 dark:text-green-400' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-green-300 dark:hover:border-green-700'}`}>
-              Sales Only
+              {t('anomalies.salesOnly')}
             </button>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
               className="px-2 py-1.5 text-[11px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg dark:text-slate-300">
-              <option value="all">All Categories</option>
+              <option value="all">{t('anomalies.allCategories')}</option>
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)}
               className="px-2 py-1.5 text-[11px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg dark:text-slate-300">
-              <option value="all">All Methods</option>
+              <option value="all">{t('anomalies.allMethods')}</option>
               {Object.entries(METHOD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
               className="px-2 py-1.5 text-[11px] bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg dark:text-slate-300">
-              <option value="severity">Sort by Severity</option>
-              <option value="confidence">Sort by Confidence</option>
-              <option value="date">Sort by Date</option>
+              <option value="severity">{t('anomalies.sortSeverity')}</option>
+              <option value="confidence">{t('anomalies.sortConfidence')}</option>
+              <option value="date">{t('anomalies.sortDate')}</option>
             </select>
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg dark:bg-slate-800">
               <button onClick={() => setViewMode('list')} className={`p-1 rounded ${viewMode === 'list' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400'}`}><List size={14} /></button>
@@ -933,7 +937,7 @@ export default function Anomalies() {
 
         {activeFilters > 0 && (
           <div className="flex items-center gap-2 mb-3 text-[11px] flex-wrap">
-            <span className="text-slate-400">{visibleCount} results · {activeFilters} filter{activeFilters > 1 ? 's' : ''} active</span>
+            <span className="text-slate-400">{t('anomalies.resultsFilters', { count: visibleCount, filters: activeFilters })}</span>
             {dateFilter && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 rounded-full">
                 <Calendar size={10} /> {dateFilter}
@@ -941,7 +945,7 @@ export default function Anomalies() {
               </span>
             )}
             <button onClick={() => { setSeverityFilter('all'); setCategoryFilter('all'); setMethodFilter('all'); setSalesOnly(false); setSearch(''); setDateFilter('') }}
-              className="text-indigo-500 hover:text-indigo-700 font-medium">Clear all</button>
+              className="text-indigo-500 hover:text-indigo-700 font-medium">{t('anomalies.clearAll')}</button>
           </div>
         )}
 
@@ -949,8 +953,8 @@ export default function Anomalies() {
         {alerts.length === 0 ? (
           <div className="text-center py-10 text-slate-400 dark:text-slate-500">
             <CheckCircle2 size={24} className="mx-auto mb-2 opacity-40 text-green-500" />
-            <p className="text-sm">No anomalies match your filters.</p>
-            <p className="text-[10px] text-slate-400 mt-1">{dismissedCount > 0 ? `${dismissedCount} anomalies dismissed` : 'All clear!'}</p>
+            <p className="text-sm">{t('anomalies.noMatch')}</p>
+            <p className="text-[10px] text-slate-400 mt-1">{dismissedCount > 0 ? t('anomalies.dismissedCount', { count: dismissedCount }) : t('anomalies.allClear')}</p>
           </div>
         ) : viewMode === 'list' ? (
           <div className="space-y-1">

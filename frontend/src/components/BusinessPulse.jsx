@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import { Activity } from 'lucide-react'
 
@@ -52,15 +53,16 @@ function computeClientScore(kpis) {
   return {
     score,
     breakdown: [
-      { label: 'Revenue Trend', value: revenueScore, weight: 40 },
-      { label: 'Inventory Health', value: invScore, weight: 30 },
-      { label: 'Invoice Collection', value: invoiceScore, weight: 30 },
+      { label: 'Revenue Trend', key: 'revenueTrend', value: revenueScore, weight: 40 },
+      { label: 'Inventory Health', key: 'inventoryHealth', value: invScore, weight: 30 },
+      { label: 'Invoice Collection', key: 'invoiceCollection', value: invoiceScore, weight: 30 },
     ],
     briefing: parts.join(' · '),
   }
 }
 
 export default function BusinessPulse({ kpis }) {
+  const { t } = useTranslation()
   const [pulse, setPulse] = useState(null)
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function BusinessPulse({ kpis }) {
             <Activity size={18} />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">Business Pulse</h3>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t('dashboard.businessPulse')}</h3>
             <p className={`text-xs ${colors.text} font-semibold`}>{getBandLabel(band)}</p>
           </div>
         </div>
@@ -98,10 +100,13 @@ export default function BusinessPulse({ kpis }) {
 
       {/* Breakdown bars */}
       <div className="flex items-center gap-4 mb-2">
-        {pulse.breakdown.map((item) => (
+        {pulse.breakdown.map((item) => {
+          const labelMap = { 'Revenue Trend': 'dashboard.revenueTrend', 'Inventory Health': 'dashboard.inventoryHealth', 'Invoice Collection': 'dashboard.invoiceCollection' };
+          const labelKey = item.key ? `dashboard.${item.key}` : (labelMap[item.label] || '');
+          return (
           <div key={item.label} className="flex-1">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">{item.label}</span>
+              <span className="text-[11px] font-medium text-slate-600 dark:text-slate-400">{labelKey ? t(labelKey) : item.label}</span>
               <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">{item.value}%</span>
             </div>
             <div className="w-full bg-slate-200/60 dark:bg-slate-700/60 rounded-full h-1.5">
@@ -111,7 +116,8 @@ export default function BusinessPulse({ kpis }) {
               />
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Briefing */}
