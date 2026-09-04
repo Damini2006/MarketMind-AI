@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, Badge } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, CardsSkeleton, PageSkeleton} from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Tags, Plus, Trash2 } from 'lucide-react'
 
@@ -45,7 +45,7 @@ export default function Categories() {
     catch (err) { setMessage(err.response?.data?.detail || 'Failed to delete category.') }
   }
 
-  if (loading) return <Loading label="Loading categories..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   const getCatProductCount = (catName) => products.filter(p => p.category === catName).length
 

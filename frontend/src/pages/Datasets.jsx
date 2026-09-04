@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Upload } from 'lucide-react'
 import api, { uploadSalesCSV } from '../services/api'
-import { Loading, PageHeader, EmptyState, Badge } from '../components/ui.jsx'
+import {Loading, PageHeader, EmptyState, Badge, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 
 export default function Datasets() {
   const [datasets, setDatasets] = useState([])
