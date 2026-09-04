@@ -98,7 +98,7 @@ export default function Comparison() {
     ])
       .then(([s, inv, p]) => {
         if (!cancelled) {
-          setSales(s.data)
+          setSales(Array.isArray(s.data) ? s.data : s.data.items || [])
           setInvoices(inv.data)
           setProducts(p.data)
         }

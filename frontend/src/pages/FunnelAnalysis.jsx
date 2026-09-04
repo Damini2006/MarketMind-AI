@@ -111,7 +111,7 @@ export default function FunnelAnalysis() {
       api.get('/inventory/products').catch(() => ({ data: [] })),
     ]).then(([c, s, p]) => {
       setCustomers(c.data)
-      setSales(s.data)
+      setSales(Array.isArray(s.data) ? s.data : s.data.items || [])
       setProducts(p.data)
     }).catch(() => {})
       .finally(() => setLoading(false))
