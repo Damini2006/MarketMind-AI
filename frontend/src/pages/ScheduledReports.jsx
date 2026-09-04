@@ -9,8 +9,7 @@ import {
   ShoppingCart, Boxes, IndianRupee, BarChart3, LayoutTemplate, AlertTriangle,
 } from 'lucide-react'
 
-const STORAGE_KEY = 'marketmind-scheduled-reports'
-const HISTORY_KEY = 'marketmind-report-delivery-history'
+const API_BASE = '/user-data'
 
 const REPORT_TYPES = [
   { id: 'sales-summary', name: 'Sales Summary', icon: ShoppingCart, color: 'indigo', sections: ['kpi_cards', 'top_products', 'sales_by_date', 'recent_sales'] },
@@ -250,12 +249,11 @@ export default function ScheduledReports() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Load from localStorage
+  // Load from Neon backend
   useEffect(() => {
-    try {
-      setSchedules(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'))
-      setDeliveryHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'))
-    } catch { /* ignore */ }
+    api.get(`${API_BASE}/scheduled-reports`)
+      .then(res => setSchedules(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setSchedules([]))
   }, [])
 
   // Load data for instant report generation
@@ -269,7 +267,7 @@ export default function ScheduledReports() {
     ]).then(([kpis, sales, products, customers, invoices]) => {
       setData({
         kpis: kpis.data,
-        sales: Array.isArray(sales.data) ? sales.data : [],
+        sales: Array.isArray(sales.data) ? sales.data : sales.data.items || [],
         products: Array.isArray(products.data) ? products.data : [],
         customers: Array.isArray(customers.data) ? customers.data : [],
         invoices: Array.isArray(invoices.data) ? invoices.data : (invoices.data?.items || []),
@@ -277,32 +275,51 @@ export default function ScheduledReports() {
     }).finally(() => setLoading(false))
   }, [])
 
-  const saveSchedule = useCallback((schedule) => {
-    setSchedules(prev => {
-      const exists = prev.findIndex(s => s.id === schedule.id)
-      const updated = exists >= 0 ? prev.map((s, i) => i === exists ? schedule : s) : [...prev, schedule]
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
+  const saveSchedule = useCallback(async (schedule) => {
+    try {
+      const numericId = Number(schedule.id)
+      if (numericId && !isNaN(numericId)) {
+        await api.put(`${API_BASE}/scheduled-reports/${numericId}`, {
+          report_type: schedule.reportType, frequency: schedule.frequency,
+          format: schedule.format, recipients: schedule.recipients, enabled: schedule.enabled,
+        })
+      } else {
+        await api.post(`${API_BASE}/scheduled-reports`, {
+          report_type: schedule.reportType, frequency: schedule.frequency,
+          format: schedule.format, recipients: schedule.recipients, enabled: schedule.enabled,
+        })
+      }
+      const res = await api.get(`${API_BASE}/scheduled-reports`)
+      setSchedules(Array.isArray(res.data) ? res.data : [])
+    } catch { /* ignore */ }
     setShowForm(false)
     setEditSchedule(null)
   }, [])
 
-  const deleteSchedule = useCallback((id) => {
-    setSchedules(prev => {
-      const updated = prev.filter(s => s.id !== id)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
+  const deleteSchedule = useCallback(async (id) => {
+    try {
+      const deleteId = Number(id)
+      if (!deleteId || isNaN(deleteId)) return
+      await api.delete(`${API_BASE}/scheduled-reports/${deleteId}`)
+      const res = await api.get(`${API_BASE}/scheduled-reports`)
+      setSchedules(Array.isArray(res.data) ? res.data : [])
+    } catch { /* ignore */ }
   }, [])
 
-  const toggleSchedule = useCallback((id) => {
-    setSchedules(prev => {
-      const updated = prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
-  }, [])
+  const toggleSchedule = useCallback(async (id) => {
+    try {
+      const sched = schedules.find(s => s.id === id)
+      if (!sched) return
+      const toggleId = Number(id)
+      if (!toggleId || isNaN(toggleId)) return
+      await api.put(`${API_BASE}/scheduled-reports/${toggleId}`, {
+        report_type: sched.reportType || sched.report_type, frequency: sched.frequency,
+        format: sched.format, recipients: sched.recipients, enabled: !sched.enabled,
+      })
+      const res = await api.get(`${API_BASE}/scheduled-reports`)
+      setSchedules(Array.isArray(res.data) ? res.data : [])
+    } catch { /* ignore */ }
+  }, [schedules])
 
   const sendNow = useCallback((schedule) => {
     const reportType = REPORT_TYPES.find(rt => rt.id === schedule.reportType)
@@ -342,17 +359,13 @@ export default function ScheduledReports() {
       exportToExcel({ title: `${reportType.name} Report`, headers, rows, filename: `${reportType.id}-scheduled` })
     }
 
-    setDeliveryHistory(prev => {
-      const updated = [record, ...prev].slice(0, 50)
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated))
-      return updated
-    })
+    setDeliveryHistory(prev => [record, ...prev].slice(0, 50))
 
-    setSchedules(prev => {
-      const updated = prev.map(s => s.id === schedule.id ? { ...s, lastRun: now.toISOString() } : s)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
-      return updated
-    })
+    // Update last_run in Neon
+    api.put(`${API_BASE}/scheduled-reports/${schedule.id}`, {
+      report_type: schedule.reportType || schedule.report_type, frequency: schedule.frequency,
+      format: schedule.format, recipients: schedule.recipients, enabled: schedule.enabled,
+    }).catch(() => {})
   }, [data])
 
   if (loading) return <Loading label="Loading..." />
@@ -400,7 +413,8 @@ export default function ScheduledReports() {
       ) : (
         <div className="space-y-3">
           {schedules.map(schedule => {
-            const rt = REPORT_TYPES.find(r => r.id === schedule.reportType)
+            const reportTypeId = schedule.report_type || schedule.reportType
+            const rt = REPORT_TYPES.find(r => r.id === reportTypeId)
             const freq = FREQUENCIES.find(f => f.id === schedule.frequency)
             const fmt = FORMATS.find(f => f.id === schedule.format)
             const Icon = rt?.icon || FileText
@@ -411,14 +425,14 @@ export default function ScheduledReports() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{rt?.name || schedule.reportType}</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{rt?.name || reportTypeId}</p>
                     <Badge tone={schedule.enabled ? 'green' : 'slate'}>{schedule.enabled ? t('scheduled.active') : t('scheduled.paused')}</Badge>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400">
                     <span className="flex items-center gap-1"><Clock size={10} /> {freq?.label}</span>
                     <span className="flex items-center gap-1"><FileText size={10} /> {fmt?.label}</span>
                     <span className="flex items-center gap-1"><Mail size={10} /> {schedule.recipients.length || 0} {t('scheduled.recipients')}</span>
-                    {schedule.lastRun && <span>{t('scheduled.lastRun')}: {new Date(schedule.lastRun).toLocaleDateString()}</span>}
+                    {schedule.last_run && <span>{t('scheduled.lastRun')}: {new Date(schedule.last_run).toLocaleDateString()}</span>}
                   </div>
                   {schedule.recipients.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
