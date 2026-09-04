@@ -41,7 +41,7 @@ export default function Customers() {
     ])
       .then(([c, s, clv]) => {
         setCustomers(c.data)
-        setSales(s.data)
+        setSales(Array.isArray(s.data) ? s.data : s.data.items || [])
         setClvData(clv.data)
       })
       .catch((err) => setError(err.response?.data?.detail || 'Failed to load customers.'))
