@@ -1,10 +1,19 @@
 import os
+import sys
+import secrets
 import datetime as dt
 from typing import Optional
 from jose import jwt, JWTError
 import bcrypt
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "marketmind-dev-secret-change-in-production")
+# JWT secret MUST be set in .env — no hardcoded fallback for security.
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    # Auto-generate a random key for first run, warn loudly
+    SECRET_KEY = secrets.token_hex(32)
+    print("WARNING: JWT_SECRET_KEY not set in .env. Generated a random key.", file=sys.stderr)
+    print("  Add JWT_SECRET_KEY to backend/.env for persistent sessions.", file=sys.stderr)
+    print(f"  JWT_SECRET_KEY={SECRET_KEY}", file=sys.stderr)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours
 
