@@ -219,20 +219,12 @@ function BotAvatar({ size = 'md' }) {
   )
 }
 
-const CHAT_HISTORY_KEY = 'marketmind_chat_history'
 const MAX_HISTORY = 50
+const API_BASE = '/user-data'
 
 export default function ChatBot() {
-  const loadSavedMessages = () => {
-    try {
-      const saved = localStorage.getItem(CHAT_HISTORY_KEY)
-      if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed) && parsed.length > 0) return parsed }
-    } catch { /* ignore */ }
-    return []
-  }
-
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState(loadSavedMessages)
+  const [messages, setMessages] = useState([{ role: 'bot', type: 'welcome' }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
@@ -242,20 +234,35 @@ export default function ChatBot() {
   const endRef = useRef(null)
   const inpRef = useRef(null)
 
-  // Persist
+  // Load from Neon on mount
   useEffect(() => {
-    if (messages.length > 0) {
+    api.get(`${API_BASE}/chat-history`)
+      .then(res => {
+        if (res.data?.messages) {
+          const parsed = typeof res.data.messages === 'string' ? JSON.parse(res.data.messages) : res.data.messages
+          if (Array.isArray(parsed) && parsed.length > 0) setMessages(parsed)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Persist to Neon
+  useEffect(() => {
+    if (messages.length > 1) {
       const serializable = messages.slice(-MAX_HISTORY).map(m => {
         const clean = { role: m.role, type: m.type, text: m.text }
         if (m.card) { clean.card = { title: m.card.title, color: m.card.color, highlight: m.card.highlight, body: m.card.body, trend: m.card.trend, emoji: m.card.emoji }; if (m.card.stats) clean.card.stats = m.card.stats.map(s => ({ label: s.label, value: s.value, color: s.color })) }
         if (m.followups) clean.followups = m.followups.filter(f => typeof f === 'string')
         return clean
       })
-      try { localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(serializable)) } catch { /* quota */ }
+      api.post(`${API_BASE}/chat-history`, { messages: JSON.stringify(serializable) }).catch(() => {})
     }
   }, [messages])
 
-  const clearChat = useCallback(() => { setMessages([{ role: 'bot', type: 'welcome' }]); localStorage.removeItem(CHAT_HISTORY_KEY) }, [])
+  const clearChat = useCallback(() => {
+    setMessages([{ role: 'bot', type: 'welcome' }])
+    api.delete(`${API_BASE}/chat-history`).catch(() => {})
+  }, [])
 
   const scroll = useCallback(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), [])
   useEffect(() => { scroll() }, [messages, scroll])
