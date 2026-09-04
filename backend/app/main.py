@@ -41,6 +41,7 @@ from .routers import (
 from .routers.websocket_alerts import router as ws_router
 from .routers.audit import router as audit_router
 from .routers.user_data import router as user_data_router
+from .routers.activity import router as activity_router
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -77,14 +78,16 @@ def _keepalive() -> None:
         time.sleep(120)
         try:
             _ping()
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.warning(f"Keepalive ping failed: {exc}")
 
 try:
     _ping()
     _ping()
-except Exception:
-    pass
+except Exception as exc:
+    import logging
+    logging.warning(f"Initial Neon keepalive ping failed: {exc}")
 threading.Thread(target=_keepalive, daemon=True).start()
 
 # Serve uploaded files (avatars) — must be mounted before routers that
@@ -110,6 +113,7 @@ app.include_router(revenue.router)
 app.include_router(ws_router)
 app.include_router(audit_router)
 app.include_router(user_data_router)
+app.include_router(activity_router)
 
 
 @app.on_event("startup")
@@ -157,13 +161,14 @@ def _start_cache_warmup() -> None:
                     ai.get_sales_forecast(horizon_days=30, db=wdb, current_user=fake)
                     ai.get_customer_segmentation(db=wdb, current_user=fake)
                     ai.get_churn_predictions(db=wdb, current_user=fake)
-                    ai.get_product_recommendations(db=wdb, current_user=fake)
+                    ai.get_all_recommendations(db=wdb, current_user=fake)
                     ai.get_anomaly_alerts(db=wdb, current_user=fake)
                     notif_router._sync_notifications(wdb, bid)
                 finally:
                     wdb.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.warning(f"Warm-up background task failed: {exc}")
 
     threading.Thread(target=_warm, daemon=True).start()
 
@@ -179,6 +184,12 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Gracefully dispose Neon connection pool on shutdown."""
+    engine.dispose()
 
 
 if __name__ == "__main__":
