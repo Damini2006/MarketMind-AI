@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import api from '../services/api'
-import { Loading, PageHeader, EmptyState, Badge } from '../components/ui.jsx'
+import {Loading, PageHeader, EmptyState, Badge, CardsSkeleton, PageSkeleton} from '../components/ui.jsx'
 
 const COLORS = ['#3b5bdb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4']
 
@@ -25,7 +25,7 @@ export default function Segmentation() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <Loading label="Running customer segmentation model..." />
+  if (loading) return <PageSkeleton variant="table" />
   
   const segments = data?.segments || []
   const customers = data?.customers || []

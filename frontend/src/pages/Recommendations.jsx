@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import { Loading, PageHeader, EmptyState, Badge } from '../components/ui.jsx'
+import {Loading, PageHeader, EmptyState, Badge, CardsSkeleton, PageSkeleton} from '../components/ui.jsx'
 import { ShoppingBag } from 'lucide-react'
 
 export default function Recommendations() {
@@ -17,7 +17,7 @@ export default function Recommendations() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <Loading label="Generating recommendations..." />
+  if (loading) return <PageSkeleton variant="table" />
   
   // Safe array check using optional chaining
   const rows = data?.rows || []

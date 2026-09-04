@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import { Loading, PageHeader, Badge } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import jsPDF from 'jspdf'
 import {
   AlertOctagon, LayoutGrid, List,

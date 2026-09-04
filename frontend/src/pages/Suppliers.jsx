@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader } from '../components/ui.jsx'
+import {Loading, PageHeader, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Plus, Trash2, Truck, Mail, Phone, MapPin } from 'lucide-react'
 
@@ -48,7 +48,7 @@ export default function Suppliers() {
     catch (err) { setError(err.response?.data?.detail || 'Failed to delete supplier.') }
   }
 
-  if (loading) return <Loading label="Loading suppliers..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   const columns = [
     { key: 'supplier_name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },

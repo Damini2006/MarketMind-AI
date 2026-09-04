@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, EmptyState, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import { DetailModal } from '../components/InteractiveTable.jsx'
 import { FileText, IndianRupee, Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
 import QRCodeGenerator from '../components/QRCodeGenerator'
-import { useUndoRedo, markInvoicePaidAction } from '../context/UndoRedoContext'
 
 export default function Invoices() {
-  const { pushAction } = useUndoRedo()
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -28,12 +26,11 @@ export default function Invoices() {
     try {
       const inv = invoices.find(i => i.id === id)
       await api.patch(`/invoices/${id}/status`, { status: 'paid' })
-      pushAction(markInvoicePaidAction(id, inv?.invoice_number || `#${id}`, load))
       load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to update status.') }
   }
 
-  if (loading) return <Loading label="Loading invoices..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   const filtered = invoices.filter(inv => {
     if (statusFilter !== 'all' && inv.status !== statusFilter) return false

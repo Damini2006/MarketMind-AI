@@ -1,13 +1,11 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, Badge, EmptyState, ErrorBanner } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, EmptyState, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import { Plus, PackagePlus, PackageMinus, Upload, Search, Download, FileText } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
-import { useUndoRedo, updateStockAction, createProductAction } from '../context/UndoRedoContext'
 
 export default function Inventory() {
-  const { pushAction } = useUndoRedo()
   const [products, setProducts] = useState([])
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -88,7 +86,6 @@ export default function Inventory() {
         stock_quantity: Number(form.stock_quantity),
         reorder_threshold: Number(form.reorder_threshold),
       })
-      pushAction(createProductAction(form, load))
       setShowForm(false)
       setForm({ name: '', category: '', price: '', stock_quantity: 0, reorder_threshold: 10, warehouse_location: '' })
       setLoading(true)
@@ -102,7 +99,6 @@ export default function Inventory() {
     try {
       const product = products.find(p => p.id === productId)
       await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta })
-      pushAction(updateStockAction(productId, product?.name || `#${productId}`, delta, load))
       setLoading(true)
       load()
     } catch (err) {
@@ -118,7 +114,7 @@ export default function Inventory() {
     return matchesSearch
   })
 
-  if (loading) return <Loading label="Loading inventory..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   return (
     <div>
