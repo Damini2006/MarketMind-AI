@@ -388,12 +388,11 @@ export default function ReportTemplates() {
   const [showPreview, setShowPreview] = useState(false)
   const [savedTemplates, setSavedTemplates] = useState([])
 
-  // Load saved templates from localStorage
+  // Load saved templates from Neon
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('reportTemplates') || '[]')
-      setSavedTemplates(saved)
-    } catch { /* ignore */ }
+    api.get('/user-data/report-templates')
+      .then(res => setSavedTemplates(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setSavedTemplates([]))
   }, [])
 
   const load = useCallback(() => {
@@ -408,7 +407,7 @@ export default function ReportTemplates() {
       api.get('/ai/clv').catch(() => ({ data: {} })),
       api.get('/analytics/pulse').catch(() => ({ data: {} })),
     ]).then(([kpis, sales, products, customers, invoices, anomalies, clv, pulse]) => {
-      const salesData = Array.isArray(sales.data) ? sales.data : []
+      const salesData = Array.isArray(sales.data) ? sales.data : sales.data.items || []
       const productsData = Array.isArray(products.data) ? products.data : []
       const customersData = Array.isArray(customers.data) ? customers.data : []
       const invoiceData = Array.isArray(invoices.data) ? invoices.data : (invoices.data?.items || [])
@@ -534,15 +533,16 @@ export default function ReportTemplates() {
       category: 'Custom',
       builtin: false,
     }
-    const updated = [...savedTemplates, newTemplate]
-    setSavedTemplates(updated)
-    localStorage.setItem('reportTemplates', JSON.stringify(updated))
+    setSavedTemplates(prev => [...prev, newTemplate])
+    api.post('/user-data/report-templates', {
+      name: newTemplate.name, description: newTemplate.description || '',
+      sections: JSON.stringify(newTemplate.sections),
+    }).catch(() => {})
   }
 
   const handleDeleteTemplate = (templateId) => {
-    const updated = savedTemplates.filter(t => t.id !== templateId)
-    setSavedTemplates(updated)
-    localStorage.setItem('reportTemplates', JSON.stringify(updated))
+    setSavedTemplates(prev => prev.filter(t => t.id !== templateId))
+    api.delete(`/user-data/report-templates/${templateId}`).catch(() => {})
   }
 
   if (loading) return <Loading label="Loading report data..." />
