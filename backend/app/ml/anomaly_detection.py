@@ -938,8 +938,9 @@ def run_full_detection(db) -> Dict[str, Any]:
             d = a.created_at[:10]
             daily_counts[d][a.severity] += 1
             daily_counts[d]["total"] += 1
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.warning(f"Timeline grouping failed for alert {a.id}: {exc}")
     timeline = [
         {"date": d, **counts}
         for d, counts in sorted(daily_counts.items())

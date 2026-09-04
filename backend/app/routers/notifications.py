@@ -109,8 +109,9 @@ def _run_sync_in_background(business_id: int) -> None:
     db = SessionLocal()
     try:
         _do_sync_notifications(db, business_id)
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.warning(f"Notification sync failed for business {business_id}: {exc}")
     finally:
         db.close()
 

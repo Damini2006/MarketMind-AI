@@ -176,13 +176,15 @@ async def _monitor_alerts():
                                 "severity": "medium",
                                 "count": anomaly_count,
                             })
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.warning(f"Anomaly detection failed for biz {biz_id}: {exc}")
 
                 broadcaster._last_snapshot[biz_id] = new_snapshot
 
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.warning(f"Alert monitor loop failed for biz {biz_id}: {exc}")
         finally:
             db.close()
 
@@ -240,7 +242,7 @@ async def websocket_alerts(websocket: WebSocket, business_id: str):
                 if msg.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
             except json.JSONDecodeError:
-                pass
+                pass  # Client sent non-JSON, ignore silently
 
     except WebSocketDisconnect:
         broadcaster.disconnect(websocket, business_id)

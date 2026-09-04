@@ -64,8 +64,9 @@ async def upload_avatar(
         if os.path.exists(old_path):
             try:
                 os.remove(old_path)
-            except OSError:
-                pass
+            except OSError as exc:
+                import logging
+                logging.warning(f"Failed to delete old avatar file: {exc}")
 
     ext = ALLOWED_AVATAR_TYPES[file.content_type]
     filename = f"u{current_user.id}_{uuid.uuid4().hex[:10]}{ext}"
@@ -90,8 +91,9 @@ def delete_avatar(
         if os.path.exists(old_path):
             try:
                 os.remove(old_path)
-            except OSError:
-                pass
+            except OSError as exc:
+                import logging
+                logging.warning(f"Failed to delete old avatar file: {exc}")
     current_user.avatar_url = None
     db.commit()
     db.refresh(current_user)
