@@ -1,20 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#6366f1"/>
       <stop offset="100%" stop-color="#8b5cf6"/>
     </linearGradient>
-    <linearGradient id="chart" x1="30" y1="85" x2="90" y2="30" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#ffffff"/>
+    <linearGradient id="m" x1="12" y1="14" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
     </linearGradient>
   </defs>
-  <!-- Rounded square background -->
-  <rect width="120" height="120" rx="28" fill="url(#bg)"/>
-  <!-- Stylized M with ascending bar chart -->
-  <path d="M30 82 L30 42 L48 42 L60 62 L72 42 L90 42 L90 82 L78 82 L78 58 L66 78 L54 58 L42 78 L42 82 Z" fill="white" opacity="0.95"/>
-  <!-- Rising trend line -->
-  <path d="M32 70 L50 55 L65 60 L88 35" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
-  <!-- Trend dot -->
-  <circle cx="88" cy="35" r="4" fill="white" opacity="0.7"/>
+  <rect width="48" height="48" rx="12" fill="url(#bg)"/>
+  <path d="M12 36V18l6 10 6-10v18" stroke="url(#m)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <path d="M30 36V18l6 10 6-10v18" stroke="url(#m)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6"/>
+  <circle cx="38" cy="12" r="3" fill="#34d399"/>
 </svg>
