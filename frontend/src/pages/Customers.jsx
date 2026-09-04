@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader, Badge, ErrorBanner } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import {
   Plus, Users, Mail, Phone, IndianRupee, ShoppingCart,
@@ -8,7 +8,6 @@ import {
   Clock, Target, Download, FileText,
 } from 'lucide-react'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
-import { useUndoRedo, createCustomerAction } from '../context/UndoRedoContext'
 
 const SEGMENT_META = {
   high: { label: 'High Value', color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400', icon: Crown, badge: 'emerald' },
@@ -18,7 +17,6 @@ const SEGMENT_META = {
 }
 
 export default function Customers() {
-  const { pushAction } = useUndoRedo()
   const [customers, setCustomers] = useState([])
   const [sales, setSales] = useState([])
   const [clvData, setClvData] = useState(null)
@@ -54,7 +52,6 @@ export default function Customers() {
     e.preventDefault(); setError(null)
     try {
       await api.post('/customers/', form)
-      pushAction(createCustomerAction(form, load))
       setForm({ name: '', email: '', phone: '' }); setShowForm(false); load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to add customer.') }
   }
@@ -120,7 +117,7 @@ export default function Customers() {
 
   const totalSpentAll = enriched.reduce((s, c) => s + c.total_spent, 0)
 
-  if (loading) return <Loading label="Loading customers and computing CLV..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   const columns = [
     { key: 'name', label: 'Name', render: (v) => <span className="font-medium text-slate-800 dark:text-slate-100">{v}</span> },

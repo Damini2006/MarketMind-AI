@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import api from '../services/api'
-import { Loading, PageHeader } from '../components/ui.jsx'
+import {Loading, PageHeader, ChartSkeleton, PageSkeleton} from '../components/ui.jsx'
 import {
   Minus, IndianRupee, ShoppingCart,
   Users, BarChart3, Zap,
@@ -168,7 +168,7 @@ export default function Comparison() {
     return { revenue, salesCount: s.length, uniqueCustomers, avgOrder, topProducts }
   }, [period2Data, getTopProducts])
 
-  if (loading) return <Loading label="Loading comparison data..." />
+  if (loading) return <PageSkeleton variant="table" />
 
   const revenueDiff = stats2.revenue - stats1.revenue
   const salesDiff = stats2.salesCount - stats1.salesCount
