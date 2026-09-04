@@ -22,9 +22,6 @@ backend/copy_neon_data.py
 backend/reseed_demo_data.py
 backend/start_server.bat
 backend/server.log
-backend/.freebuff/
-.freebuff/
-
 # Local DB backups
 backend/*.user-backup-*.db
 backend/import-test.db
