@@ -7,6 +7,7 @@ import api from '../../services/api'
 import DetailModal from '../DetailModal.jsx'
 import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight, Download, FileText } from 'lucide-react'
 import { exportToPDF, exportToExcel } from '../../utils/exportUtils'
+import { CountUp, useCountUp } from '../../hooks/useCountUp.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import BusinessPulse from '../BusinessPulse.jsx'
 
@@ -49,12 +50,12 @@ export default function OwnerDashboard() {
 
       {/* KPI Cards */}
       <div data-tour="kpi-cards" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <ClickableKPI label={t('dashboard.totalRevenue')} value={`₹${kpis.total_revenue.toLocaleString('en-IN')}`} icon={IndianRupee} tone="green" onClick={() => setKpiModal('revenue')} />
-        <ClickableKPI label={t('dashboard.totalSales')} value={kpis.total_sales.toLocaleString('en-IN')} icon={ShoppingCart} tone="brand" onClick={() => setKpiModal('sales')} />
-        <ClickableKPI label={t('dashboard.customers')} value={kpis.total_customers} icon={Users} tone="brand" onClick={() => setKpiModal('customers')} />
-        <ClickableKPI label={t('dashboard.products')} value={kpis.total_products} icon={Boxes} tone="brand" onClick={() => setKpiModal('products')} />
-        <ClickableKPI label={t('dashboard.lowStock')} value={kpis.low_stock_count} icon={AlertTriangle} tone="amber" onClick={() => setKpiModal('lowstock')} />
-        <ClickableKPI label={t('dashboard.overdueInvoices')} value={kpis.overdue_invoices} sub={`${kpis.pending_invoices} ${t('dashboard.pendingLabel')}`} icon={FileWarning} tone="red" onClick={() => setKpiModal('invoices')} />
+        <ClickableKPI label={t('dashboard.totalRevenue')} rawValue={kpis.total_revenue} prefix="₹" icon={IndianRupee} tone="green" onClick={() => setKpiModal('revenue')} delay={0} />
+        <ClickableKPI label={t('dashboard.totalSales')} rawValue={kpis.total_sales} icon={ShoppingCart} tone="brand" onClick={() => setKpiModal('sales')} delay={80} />
+        <ClickableKPI label={t('dashboard.customers')} rawValue={kpis.total_customers} icon={Users} tone="brand" onClick={() => setKpiModal('customers')} delay={160} />
+        <ClickableKPI label={t('dashboard.products')} rawValue={kpis.total_products} icon={Boxes} tone="brand" onClick={() => setKpiModal('products')} delay={240} />
+        <ClickableKPI label={t('dashboard.lowStock')} rawValue={kpis.low_stock_count} icon={AlertTriangle} tone="amber" onClick={() => setKpiModal('lowstock')} delay={320} />
+        <ClickableKPI label={t('dashboard.overdueInvoices')} rawValue={kpis.overdue_invoices} sub={`${kpis.pending_invoices} ${t('dashboard.pendingLabel')}`} icon={FileWarning} tone="red" onClick={() => setKpiModal('invoices')} delay={400} />
       </div>
 
       {/* Export Buttons */}
@@ -219,7 +220,7 @@ export default function OwnerDashboard() {
   )
 }
 
-function ClickableKPI({ label, value, sub, icon: Icon, tone, onClick }) {
+function ClickableKPI({ label, rawValue, prefix = '', sub, icon: Icon, tone, onClick, delay = 0 }) {
   const toneClasses = {
     brand: 'bg-brand-50 dark:bg-brand-500/10 text-brand-700 dark:text-brand-300',
     green: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
@@ -229,15 +230,18 @@ function ClickableKPI({ label, value, sub, icon: Icon, tone, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="card flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-200 text-left w-full"
+      className="card flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all duration-200 text-left w-full opacity-0 translate-y-2"
+      style={{ animation: 'fadeInUp 0.5s ease-out forwards', animationDelay: delay + 'ms' }}
     >
       {Icon && (
-        <div className={`p-3 rounded-lg ${toneClasses[tone] || toneClasses.brand}`}>
+        <div className={`p-3 rounded-lg ${toneClasses[tone] || toneClasses.brand} transition-transform duration-300 hover:scale-110`}>
           <Icon size={22} />
         </div>
       )}
       <div>
-        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">{value}</p>
+        <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <CountUp value={rawValue} prefix={prefix} duration={1200} delay={delay + 200} />
+        </p>
         <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
         {sub && <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{sub}</p>}
       </div>
