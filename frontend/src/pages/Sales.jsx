@@ -1,16 +1,16 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import { Loading, PageHeader, Badge, ErrorBanner } from '../components/ui.jsx'
+import {Loading, PageHeader, Badge, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Upload, Plus, Download, ShoppingCart, IndianRupee, Users, Calendar, FileText } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
-import { useUndoRedo, createSaleAction } from '../context/UndoRedoContext'
+
+const PAGE_SIZE = 50
 
 export default function Sales() {
   const { t } = useTranslation()
-  const { pushAction } = useUndoRedo()
   const [sales, setSales] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
@@ -20,15 +20,30 @@ export default function Sales() {
   const [error, setError] = useState(null)
   const [selectedSale, setSelectedSale] = useState(null)
   const [form, setForm] = useState({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const totalPages = Math.ceil(total / PAGE_SIZE)
 
   const load = useCallback(() => {
-    Promise.all([api.get('/sales/'), api.get('/inventory/products'), api.get('/customers/')])
-      .then(([s, p, c]) => { setSales(s.data); setProducts(p.data); setCustomers(c.data) })
+    const offset = page * PAGE_SIZE
+    Promise.all([
+      api.get(`/sales/?limit=${PAGE_SIZE}&offset=${offset}`),
+      api.get('/inventory/products'),
+      api.get('/customers/'),
+    ])
+      .then(([s, p, c]) => {
+        setSales(s.data.items || s.data)
+        setTotal(s.data.total ?? (s.data.items || s.data).length)
+        setProducts(p.data)
+        setCustomers(c.data)
+      })
       .catch((err) => setError(err.response?.data?.detail || err.message || 'Failed to load sales data.'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [page])
 
   useEffect(() => { load() }, [load])
+  // Reset to page 0 when load changes (new sale, upload, etc.)
+  const reload = useCallback(() => { setPage(0); setLoading(true) }, [])
 
   const handleProductChange = (e) => {
     const pid = e.target.value
@@ -45,17 +60,9 @@ export default function Sales() {
         customer_id: form.customer_id ? Number(form.customer_id) : null,
         quantity: Number(form.quantity), unit_price: Number(form.unit_price),
       })
-      const productName = products.find(p => p.id === Number(form.product_id))?.name || 'product'
-      pushAction(createSaleAction({
-        product_id: form.product_id ? Number(form.product_id) : null,
-        customer_id: form.customer_id ? Number(form.customer_id) : null,
-        quantity: Number(form.quantity),
-        unit_price: Number(form.unit_price),
-        product_name: productName,
-      }, load))
       setShowForm(false)
       setForm({ product_id: '', customer_id: '', quantity: 1, unit_price: '' })
-      load()
+      reload()
     } catch (err) { setError(err.response?.data?.detail || 'Could not record sale.') }
   }
 
@@ -67,7 +74,7 @@ export default function Sales() {
   const exportHeaders = ['Date', 'Product', 'Customer', 'Qty', 'Unit Price', 'Total', 'Source']
 
   const handleExportCSV = () => downloadCSV('sales.csv', exportHeaders, getExportRows())
-  const handleExportPDF = () => exportToPDF({ title: 'Sales Report', subtitle: `${sales.length} transactions`, headers: exportHeaders, rows: getExportRows(), filename: 'sales-report' })
+  const handleExportPDF = () => exportToPDF({ title: 'Sales Report', subtitle: `${total} transactions`, headers: exportHeaders, rows: getExportRows(), filename: 'sales-report' })
   const handleExportExcel = () => exportToExcel({ title: 'Sales Report', headers: exportHeaders, rows: getExportRows(), filename: 'sales-report' })
 
   const handleUpload = async (e) => {
@@ -78,7 +85,7 @@ export default function Sales() {
     try {
       const res = await api.post('/sales/upload-csv', data, { headers: { 'Content-Type': 'multipart/form-data' } })
       setUploadMsg(`Uploaded: ${res.data.sales_created} sales created, ${res.data.rows_skipped} rows skipped.`)
-      load()
+      reload()
     } catch (err) { setUploadMsg(err.response?.data?.detail || 'Upload failed.') }
     e.target.value = ''
   }
@@ -123,7 +130,7 @@ export default function Sales() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <div className="card text-center p-3"><p className="text-xl font-bold text-slate-900 dark:text-slate-100">{sales.length}</p><p className="text-[10px] text-slate-500 uppercase">{t('sales.totalSales')}</p></div>
+        <div className="card text-center p-3"><p className="text-xl font-bold text-slate-900 dark:text-slate-100">{total}</p><p className="text-[10px] text-slate-500 uppercase">{t('sales.totalSales')}</p></div>
         <div className="card text-center p-3"><p className="text-xl font-bold text-emerald-600">₹{totalRevenue.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">{t('sales.totalRevenue')}</p></div>
         <div className="card text-center p-3"><p className="text-xl font-bold text-blue-600">₹{avgSale.toLocaleString('en-IN')}</p><p className="text-[10px] text-slate-500 uppercase">{t('sales.avgSale')}</p></div>
         <div className="card text-center p-3"><p className="text-xl font-bold text-purple-600">{customers.length}</p><p className="text-[10px] text-slate-500 uppercase">{t('dashboard.customers')}</p></div>
@@ -170,6 +177,56 @@ export default function Sales() {
           onRowClick={setSelectedSale}
           emptyMessage={t('sales.noRecords')}
         />
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total.toLocaleString('en-IN')}
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Previous
+              </button>
+              {/* Page number buttons */}
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum
+                if (totalPages <= 5) {
+                  pageNum = i
+                } else if (page < 3) {
+                  pageNum = i
+                } else if (page >= totalPages - 2) {
+                  pageNum = totalPages - 5 + i
+                } else {
+                  pageNum = page - 2 + i
+                }
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    className={`w-8 h-8 text-xs font-medium rounded-lg transition-colors ${
+                      page === pageNum
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {pageNum + 1}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sale Detail Modal */}
