@@ -11,7 +11,7 @@
 [![Neon PostgreSQL](https://img.shields.io/badge/Neon-PostgreSQL-00A87E?logo=postgresql)](https://neon.tech)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8?logo=tailwindcss)](https://tailwindcss.com/)
 
-AI-powered business intelligence platform for Indian small businesses.
+**AI-powered business intelligence platform for Indian small businesses.**
 
 </div>
 
@@ -19,16 +19,16 @@ AI-powered business intelligence platform for Indian small businesses.
 
 ## Overview
 
-MarketMind AI is a full-stack SaaS application built to give small retail businesses access to enterprise-grade analytics. A React frontend communicates with a FastAPI backend, backed by Neon PostgreSQL, delivering real-time insights across sales, inventory, customers, and finances â€” with ML models for forecasting, anomaly detection, and recommendations.
+MarketMind AI is a full-stack SaaS application built to give small retail businesses access to enterprise-grade analytics. A React frontend communicates with a FastAPI backend, backed by Neon PostgreSQL, delivering real-time insights across sales, inventory, customers, and finances — with ML models for forecasting, anomaly detection, and recommendations.
 
 ### Highlights
 
 - 28+ pages covering sales, inventory, customers, invoices, analytics, and AI
-- 5-language support â€” English, Hindi, Telugu, Tamil, Kannada
-- Role-based access â€” Business Owner, Store Manager, Sales Executive, Admin
-- Neon PostgreSQL â€” serverless database with connection pooling
-- PWA â€” installable on mobile and desktop with offline caching
-- Real-time alerts â€” WebSocket-powered live notifications
+- 5-language support — English, Hindi, Telugu, Tamil, Kannada
+- Role-based access — Business Owner, Store Manager, Sales Executive, Admin
+- Neon PostgreSQL — serverless database with connection pooling
+- PWA — installable on mobile and desktop with offline caching
+- Real-time alerts — WebSocket-powered live notifications
 
 ---
 
@@ -72,7 +72,7 @@ MarketMind AI is a full-stack SaaS application built to give small retail busine
 
 | Feature | Description |
 |---------|-------------|
-| Multi-Language (i18n) | English, Hindi, Telugu, Tamil, Kannada â€” full app translation |
+| Multi-Language (i18n) | English, Hindi, Telugu, Tamil, Kannada — full app translation |
 | Dark/Light Mode | System-aware theme with manual toggle |
 | PWA | Installable on mobile/desktop with offline caching |
 | Real-Time Alerts | WebSocket live notifications with browser push support |
@@ -227,66 +227,66 @@ Frontend runs at `http://localhost:5173`
 
 ```
 Team_2_Small_Biz_AI/
-â”œâ”€â”€ backend/
-â”‚   â”œâ”€â”€ app/
-â”‚   â”‚   â”œâ”€â”€ core/
-â”‚   â”‚   â”‚   â””â”€â”€ security.py              # JWT, password hashing
-â”‚   â”‚   â”œâ”€â”€ ml/
-â”‚   â”‚   â”‚   â”œâ”€â”€ anomaly_detection.py      # Statistical anomaly detection
-â”‚   â”‚   â”‚   â”œâ”€â”€ business_rule_anomalies.py
-â”‚   â”‚   â”‚   â”œâ”€â”€ inference.py              # ML model inference
-â”‚   â”‚   â”‚   â”œâ”€â”€ recommendations.py        # Collaborative filtering
-â”‚   â”‚   â”‚   â””â”€â”€ forecasting.py            # XGBoost sales forecasting
-â”‚   â”‚   â”œâ”€â”€ routers/
-â”‚   â”‚   â”‚   â”œâ”€â”€ auth.py                   # Login, register, OTP, password reset
-â”‚   â”‚   â”‚   â”œâ”€â”€ sales.py                  # Sales CRUD + CSV upload
-â”‚   â”‚   â”‚   â”œâ”€â”€ inventory.py              # Products, stock management
-â”‚   â”‚   â”‚   â”œâ”€â”€ customers.py              # Customer CRUD + segmentation
-â”‚   â”‚   â”‚   â”œâ”€â”€ invoices.py               # Invoice generation
-â”‚   â”‚   â”‚   â”œâ”€â”€ analytics.py              # KPIs, charts, aggregation
-â”‚   â”‚   â”‚   â”œâ”€â”€ ai.py                     # AI endpoints (forecast, churn, etc.)
-â”‚   â”‚   â”‚   â”œâ”€â”€ audit.py                  # Audit trail logging
-â”‚   â”‚   â”‚   â”œâ”€â”€ websocket_alerts.py       # Real-time alert broadcasting
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 19 router files total
-â”‚   â”‚   â”œâ”€â”€ models.py                     # SQLAlchemy models (28 tables)
-â”‚   â”‚   â”œâ”€â”€ schemas.py                    # Pydantic validation schemas
-â”‚   â”‚   â”œâ”€â”€ database.py                   # Neon PostgreSQL engine
-â”‚   â”‚   â””â”€â”€ main.py                       # FastAPI app, middleware, startup
-â”‚   â”œâ”€â”€ .env.example                      # Environment variable template
-â”‚   â””â”€â”€ requirements.txt                  # Python dependencies
-â”‚
-â”œâ”€â”€ frontend/
-â”‚   â”œâ”€â”€ public/
-â”‚   â”‚   â”œâ”€â”€ manifest.json                 # PWA manifest
-â”‚   â”‚   â”œâ”€â”€ sw.js                         # Service worker
-â”‚   â”‚   â””â”€â”€ icon-*.png                    # App icons (72-512px)
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ components/
-â”‚   â”‚   â”‚   â”œâ”€â”€ Layout.jsx                # Sidebar + header layout
-â”‚   â”‚   â”‚   â”œâ”€â”€ ChatBot.jsx               # AI chatbot overlay
-â”‚   â”‚   â”‚   â”œâ”€â”€ LiveAlerts.jsx            # WebSocket alert notifications
-â”‚   â”‚   â”‚   â”œâ”€â”€ LanguageSwitcher.jsx      # 5-language selector
-â”‚   â”‚   â”‚   â”œâ”€â”€ OnboardingWizard.jsx      # 5-step setup wizard
-â”‚   â”‚   â”‚   â”œâ”€â”€ CommandPalette.jsx        # Ctrl+K search
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 15+ reusable components
-â”‚   â”‚   â”œâ”€â”€ pages/
-â”‚   â”‚   â”‚   â”œâ”€â”€ Dashboard.jsx             # Main dashboard
-â”‚   â”‚   â”‚   â”œâ”€â”€ Sales.jsx                 # Sales management
-â”‚   â”‚   â”‚   â”œâ”€â”€ Inventory.jsx             # Product & stock management
-â”‚   â”‚   â”‚   â”œâ”€â”€ Anomalies.jsx             # Anomaly detection dashboard
-â”‚   â”‚   â”‚   â”œâ”€â”€ DashboardBuilder.jsx      # Drag-and-drop dashboard builder
-â”‚   â”‚   â”‚   â”œâ”€â”€ ReportTemplates.jsx       # Report templates + export
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 27 page files total
-â”‚   â”‚   â”œâ”€â”€ context/
-â”‚   â”‚   â”‚   â”œâ”€â”€ AuthContext.jsx           # Authentication state
-â”‚   â”‚   â”‚   â””â”€â”€ ThemeContext.jsx          # Dark/light mode
-â”‚   â”‚   â”œâ”€â”€ i18n.js                       # 5-language translations
-â”‚   â”‚   â”œâ”€â”€ App.jsx                       # Router + lazy loading
-â”‚   â”‚   â””â”€â”€ main.jsx                      # App entry point
-â”‚   â”œâ”€â”€ package.json                      # Node dependencies
-â”‚   â””â”€â”€ vite.config.js                    # Vite build config
-â”‚
-â””â”€â”€ README.md
+├── backend/
+│   ├── app/
+│   │   ├── core/
+│   │   │   └── security.py              # JWT, password hashing
+│   │   ├── ml/
+│   │   │   ├── anomaly_detection.py      # Statistical anomaly detection
+│   │   │   ├── business_rule_anomalies.py
+│   │   │   ├── inference.py              # ML model inference
+│   │   │   ├── recommendations.py        # Collaborative filtering
+│   │   │   └── forecasting.py            # XGBoost sales forecasting
+│   │   ├── routers/
+│   │   │   ├── auth.py                   # Login, register, OTP, password reset
+│   │   │   ├── sales.py                  # Sales CRUD + CSV upload
+│   │   │   ├── inventory.py              # Products, stock management
+│   │   │   ├── customers.py              # Customer CRUD + segmentation
+│   │   │   ├── invoices.py               # Invoice generation
+│   │   │   ├── analytics.py              # KPIs, charts, aggregation
+│   │   │   ├── ai.py                     # AI endpoints (forecast, churn, etc.)
+│   │   │   ├── audit.py                  # Audit trail logging
+│   │   │   ├── websocket_alerts.py       # Real-time alert broadcasting
+│   │   │   └── ...                       # 19 router files total
+│   │   ├── models.py                     # SQLAlchemy models (28 tables)
+│   │   ├── schemas.py                    # Pydantic validation schemas
+│   │   ├── database.py                   # Neon PostgreSQL engine
+│   │   └── main.py                       # FastAPI app, middleware, startup
+│   ├── .env.example                      # Environment variable template
+│   └── requirements.txt                  # Python dependencies
+│
+├── frontend/
+│   ├── public/
+│   │   ├── manifest.json                 # PWA manifest
+│   │   ├── sw.js                         # Service worker
+│   │   └── icon-*.png                    # App icons (72-512px)
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.jsx                # Sidebar + header layout
+│   │   │   ├── ChatBot.jsx               # AI chatbot overlay
+│   │   │   ├── LiveAlerts.jsx            # WebSocket alert notifications
+│   │   │   ├── LanguageSwitcher.jsx      # 5-language selector
+│   │   │   ├── OnboardingWizard.jsx      # 5-step setup wizard
+│   │   │   ├── CommandPalette.jsx        # Ctrl+K search
+│   │   │   └── ...                       # 15+ reusable components
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx             # Main dashboard
+│   │   │   ├── Sales.jsx                 # Sales management
+│   │   │   ├── Inventory.jsx             # Product & stock management
+│   │   │   ├── Anomalies.jsx             # Anomaly detection dashboard
+│   │   │   ├── DashboardBuilder.jsx      # Drag-and-drop dashboard builder
+│   │   │   ├── ReportTemplates.jsx       # Report templates + export
+│   │   │   └── ...                       # 27 page files total
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx           # Authentication state
+│   │   │   └── ThemeContext.jsx          # Dark/light mode
+│   │   ├── i18n.js                       # 5-language translations
+│   │   ├── App.jsx                       # Router + lazy loading
+│   │   └── main.jsx                      # App entry point
+│   ├── package.json                      # Node dependencies
+│   └── vite.config.js                    # Vite build config
+│
+└── README.md
 ```
 
 ---
@@ -391,13 +391,13 @@ Full interactive API documentation at `http://localhost:8000/docs`
 
 - JWT authentication with 12-hour token expiry
 - bcrypt password hashing with salt
-- Rate limiting â€” Login: 10 attempts/5min, Register: 5 attempts/5min per IP
+- Rate limiting — Login: 10 attempts/5min, Register: 5 attempts/5min per IP
 - Role-based access control (RBAC) on all endpoints
-- CORS protection â€” configurable allowed origins
+- CORS protection — configurable allowed origins
 - OTP email verification for password resets
 - TOTP 2FA with QR code setup and backup codes
-- Audit trail â€” all actions logged with IP address
-- No secrets in code â€” all sensitive values via environment variables
+- Audit trail — all actions logged with IP address
+- No secrets in code — all sensitive values via environment variables
 
 ---
 
@@ -412,6 +412,8 @@ Full interactive API documentation at `http://localhost:8000/docs`
 | GZip compression | Enabled for responses >1KB |
 | Connection pooling | Neon serverless with pooler endpoint |
 
+---
+
 ## Contributing
 
 1. Fork the repository
@@ -425,7 +427,7 @@ Full interactive API documentation at `http://localhost:8000/docs`
 - Python: Follow PEP 8, use type hints
 - JavaScript: Use functional components with hooks
 - Commits: Use conventional commits (`feat:`, `fix:`, `chore:`)
-- No hardcoded secrets â€” always use environment variables
+- No hardcoded secrets — always use environment variables
 
 ---
 
@@ -439,6 +441,6 @@ This project is for educational purposes as part of the Infosys Springboard prog
 
 **Built for Indian Small Businesses**
 
-*MarketMind AI â€” Making enterprise-grade analytics accessible to every shop owner*
+*MarketMind AI — Making enterprise-grade analytics accessible to every shop owner*
 
 </div>
