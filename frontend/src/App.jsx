@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react'
-import { UndoRedoProvider } from './context/UndoRedoContext.jsx'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuth } from './context/AuthContext.jsx'
@@ -9,34 +8,45 @@ import CommandPalette from './components/CommandPalette.jsx'
 import InstallBanner from './components/InstallBanner.jsx'
 import OnboardingWizard from './components/OnboardingWizard.jsx'
 import ThemeToggle from './components/ThemeToggle.jsx'
-import LandingPage from './pages/LandingPage';
 import Layout from './components/Layout.jsx'
-import Login from './pages/Login.jsx'
-import Register from './pages/Register.jsx'
-import Dashboard from './pages/Dashboard.jsx'
-import Sales from './pages/Sales.jsx'
-import Inventory from './pages/Inventory.jsx'
-import Invoices from './pages/Invoices.jsx'
-import Customers from './pages/Customers.jsx'
-import Forecasting from './pages/Forecasting.jsx'
-import Segmentation from './pages/Segmentation.jsx'
-import Churn from './pages/Churn.jsx'
-import Recommendations from './pages/Recommendations.jsx'
-import Anomalies from './pages/Anomalies.jsx'
-import Categories from './pages/Categories.jsx'
-import Suppliers from './pages/Suppliers.jsx'
-import Datasets from './pages/Datasets.jsx'
-import Team from './pages/Team.jsx'
-import Settings from './pages/Settings.jsx'
-import ActivityLog from './pages/ActivityLog.jsx'
-import AuditTrail from './pages/AuditTrail.jsx'
-import FunnelAnalysis from './pages/FunnelAnalysis.jsx'
-import ReportTemplates from './pages/ReportTemplates.jsx'
-import ScheduledReports from './pages/ScheduledReports.jsx'
-import DashboardBuilder from './pages/DashboardBuilder.jsx'
-import Comparison from './pages/Comparison.jsx'
-import RevenuePrediction from './pages/RevenuePrediction.jsx'
-import ForgotPassword from "./pages/ForgotPassword.jsx"
+
+// Lazy-load all page components for code-splitting (smaller initial bundle)
+const LandingPage = lazy(() => import('./pages/LandingPage'))
+const Login = lazy(() => import('./pages/Login.jsx'))
+const Register = lazy(() => import('./pages/Register.jsx'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword.jsx'))
+const Dashboard = lazy(() => import('./pages/Dashboard.jsx'))
+const Sales = lazy(() => import('./pages/Sales.jsx'))
+const Inventory = lazy(() => import('./pages/Inventory.jsx'))
+const Invoices = lazy(() => import('./pages/Invoices.jsx'))
+const Customers = lazy(() => import('./pages/Customers.jsx'))
+const Forecasting = lazy(() => import('./pages/Forecasting.jsx'))
+const Segmentation = lazy(() => import('./pages/Segmentation.jsx'))
+const Churn = lazy(() => import('./pages/Churn.jsx'))
+const Recommendations = lazy(() => import('./pages/Recommendations.jsx'))
+const Anomalies = lazy(() => import('./pages/Anomalies.jsx'))
+const Categories = lazy(() => import('./pages/Categories.jsx'))
+const Suppliers = lazy(() => import('./pages/Suppliers.jsx'))
+const Datasets = lazy(() => import('./pages/Datasets.jsx'))
+const Team = lazy(() => import('./pages/Team.jsx'))
+const Settings = lazy(() => import('./pages/Settings.jsx'))
+const ActivityLog = lazy(() => import('./pages/ActivityLog.jsx'))
+const AuditTrail = lazy(() => import('./pages/AuditTrail.jsx'))
+const FunnelAnalysis = lazy(() => import('./pages/FunnelAnalysis.jsx'))
+const ReportTemplates = lazy(() => import('./pages/ReportTemplates.jsx'))
+const ScheduledReports = lazy(() => import('./pages/ScheduledReports.jsx'))
+const DashboardBuilder = lazy(() => import('./pages/DashboardBuilder.jsx'))
+const Comparison = lazy(() => import('./pages/Comparison.jsx'))
+const RevenuePrediction = lazy(() => import('./pages/RevenuePrediction.jsx'))
+
+// Loading fallback for lazy routes
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+    </div>
+  )
+}
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth()
@@ -60,6 +70,14 @@ export default function App() {
         e.preventDefault()
         setCmdOpen((v) => !v)
       }
+      // ? key opens shortcuts (only when not typing in an input)
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const tag = document.activeElement?.tagName
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+          e.preventDefault()
+          setCmdOpen((v) => !v)
+        }
+      }
       if (e.key === 'Escape') setCmdOpen(false)
     }
     document.addEventListener('keydown', handler)
@@ -71,7 +89,6 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <UndoRedoProvider>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -97,6 +114,7 @@ export default function App() {
           </div>
         )}
 
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Landing Page */}
           <Route path="/" element={<LandingPage />} />
@@ -141,8 +159,8 @@ export default function App() {
           {/* Catch-all Wildcard Route */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </div>
-      </UndoRedoProvider>
     </ErrorBoundary>
   )
 }
