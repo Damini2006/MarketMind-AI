@@ -59,7 +59,7 @@ const WIDGET_COLORS = {
   violet: { bg: 'bg-violet-50 dark:bg-violet-950/20', text: 'text-violet-600 dark:text-violet-400', border: 'border-violet-200 dark:border-violet-800', fill: '#8b5cf6' },
 }
 
-const LAYOUT_KEY = 'marketmind-dashboard-layout'
+const API_BASE = '/user-data'
 
 // ─── Layout Templates ─────────────────────────────────────────────────
 const LAYOUT_TEMPLATES = {
@@ -487,18 +487,23 @@ export default function DashboardBuilder() {
   const [activeTemplate, setActiveTemplate] = useState('executive')
   const [showTemplates, setShowTemplates] = useState(false)
 
-  // Load saved layout or use default
+  // Load saved layout from Neon or use default
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY))
-      if (saved && Array.isArray(saved) && saved.length > 0) {
-        setLayout(saved)
-      } else {
+    api.get(`${API_BASE}/dashboard-layouts`)
+      .then(res => {
+        const layouts = Array.isArray(res.data) ? res.data : []
+        const active = layouts.find(l => l.is_active)
+        if (active && active.layout_json) {
+          const parsed = JSON.parse(active.layout_json)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setLayout(parsed)
+            return
+          }
+        }
+        // No saved layout — load the executive template as default
         setLayout(DEFAULT_LAYOUT.map(w => ({ ...w })))
-      }
-    } catch {
-      setLayout(DEFAULT_LAYOUT.map(w => ({ ...w })))
-    }
+      })
+      .catch(() => setLayout(DEFAULT_LAYOUT.map(w => ({ ...w }))))
   }, [])
 
   // Load data
@@ -512,7 +517,7 @@ export default function DashboardBuilder() {
     ]).then(([kpis, sales, products, customers, invoices]) => {
       setData({
         kpis: kpis.data,
-        sales: Array.isArray(sales.data) ? sales.data : [],
+        sales: Array.isArray(sales.data) ? sales.data : sales.data.items || [],
         products: Array.isArray(products.data) ? products.data : [],
         customers: Array.isArray(customers.data) ? customers.data : [],
         invoices: Array.isArray(invoices.data) ? invoices.data : [],
@@ -570,18 +575,25 @@ export default function DashboardBuilder() {
     setHiddenWidgets(new Set())
     setActiveTemplate(templateKey)
     setShowTemplates(false)
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(tmpl.layout))
+    // Save to Neon
+    api.post(`${API_BASE}/dashboard-layouts`, {
+      name: templateKey, layout_json: JSON.stringify(tmpl.layout), is_active: true,
+    }).catch(() => {})
   }, [])
 
   const resetLayout = useCallback(() => {
     const tmpl = LAYOUT_TEMPLATES[activeTemplate] || LAYOUT_TEMPLATES.executive
     setLayout(tmpl.layout.map(w => ({ ...w })))
     setHiddenWidgets(new Set())
-    localStorage.removeItem(LAYOUT_KEY)
+    api.post(`${API_BASE}/dashboard-layouts`, {
+      name: activeTemplate, layout_json: JSON.stringify(tmpl.layout), is_active: true,
+    }).catch(() => {})
   }, [activeTemplate])
 
   const saveLayout = useCallback(() => {
-    localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout))
+    api.post(`${API_BASE}/dashboard-layouts`, {
+      name: 'custom', layout_json: JSON.stringify(layout), is_active: true,
+    }).catch(() => {})
   }, [layout])
 
   // Export
