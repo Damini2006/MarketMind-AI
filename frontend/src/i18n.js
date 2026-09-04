@@ -5,7 +5,8 @@ const resources = {
   en: {
     translation: {
       // Sidebar
-      'nav.dashboard': 'Dashboard', 'nav.sales': 'Sales', 'nav.inventory': 'Inventory',
+        'navGroup.overview': 'Overview', 'navGroup.operations': 'Operations', 'navGroup.aiAnalytics': 'AI & Analytics', 'navGroup.reports': 'Reports & Tools', 'navGroup.admin': 'Admin',
+  'nav.dashboard': 'Dashboard', 'nav.sales': 'Sales', 'nav.inventory': 'Inventory',
       'nav.invoices': 'Invoices', 'nav.customers': 'Customers', 'nav.team': 'Team',
       'nav.categories': 'Categories', 'nav.suppliers': 'Suppliers', 'nav.datasets': 'Datasets',
       'nav.forecasting': 'Forecasting', 'nav.segmentation': 'Segmentation', 'nav.churn': 'Churn Risk',
