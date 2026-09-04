@@ -1,13 +1,29 @@
 import os
+import time
 import random
 import smtplib
 import datetime as dt
+from collections import defaultdict
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+
+# Simple in-memory rate limiter for auth endpoints
+_rate_store = defaultdict(list)
+
+def _check_rate_limit(key: str, max_attempts: int = 5, window: int = 300):
+    """Reject if more than max_attempts in window seconds."""
+    now = time.time()
+    _rate_store[key] = [t for t in _rate_store[key] if now - t < window]
+    if len(_rate_store[key]) >= max_attempts:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many attempts. Try again in {window}s.",
+        )
+    _rate_store[key].append(now)
 
 from .. import models, schemas
 from ..cache import invalidate
@@ -102,8 +118,12 @@ class ResetPasswordOTPRequest(BaseModel):
 )
 def register(
     payload: schemas.RegisterRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"register:{ip}", max_attempts=5, window=300)
+
     existing = (
         db.query(models.User)
         .filter(models.User.email == payload.email)
@@ -133,6 +153,44 @@ def register(
     db.flush()
     db.commit()
 
+    # Auto-seed demo data so new users see a populated dashboard
+    try:
+        import random as _rnd, datetime as _dt
+        bid = business.id
+        _cats = ['Groceries', 'Electronics', 'Clothing', 'Home & Kitchen', 'Personal Care']
+        for c in _cats:
+            db.add(models.Category(category_name=c, business_id=bid))
+        _prods = [
+            ('Whole Wheat Atta 10kg', 480, 50, 1), ('Basmati Rice 5kg', 650, 35, 1),
+            ('Sunflower Oil 1L', 180, 80, 1), ('Toothpaste Pack', 120, 60, 5),
+            ('Notebook 200pg', 80, 100, 4), ('USB Cable', 250, 40, 2),
+            ('Rice Cooker', 2500, 15, 2), ('Cotton T-Shirt', 350, 50, 3),
+            ('Dish Soap 1L', 150, 70, 5), ('Pressure Cooker 5L', 1800, 20, 2),
+        ]
+        prod_ids = []
+        for name, price, stock, cat_id in _prods:
+            p = models.Product(name=name, price=price, stock_quantity=stock, business_id=bid)
+            db.add(p); db.flush(); prod_ids.append(p.id)
+        cust_names = ['Amit Sharma','Priya Patel','Ravi Kumar','Sneha Gupta','Vikram Singh','Anjali Reddy','Rohit Verma','Neha Kulkarni','Deepak Nair','Kavita Joshi','Suresh Iyer','Meera Das','Arjun Rao','Divya Menon','Rajesh Pillai']
+        cust_ids = []
+        for n in cust_names:
+            c = models.Customer(name=n, email=f"{n.split()[0].lower()}@example.com", business_id=bid)
+            db.add(c); db.flush(); cust_ids.append(c.id)
+        ref = _dt.date(2026, 7, 1)
+        for i in range(50):
+            day = ref + _dt.timedelta(days=_rnd.randint(0, 60))
+            db.add(models.Sale(
+                product_id=_rnd.choice(prod_ids), customer_id=_rnd.choice(cust_ids),
+                quantity=_rnd.randint(1, 10), unit_price=round(_rnd.uniform(80, 2500), 2),
+                total_amount=round(_rnd.uniform(200, 15000), 2),
+                sale_date=_dt.datetime.combine(day, _dt.time(9, 0)),
+                business_id=bid))
+        db.commit()
+    except Exception as e:
+        import sys; print(f"SEED ERROR: {e}", file=sys.stderr, flush=True)
+        try: db.rollback()
+        except: pass
+
     db.refresh(user)
     return user
 
@@ -140,8 +198,12 @@ def register(
 @router.post("/login", response_model=schemas.Token)
 def login(
     payload: schemas.LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"login:{ip}", max_attempts=10, window=300)
+
     user = (
         db.query(models.User)
         .filter(models.User.email == payload.email)
@@ -162,6 +224,23 @@ def login(
             "role": role_str,
         }
     )
+
+    # Log the login action to audit trail
+    try:
+        from .audit import log_action
+        log_action(
+            db=db,
+            action="Logged in",
+            action_type="login",
+            resource="Auth",
+            user_id=user.id,
+            user_name=user.full_name,
+            business_id=user.business_id,
+            details=f"Login via email: {payload.email}",
+        )
+    except Exception as exc:
+        import logging
+        logging.warning(f"Audit log failed during login: {exc}")  # Don't block login if audit fails
 
     return {
         "access_token": token,

@@ -18,31 +18,46 @@ router = APIRouter(prefix="/api/sales", tags=["Sales"])
 REQUIRED_CSV_COLUMNS = {"product_name", "quantity", "unit_price"}
 
 
-def _load_sales(db: Session, business_id: int, limit: int):
-    """Fetch the sales list once and serialize it so the cached value is plain JSON."""
+def _load_sales(db: Session, business_id: int, limit: int, offset: int = 0):
+    """Fetch the sales list with pagination and serialize it."""
     return [
         schemas.SaleOut.model_validate(s).model_dump(mode="json")
         for s in db.query(models.Sale)
         .filter(models.Sale.business_id == business_id)
         .order_by(models.Sale.sale_date.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     ]
 
 
-@router.get("/", response_model=List[schemas.SaleOut])
+def _count_sales(db: Session, business_id: int) -> int:
+    """Count total sales for pagination metadata."""
+    return db.query(func.count(models.Sale.id)).filter(models.Sale.business_id == business_id).scalar() or 0
+
+
+@router.get("/")
 def list_sales(
-    limit: int = 500,
+    limit: int = 50,
+    offset: int = 0,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # Cached 60s: the 500-row query is the most expensive round-trip to Neon.
-    # Safe to cache long — every mutation invalidates the entry.
-    return get_or_set(
-        f"sales_list:{current_user.business_id}:{limit}",
+    """List sales with server-side pagination. Returns {items, total, limit, offset}."""
+    bid = current_user.business_id
+    # Cache total count (changes rarely)
+    total = get_or_set(
+        f"sales_count:{bid}",
         60,
-        lambda: _load_sales(db, current_user.business_id, limit),
+        lambda: _count_sales(db, bid),
     )
+    # Cache the page (changes with every new sale)
+    items = get_or_set(
+        f"sales_list:{bid}:{limit}:{offset}",
+        60,
+        lambda: _load_sales(db, bid, limit, offset),
+    )
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.post("/", response_model=schemas.SaleOut, status_code=201)
@@ -109,6 +124,7 @@ def create_sale(
     db.commit()
     db.refresh(sale)
     invalidate("sales_list:")
+    invalidate("sales_count:")
     return sale
 
 
@@ -186,8 +202,10 @@ def upload_sales_csv(
             if "sale_date" in df.columns and pd.notna(row.get("sale_date")):
                 try:
                     sale_date = pd.to_datetime(row["sale_date"]).to_pydatetime()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.warning(f"CSV date parse failed for row: {exc}")
+                    sale_date = dt.datetime.utcnow()
 
             qty = int(row["quantity"])
             price = float(row["unit_price"])
@@ -236,6 +254,7 @@ def upload_sales_csv(
     db.commit()
     # Uploads also create products/customers, so bust both list caches.
     invalidate("sales_list:")
+    invalidate("sales_count:")
     invalidate("customers_list:")
 
     return {"rows_processed": int(len(df)), "sales_created": created, "rows_skipped": skipped}
