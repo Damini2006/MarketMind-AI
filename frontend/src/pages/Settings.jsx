@@ -265,44 +265,15 @@ function TwoFactorSection() {
 
 // ─── Install App Section ─────────────────────────────────────────────
 function InstallAppSection() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [isInstalled, setIsInstalled] = useState(false)
-  const [showInstructions, setShowInstructions] = useState(false)
-  const [installing, setInstalling] = useState(false)
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
       setIsInstalled(true)
-      return
     }
-    const handler = (e) => { e.preventDefault(); setDeferredPrompt(e) }
-    window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
   }, [])
 
-  const handleInstall = async () => {
-    setInstalling(true)
-    try {
-      if (deferredPrompt) {
-        deferredPrompt.prompt()
-        const { outcome } = await deferredPrompt.userChoice
-        if (outcome === 'accepted') setIsInstalled(true)
-        setDeferredPrompt(null)
-      } else {
-        setShowInstructions(true)
-      }
-    } catch {
-      setShowInstructions(true)
-    } finally {
-      setInstalling(false)
-    }
-  }
-
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent)
-  const isAndroid = /Android/i.test(navigator.userAgent)
-  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edg/i.test(navigator.userAgent)
-  const isEdge = /Edg/i.test(navigator.userAgent)
+  const openModal = () => window.dispatchEvent(new CustomEvent('open-install-modal'))
 
   if (isInstalled) {
     return (
@@ -337,22 +308,10 @@ function InstallAppSection() {
         <p className="text-xs text-slate-600 dark:text-slate-400 mb-4">
           Install on your device for faster access, offline support, and an app-like experience.
         </p>
-        <button onClick={handleInstall} disabled={installing}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-60">
-          <Download size={16} />
-          {installing ? 'Installing...' : deferredPrompt ? 'Install App Now' : isMobile ? 'Add to Home Screen' : 'Install as App'}
+        <button onClick={openModal}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all">
+          <Download size={16} /> View Install Guide
         </button>
-        {!deferredPrompt && !showInstructions && (
-          <div className="mt-3 space-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-            {isChrome && <p>💡 Look for the install icon 🖥️ in Chrome's address bar</p>}
-            {isEdge && <p>💡 Click ⋮ menu → Apps → "Install this site as an app"</p>}
-            {isAndroid && <p>💡 Tap ⋮ menu → "Add to Home screen"</p>}
-            {isIOS && <p>💡 Tap Share → "Add to Home Screen"</p>}
-            {!isChrome && !isEdge && !isAndroid && !isIOS && (
-              <p>💡 Use Chrome/Edge for easiest installation, or check your browser's menu for "Install" option</p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
