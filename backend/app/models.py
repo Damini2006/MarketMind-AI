@@ -376,6 +376,12 @@ class AuditLog(Base):
     resource_id = Column(Integer, nullable=True)
     ip_address = Column(String, nullable=True)
     user_agent = Column(Text, nullable=True)
+    device = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    is_suspicious = Column(Boolean, default=False, nullable=True)
+    suspicion_reason = Column(String, nullable=True)
     details = Column(Text, nullable=True)
     created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
 

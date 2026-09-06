@@ -195,6 +195,49 @@ def register(
     return user
 
 
+def _login_suspicion(db, user, device, location):
+    """Return (is_suspicious, reason) for a login based on prior history.
+
+    A login is flagged when the device or location has never been seen for
+    this user before. Fresh accounts (<3 prior logins) are never flagged so
+    first-time setup isn't noisy. Local/Unknown locations are treated as
+    neutral (dev machines can't be geolocated).
+    """
+    from sqlalchemy import func as sa_func
+
+    login_filter = (
+        models.AuditLog.user_id == user.id,
+        models.AuditLog.action_type == "login",
+    )
+    login_count = db.query(sa_func.count(models.AuditLog.id)).filter(*login_filter).scalar()
+    if not login_count or login_count < 3:
+        return False, None
+
+    # "Known" = every device/location this user has ever logged in from
+    # (distinct sets — no arbitrary recency window that testing noise can
+    # flush a real device out of).
+    known_devices = {
+        d for (d,) in db.query(models.AuditLog.device).filter(*login_filter).distinct() if d
+    }
+    known_locations = {
+        loc for (loc,) in db.query(models.AuditLog.location).filter(*login_filter).distinct() if loc
+    }
+
+    neutral_locations = {"Local", "Unknown"}
+    device_known = device in known_devices or not device or device == "Unknown device"
+    location_known = location in known_locations or location in neutral_locations
+
+    if device_known and location_known:
+        return False, None
+
+    reasons = []
+    if not device_known:
+        reasons.append("new device")
+    if not location_known:
+        reasons.append("new location")
+    return True, " and ".join(reasons)
+
+
 @router.post("/login", response_model=schemas.Token)
 def login(
     payload: schemas.LoginRequest,
@@ -225,9 +268,17 @@ def login(
         }
     )
 
-    # Log the login action to audit trail
+    # Log the login action to audit trail with device + location context,
+    # flagging logins from devices/locations the user has never used before.
     try:
+        from sqlalchemy import desc as sa_desc
         from .audit import log_action
+        from ..core.client_info import parse_device, geolocate
+
+        ua = request.headers.get("user-agent", "") if request else ""
+        device = parse_device(ua)
+        location, lat, lng = geolocate(ip)
+        is_suspicious, suspicion_reason = _login_suspicion(db, user, device, location)
         log_action(
             db=db,
             action="Logged in",
@@ -236,6 +287,14 @@ def login(
             user_id=user.id,
             user_name=user.full_name,
             business_id=user.business_id,
+            ip_address=ip,
+            user_agent=ua,
+            device=device,
+            location=location,
+            latitude=lat,
+            longitude=lng,
+            is_suspicious=is_suspicious,
+            suspicion_reason=suspicion_reason,
             details=f"Login via email: {payload.email}",
         )
     except Exception as exc:

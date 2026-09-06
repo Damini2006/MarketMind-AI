@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip, useMap } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 import api from '../../services/api'
 import { StatCard, Loading } from '../ui.jsx'
-import { IndianRupee, Users, Boxes, ShieldCheck, Database, AlertTriangle, FileWarning } from 'lucide-react'
+import { IndianRupee, Users, Boxes, ShieldCheck, Database, AlertTriangle, FileWarning, MapPinned } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext.jsx'
 
 export default function AdminDashboard() {
@@ -15,17 +17,22 @@ export default function AdminDashboard() {
     : undefined
   const [kpis, setKpis] = useState(null)
   const [teamCount, setTeamCount] = useState(0)
+  const [loginMap, setLoginMap] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       api.get('/analytics/kpis'),
       api.get('/users/').catch(() => ({ data: [] })),
-    ]).then(([kpiRes, teamRes]) => {
+      api.get('/system/login-map').catch(() => ({ data: null })),
+    ]).then(([kpiRes, teamRes, mapRes]) => {
       setKpis(kpiRes.data)
       setTeamCount(Array.isArray(teamRes.data) ? teamRes.data.length : 0)
+      setLoginMap(mapRes.data)
     }).finally(() => setLoading(false))
   }, [])
+
+  const mappedPoints = (loginMap?.items || []).filter((p) => p.latitude != null && p.longitude != null)
 
   if (loading) return <Loading label="Loading admin dashboard..." />
   if (!kpis) return null
@@ -104,6 +111,73 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* World Login Activity Map */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <MapPinned size={15} className="text-rose-500" />
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">World Login Activity</h3>
+          <span className="text-[10px] text-slate-400 ml-auto">
+            {mappedPoints.length} mapped · {loginMap?.total_logins ?? 0} total logins · {loginMap?.businesses?.length ?? 0} businesses
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 h-80 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            {mappedPoints.length > 0 ? (
+              <MapContainer center={[20.59, 78.96]} zoom={3} scrollWheelZoom={false} className="h-full w-full z-0">
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
+                <FitBounds points={mappedPoints} />
+                {mappedPoints.map((p, i) => (
+                  <CircleMarker
+                    key={i}
+                    center={[p.latitude, p.longitude]}
+                    radius={Math.min(6 + p.count * 1.5, 26)}
+                    pathOptions={{ color: '#e11d48', fillColor: '#f43f5e', fillOpacity: 0.55, weight: 1.5 }}
+                  >
+                    <MapTooltip direction="top" offset={[0, -6]}>
+                      <div className="text-xs">
+                        <strong>{p.location}</strong><br />
+                        {p.count} login{p.count === 1 ? '' : 's'}
+                        {p.businesses?.length > 0 ? ` · ${p.businesses.join(', ')}` : ''}
+                      </div>
+                    </MapTooltip>
+                  </CircleMarker>
+                ))}
+              </MapContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                <MapPinned size={30} className="opacity-40 text-slate-400 mb-2" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">No geolocated logins yet</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                  Pins appear once users sign in from real IP addresses — logins from this
+                  machine are recorded as “Local”.
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {!loginMap || loginMap.items.length === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">No login location data yet.</p>
+            ) : (
+              loginMap.items.slice(0, 12).map((p, i) => (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.latitude != null ? '#f43f5e' : '#94a3b8' }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{p.location}</p>
+                    {p.businesses?.length > 0 && (
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{p.businesses.join(', ')}</p>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">{p.count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Admin Quick Links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <a href="/team" className="card hover:shadow-md transition-shadow border-l-4 border-slate-700">
@@ -121,4 +195,16 @@ export default function AdminDashboard() {
       </div>
     </div>
   )
+}
+
+function FitBounds({ points }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!points || points.length === 0) return
+    map.fitBounds(
+      points.map((p) => [p.latitude, p.longitude]),
+      { padding: [40, 40], maxZoom: 6 }
+    )
+  }, [points, map])
+  return null
 }
