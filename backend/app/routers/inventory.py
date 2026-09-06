@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from .. import models, schemas
+from ..cache import get_or_set, invalidate
 from ..database import get_db
 from ..deps import get_current_user, require_roles
 
@@ -83,12 +84,18 @@ def _check_and_create_alert(db: Session, product: models.Product):
 
 @router.get("/products", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    return (
-        db.query(models.Product)
-        .filter(models.Product.business_id == current_user.business_id)
-        .order_by(models.Product.id.desc())
-        .all()
-    )
+    bid = current_user.business_id
+
+    def _load():
+        return [
+            schemas.ProductOut.model_validate(p).model_dump(mode="json")
+            for p in db.query(models.Product)
+            .filter(models.Product.business_id == bid)
+            .order_by(models.Product.id.desc())
+            .all()
+        ]
+
+    return get_or_set(f"inventory_products:{bid}", 30, _load)
 
 
 @router.post("/products", response_model=schemas.ProductOut, status_code=201)
@@ -108,6 +115,7 @@ def create_product(
         )
     db.commit()
     _check_and_create_alert(db, product)
+    invalidate("inventory_products:")
     return product
 
 
@@ -141,6 +149,7 @@ def update_stock(
     db.commit()
     db.refresh(product)
     _check_and_create_alert(db, product)
+    invalidate("inventory_products:")
     return product
 
 
@@ -245,4 +254,5 @@ def upload_products_csv(
             _check_and_create_alert(db, product)
 
     db.commit()
+    invalidate("inventory_products:")
     return {"rows_processed": int(len(df)), "products_created": created, "products_updated": updated, "rows_skipped": skipped}

@@ -125,6 +125,7 @@ def create_sale(
     db.refresh(sale)
     invalidate("sales_list:")
     invalidate("sales_count:")
+    invalidate("ai:")  # forecast/segmentation/churn/anomalies recompute on next call
     return sale
 
 
@@ -256,5 +257,6 @@ def upload_sales_csv(
     invalidate("sales_list:")
     invalidate("sales_count:")
     invalidate("customers_list:")
+    invalidate("ai:")
 
     return {"rows_processed": int(len(df)), "sales_created": created, "rows_skipped": skipped}
