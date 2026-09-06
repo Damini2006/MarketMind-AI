@@ -53,6 +53,10 @@ def _serialize(activity, user_name):
         "entity_id": getattr(activity, "resource_id", None),
         "description": getattr(activity, "details", ""),
         "ip_address": getattr(activity, "ip_address", None),
+        "device": getattr(activity, "device", None),
+        "location": getattr(activity, "location", None),
+        "is_suspicious": bool(getattr(activity, "is_suspicious", False)),
+        "suspicion_reason": getattr(activity, "suspicion_reason", None),
         "created_at": activity.created_at.isoformat() if activity.created_at else None,
     }
 
@@ -99,18 +103,43 @@ def get_recent_activity(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Get the most recent activity entries for dashboard widget."""
-    entries = (
-        db.query(models.AuditLog, models.User.full_name)
-        .join(models.User, models.AuditLog.user_id == models.User.id, isouter=True)
-        .filter(models.AuditLog.business_id == current_user.business_id)
-        .order_by(desc(models.AuditLog.created_at))
-        .limit(limit)
-        .all()
-    )
+    """Get the most recent activity entries for dashboard widget.
 
-    items = [_serialize(a, un) for a, un in entries]
-    return {"items": items}
+    Adjacent "Logged in" entries from the same user are collapsed into one
+    entry carrying a `repeat_count`, so the widget never shows one person
+    logging in a dozen times. The full audit trail is untouched.
+    """
+    from ..cache import get_or_set
+
+    def _load():
+        entries = (
+            db.query(models.AuditLog, models.User.full_name)
+            .join(models.User, models.AuditLog.user_id == models.User.id, isouter=True)
+            .filter(models.AuditLog.business_id == current_user.business_id)
+            .order_by(desc(models.AuditLog.created_at))
+            .limit(limit + 40)
+            .all()
+        )
+
+        items = [_serialize(a, un) for a, un in entries]
+        grouped = []
+        for it in items:
+            # Merge every adjacent login from the same user/account into one
+            # entry with a repeat_count (no time window — repeated logins from
+            # testing/tabs used to flood the widget with identical rows).
+            if (
+                grouped
+                and it.get("action") == "Logged in"
+                and grouped[-1].get("action") == "Logged in"
+                and grouped[-1].get("user_name") == it.get("user_name")
+                and grouped[-1].get("description") == it.get("description")
+            ):
+                grouped[-1]["repeat_count"] = grouped[-1].get("repeat_count", 1) + 1
+                continue
+            grouped.append(it)
+        return {"items": grouped[:limit]}
+
+    return get_or_set(f"activity_recent:{current_user.business_id}:{limit}", 30, _load)
 
 
 @router.get("/stats")
@@ -175,15 +204,20 @@ def get_activity_users(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Get activity counts per user."""
+    """Get activity counts per user.
+
+    Returns a list so the frontend can render one option per account
+    (id/name/count) in the user filter dropdown.
+    """
     business_id = current_user.business_id
     entries = (
-        db.query(models.User.full_name, models.AuditLog.id)
+        db.query(models.User.id, models.User.full_name, models.AuditLog.id)
         .join(models.AuditLog, models.AuditLog.user_id == models.User.id)
         .filter(models.AuditLog.business_id == business_id)
         .all()
     )
     user_counts = {}
-    for name, _ in entries:
-        user_counts[name] = user_counts.get(name, 0) + 1
-    return {"users": user_counts}
+    for uid, name, _ in entries:
+        row = user_counts.setdefault(uid, {"user_id": uid, "name": name, "count": 0})
+        row["count"] += 1
+    return {"users": sorted(user_counts.values(), key=lambda r: -r["count"])}

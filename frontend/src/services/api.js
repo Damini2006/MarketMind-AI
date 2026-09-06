@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+  import.meta.env.VITE_API_BASE_URL || "/api";
 
 // Origin that serves user-uploaded files (/uploads/...) — derived from the
 // API base so it stays correct when VITE_API_BASE_URL is overridden.
@@ -9,6 +9,7 @@ export const STATIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  timeout: 30000, // 30s — AI endpoints need time on cold Neon
   headers: {
     "Content-Type": "application/json",
   },
@@ -53,7 +54,7 @@ api.interceptors.response.use(
 // instantly while staying fresh within a short TTL. Any mutation (POST/PUT/
 // PATCH/DELETE) busts the whole cache, so refresh-after-create still fetches
 // the new row. Notifications are excluded so the bell stays live.
-const GET_CACHE_TTL = 60_000; // ms
+const GET_CACHE_TTL = 120_000; // 2 min — fewer Neon round-trips
 const getCache = new Map();
 
 const cacheKey = (config) => {

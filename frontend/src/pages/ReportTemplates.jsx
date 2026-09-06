@@ -407,7 +407,8 @@ export default function ReportTemplates() {
       api.get('/ai/clv').catch(() => ({ data: {} })),
       api.get('/analytics/pulse').catch(() => ({ data: {} })),
     ]).then(([kpis, sales, products, customers, invoices, anomalies, clv, pulse]) => {
-      const salesData = Array.isArray(sales.data) ? sales.data : sales.data.items || []
+      try {
+      const salesData = Array.isArray(sales.data) ? sales.data : (sales.data?.items || [])
       const productsData = Array.isArray(products.data) ? products.data : []
       const customersData = Array.isArray(customers.data) ? customers.data : []
       const invoiceData = Array.isArray(invoices.data) ? invoices.data : (invoices.data?.items || [])
@@ -466,7 +467,7 @@ export default function ReportTemplates() {
       const salesByDateArr = Object.values(salesByDate).sort((a, b) => a.date.localeCompare(b.date))
 
       setData({
-        kpis: kpis.data,
+        kpis: kpis.data || {},
         salesByDate: salesByDateArr,
         revenueByDay,
         recentSales,
@@ -482,6 +483,7 @@ export default function ReportTemplates() {
         invoices: invoiceCounts,
         pulse: pulse.data || {},
       })
+      } catch (e) { console.error('ReportTemplates data error:', e); setData({}) }
     })
     .finally(() => setLoading(false))
   }, [])
@@ -546,6 +548,14 @@ export default function ReportTemplates() {
   }
 
   if (loading) return <Loading label="Loading report data..." />
+  if (!data) return (
+    <div>
+      <PageHeader title="Report Templates" subtitle="0 templates available" />
+      <div className="card text-center py-10 text-slate-400">
+        <p>Failed to load report data. <button onClick={load} className="text-indigo-500 underline">Retry</button></p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="space-y-5">

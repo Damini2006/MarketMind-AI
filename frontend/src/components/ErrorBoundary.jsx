@@ -39,6 +39,11 @@ export default class ErrorBoundary extends Component {
               An unexpected error occurred. Don't worry, your data is safe.
             </p>
             {this.state.error && (
+              <p className="text-xs text-red-500 dark:text-red-400 mb-4 font-mono bg-red-50 dark:bg-red-950/30 p-2 rounded-lg">
+                {this.state.error.message || String(this.state.error)}
+              </p>
+            )}
+            {this.state.error && (
               <details className="mb-6 text-left">
                 <summary className="text-xs font-medium text-slate-400 cursor-pointer hover:text-slate-600 dark:hover:text-slate-300">
                   Technical details

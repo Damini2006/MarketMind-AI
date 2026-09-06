@@ -27,6 +27,9 @@ export default function Forecasting() {
       .then((res) => {
         if (isMounted) setData(res.data)
       })
+      .catch(() => {
+        if (isMounted) setData(null)
+      })
       .finally(() => {
         if (isMounted) setLoading(false)
       })

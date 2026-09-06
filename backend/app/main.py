@@ -98,7 +98,6 @@ def _keepalive() -> None:
 
 try:
     _ping()
-    _ping()
 except Exception as exc:
     import logging
     logging.warning(f"Initial Neon keepalive ping failed: {exc}")
@@ -141,17 +140,22 @@ def startup_seed():
     every --reload restart. The cache warm-up already follows this pattern.
     """
     def _seed():
-        db = SessionLocal()
         try:
-            seed_if_empty(db)
+            db = SessionLocal()
+            try:
+                # Quick check: skip if data already exists
+                from sqlalchemy import text as _text
+                count = db.execute(_text("SELECT COUNT(*) FROM users")).scalar()
+                if count and count > 0:
+                    return  # Already seeded, skip entirely
+                seed_if_empty(db)
+            finally:
+                db.close()
         except Exception as exc:
             import logging
-            logging.warning(f"Startup seed failed: {exc}")
-        finally:
-            db.close()
+            logging.warning(f"Startup seed skipped: {exc}")
 
     threading.Thread(target=_seed, daemon=True).start()
-    _start_cache_warmup()
 
 
 def _start_cache_warmup() -> None:
@@ -204,8 +208,20 @@ def _start_cache_warmup() -> None:
     threading.Thread(target=_warm, daemon=True).start()
 
 
+_warmup_done = False
+
+def _ensure_warmup():
+    """Lazy warm-up: runs once on the first request, not at startup."""
+    global _warmup_done
+    if _warmup_done:
+        return
+    _warmup_done = True
+    threading.Thread(target=_start_cache_warmup, daemon=True).start()
+
+
 @app.get("/")
 def root():
+    _ensure_warmup()
     return {
         "status": "ok",
         "message": "MarketMind AI API is running. Visit /docs for interactive API documentation.",

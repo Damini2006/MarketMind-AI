@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip, useMap } from 'react-leaflet'
+import 'leaflet/dist/leaflet.css'
 import api from '../services/api'
 import { Loading, PageHeader } from '../components/ui.jsx'
-import { ClipboardList, Search, Download, User, Globe, Clock, Filter, BarChart3, Zap, TrendingUp } from 'lucide-react'
+import { ClipboardList, Search, Download, User, Globe, Clock, Filter, BarChart3, Zap, TrendingUp, MapPin, MapPinned } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 
@@ -12,6 +14,8 @@ export default function AuditTrail() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [actionFilter, setActionFilter] = useState('all')
+  const [suspiciousOnly, setSuspiciousOnly] = useState(false)
+  const [perf, setPerf] = useState(null)
 
   const load = useCallback(() => {
     api.get('/audit/logs')
@@ -22,14 +26,40 @@ export default function AuditTrail() {
 
   useEffect(() => { load() }, [load])
 
+  // Performance telemetry (cache hit rates + endpoint latencies)
+  useEffect(() => {
+    api.get('/system/cache-stats')
+      .then((res) => setPerf(res.data))
+      .catch(() => setPerf(null))
+  }, [])
+
   const filtered = logs.filter((log) => {
     const matchesSearch = !search ||
       log.user?.toLowerCase().includes(search.toLowerCase()) ||
       log.action?.toLowerCase().includes(search.toLowerCase()) ||
       log.resource?.toLowerCase().includes(search.toLowerCase())
     const matchesAction = actionFilter === 'all' || log.action_type === actionFilter
-    return matchesSearch && matchesAction
+    const matchesSuspicious = !suspiciousOnly || log.is_suspicious
+    return matchesSearch && matchesAction && matchesSuspicious
   })
+
+  const suspiciousCount = logs.filter((l) => l.is_suspicious).length
+
+  // Aggregate login entries by location for the map view
+  const loginLocations = useMemo(() => {
+    const counts = {}
+    logs.forEach((l) => {
+      if (!l.location) return
+      const key = `${l.location}|${l.latitude ?? ''}|${l.longitude ?? ''}`
+      if (!counts[key]) {
+        counts[key] = { location: l.location, latitude: l.latitude, longitude: l.longitude, count: 0, lastSeen: l.timestamp }
+      }
+      counts[key].count += 1
+      if (l.timestamp > counts[key].lastSeen) counts[key].lastSeen = l.timestamp
+    })
+    return Object.values(counts).sort((a, b) => b.count - a.count)
+  }, [logs])
+  const mappedLocations = loginLocations.filter((p) => p.latitude != null && p.longitude != null)
 
   // Generate heatmap data from logs
   const heatmapData = (() => {
@@ -66,14 +96,14 @@ export default function AuditTrail() {
   const actionTypes = [...new Set(logs.map(l => l.action_type))].filter(Boolean)
 
   const handleExportPDF = () => {
-    const headers = ['Timestamp', 'User', 'Action', 'Resource', 'IP Address', 'Details']
-    const rows = filtered.map(l => [l.timestamp, l.user, l.action, l.resource, l.ip_address, l.details || ''])
+    const headers = ['Timestamp', 'User', 'Action', 'Resource', 'IP Address', 'Device', 'Location', 'Suspicious', 'Details']
+    const rows = filtered.map(l => [l.timestamp, l.user, l.action, l.resource, l.ip_address, l.device || '—', l.location || '—', l.is_suspicious ? 'YES' : '—', l.details || ''])
     exportToPDF({ title: 'Audit Trail Report', subtitle: `${filtered.length} events`, headers, rows, filename: 'audit-trail' })
   }
 
   const handleExportExcel = () => {
-    const headers = ['Timestamp', 'User', 'Action', 'Resource', 'IP Address', 'Details']
-    const rows = filtered.map(l => [l.timestamp, l.user, l.action, l.resource, l.ip_address, l.details || ''])
+    const headers = ['Timestamp', 'User', 'Action', 'Resource', 'IP Address', 'Device', 'Location', 'Suspicious', 'Details']
+    const rows = filtered.map(l => [l.timestamp, l.user, l.action, l.resource, l.ip_address, l.device || '—', l.location || '—', l.is_suspicious ? 'YES' : '—', l.details || ''])
     exportToExcel({ title: 'Audit Trail Report', headers, rows, filename: 'audit-trail' })
   }
 
@@ -125,6 +155,10 @@ export default function AuditTrail() {
         <div className="card text-center p-3">
           <p className="text-2xl font-bold text-purple-600">{logs.filter(l => l.action_type === 'login').length}</p>
           <p className="text-[10px] text-slate-500 uppercase">Logins</p>
+        </div>
+        <div className="card text-center p-3">
+          <p className="text-2xl font-bold text-rose-500">{suspiciousCount}</p>
+          <p className="text-[10px] text-slate-500 uppercase">Suspicious</p>
         </div>
       </div>
 
@@ -199,6 +233,78 @@ export default function AuditTrail() {
         </div>
       )}
 
+      {/* Login Locations Map */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <MapPinned size={14} className="text-rose-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">Login Locations</span>
+          <span className="text-[10px] text-slate-400 ml-auto">
+            {mappedLocations.length} mapped · {loginLocations.length} total
+          </span>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 h-72 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+            {mappedLocations.length > 0 ? (
+              <MapContainer
+                center={[20.59, 78.96]}
+                zoom={4}
+                scrollWheelZoom={false}
+                className="h-full w-full z-0"
+              >
+                <TileLayer
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                />
+                <FitBounds points={mappedLocations} />
+                {mappedLocations.map((p, i) => (
+                  <CircleMarker
+                    key={i}
+                    center={[p.latitude, p.longitude]}
+                    radius={Math.min(6 + p.count * 2, 22)}
+                    pathOptions={{ color: '#e11d48', fillColor: '#f43f5e', fillOpacity: 0.55, weight: 1.5 }}
+                  >
+                    <MapTooltip direction="top" offset={[0, -6]}>
+                      <div className="text-xs">
+                        <strong>{p.location}</strong><br />
+                        {p.count} login{p.count === 1 ? '' : 's'}
+                        {p.lastSeen ? ` · last ${new Date(p.lastSeen).toLocaleDateString()}` : ''}
+                      </div>
+                    </MapTooltip>
+                  </CircleMarker>
+                ))}
+              </MapContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center px-6">
+                <MapPin size={30} className="opacity-40 text-slate-400 mb-2" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">No mapped logins yet</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
+                  Pins appear here once users sign in from real IP addresses.
+                  Logins from this device are recorded as "Local".
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {loginLocations.length === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">No login location data yet.</p>
+            ) : (
+              loginLocations.map((p, i) => (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/50">
+                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.latitude != null ? '#f43f5e' : '#94a3b8' }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{p.location}</p>
+                    {p.lastSeen && (
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">last {new Date(p.lastSeen).toLocaleString()}</p>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0">{p.count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Filters */}
       <div className="card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -222,6 +328,15 @@ export default function AuditTrail() {
               <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
             ))}
           </select>
+          <label className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={suspiciousOnly}
+              onChange={(e) => setSuspiciousOnly(e.target.checked)}
+              className="accent-rose-500"
+            />
+            Suspicious only
+          </label>
         </div>
       </div>
 
@@ -235,13 +350,15 @@ export default function AuditTrail() {
               <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase">Action</th>
               <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase">Resource</th>
               <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase">IP Address</th>
+              <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase hidden lg:table-cell">Device</th>
+              <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase hidden lg:table-cell">Location</th>
               <th className="text-left py-3 px-3 text-[10px] font-semibold text-slate-500 uppercase hidden md:table-cell">Details</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-10 text-center text-slate-400">
+                <td colSpan={8} className="py-10 text-center text-slate-400">
                   <ClipboardList size={24} className="mx-auto mb-2 opacity-40" />
                   <p className="text-sm">No audit events found.</p>
                 </td>
@@ -261,9 +378,19 @@ export default function AuditTrail() {
                   </div>
                 </td>
                 <td className="py-2.5 px-3">
-                  <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getActionColor(log.action_type)}`}>
-                    {log.action}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-semibold ${getActionColor(log.action_type)}`}>
+                      {log.action}
+                    </span>
+                    {log.is_suspicious && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400"
+                        title={log.suspicion_reason || 'Suspicious login'}
+                      >
+                        ⚠ Suspicious
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-2.5 px-3 text-xs text-slate-600 dark:text-slate-400">{log.resource || '—'}</td>
                 <td className="py-2.5 px-3">
@@ -272,14 +399,74 @@ export default function AuditTrail() {
                     {log.ip_address || '127.0.0.1'}
                   </div>
                 </td>
+                <td className="py-2.5 px-3 text-[11px] text-slate-500 hidden lg:table-cell">{log.device || '—'}</td>
+                <td className="py-2.5 px-3 text-[11px] text-slate-500 hidden lg:table-cell">{log.location || '—'}</td>
                 <td className="py-2.5 px-3 text-[11px] text-slate-500 hidden md:table-cell">{log.details || '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Performance Stats */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap size={14} className="text-emerald-500" />
+          <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">System Performance</span>
+          <span className="text-[10px] text-slate-400 ml-auto">in-memory · resets on restart</span>
+        </div>
+        {!perf ? (
+          <p className="text-xs text-slate-400">Performance stats unavailable.</p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="space-y-3">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600">{(perf.hit_rate * 100).toFixed(0)}%</p>
+                  <p className="text-[10px] text-slate-500 uppercase">Cache hit rate</p>
+                </div>
+                <p className="text-[10px] text-slate-400">{perf.hits} hits · {perf.misses} misses</p>
+              </div>
+              <div className="flex gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>⚡ avg compute <b className="text-slate-700 dark:text-slate-200">{perf.avg_compute_ms}ms</b></span>
+                <span>🗄️ entries <b className="text-slate-700 dark:text-slate-200">{perf.cache_entries}</b></span>
+                <span>⏱️ uptime <b className="text-slate-700 dark:text-slate-200">{(perf.uptime_seconds / 60).toFixed(1)}m</b></span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {Object.entries(perf.prefixes || {}).map(([prefix, p]) => (
+                  <span key={prefix} className="px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800 text-[10px] text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-700">
+                    <b className="text-slate-800 dark:text-slate-200">{prefix}</b> {(p.hit_rate * 100).toFixed(0)}%
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-2">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase mb-2">Slowest endpoints</p>
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                {Object.entries(perf.endpoint_latency_ms || {}).slice(0, 10).map(([path, e]) => (
+                  <div key={path} className="flex items-center gap-2 text-[11px]">
+                    <span className="font-mono text-slate-600 dark:text-slate-400 truncate flex-1">{path}</span>
+                    <span className="text-slate-400 shrink-0">{e.count}×</span>
+                    <span className="w-16 text-right font-semibold text-slate-700 dark:text-slate-200 shrink-0">{e.avg_ms}ms</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-
+function FitBounds({ points }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!points || points.length === 0) return
+    map.fitBounds(
+      points.map((p) => [p.latitude, p.longitude]),
+      { padding: [40, 40], maxZoom: 8 }
+    )
+  }, [points, map])
+  return null
+}

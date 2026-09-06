@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import api from '../../services/api'
 
 import DetailModal from '../DetailModal.jsx'
-import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight, Download, FileText } from 'lucide-react'
+import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight, Download, FileText, Smartphone } from 'lucide-react'
 import { exportToPDF, exportToExcel } from '../../utils/exportUtils'
 import { CountUp, useCountUp } from '../../hooks/useCountUp.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
@@ -343,6 +343,20 @@ function RecentActivityWidget() {
             <p className="text-sm text-slate-700 dark:text-slate-300 truncate flex-1">
               <span className="font-medium">{item.user_name}</span>
               <span className="text-slate-500 dark:text-slate-400"> {item.description.toLowerCase()} </span>
+              {item.is_suspicious && (
+                <span className="inline-flex items-center px-1 py-0.5 rounded text-[10px] font-bold text-rose-500" title={item.suspicion_reason || 'Suspicious login'}>⚠</span>
+              )}
+              {item.repeat_count > 1 && (
+                <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] font-semibold" title={`${item.repeat_count} times in the last few minutes`}>
+                  ×{item.repeat_count}
+                </span>
+              )}
+              {item.device && (
+                <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] text-slate-400 dark:text-slate-500" title={item.device}>
+                  <Smartphone size={9} className="shrink-0" />
+                  <span className="truncate max-w-[110px]">{item.device}</span>
+                </span>
+              )}
             </p>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0 flex items-center gap-1">
               <Clock size={10} />

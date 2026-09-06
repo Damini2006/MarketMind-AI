@@ -14,26 +14,11 @@ import api, {
 
 const AuthContext = createContext(null);
 
-// Warm the frontend GET cache with every list page's data so they all render
-// instantly right after login or a page refresh — no spinner on first visit.
-// Fire-and-forget: results land in the axios cache, no state touched here.
-// The team list is role-restricted (owner/admin), so only prefetch it for
-// roles that can actually open the Team page.
-const TEAM_ROLES = ['business_owner', 'admin'];
-
+// Only prefetch KPIs on boot — the most critical dashboard data.
+// Other pages lazy-load their data when navigated to, cutting boot time
+// from 10+ sequential Neon round-trips to just 1.
 const prefetchCore = (role) => {
-  Promise.allSettled([
-    getKPIs(),
-    getSales(),
-    getCustomers(),
-    getProducts(),
-    getInvoices(),
-    getCategories(),
-    getSuppliers(),
-    getDatasets(),
-    TEAM_ROLES.includes(role) ? getTeamMembers() : Promise.resolve(),
-    getInventoryAlerts(),
-  ]);
+  Promise.allSettled([getKPIs()]);
 };
 
 export function AuthProvider({ children }) {

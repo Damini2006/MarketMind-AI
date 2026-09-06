@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { useAuth } from './context/AuthContext.jsx'
 import './i18n'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import SplashScreen from './components/SplashScreen.jsx'
 import CommandPalette from './components/CommandPalette.jsx'
 import InstallBanner from './components/InstallBanner.jsx'
 import OnboardingWizard from './components/OnboardingWizard.jsx'
@@ -89,6 +90,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
+    <SplashScreen>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -161,6 +163,7 @@ export default function App() {
         </Routes>
         </Suspense>
       </div>
+    </SplashScreen>
     </ErrorBoundary>
   )
 }
