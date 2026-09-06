@@ -1,6 +1,6 @@
 import datetime as dt
 from sqlalchemy import (
-    Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Text, Date
+    JSON, Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Text, Date
 )
 from sqlalchemy.orm import relationship
 from .database import Base
@@ -316,7 +316,16 @@ class ProductRecommendation(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     recommendation_type = Column(String, nullable=True)  # cross_sell, upsell
     score = Column(Float, nullable=True)
+
+    collaborative_score = Column(Float, nullable=True)
+    association_score = Column(Float, nullable=True)
+    popularity_score = Column(Float, nullable=True)
+    price_score = Column(Float, nullable=True)
+    signal_sources = Column(JSON, nullable=True)
+
+
     generated_at = Column(DateTime, default=dt.datetime.utcnow)
+    
 
     customer = relationship("Customer", back_populates="recommendations")
     product = relationship("Product", back_populates="recommendations")
