@@ -42,6 +42,7 @@ from .routers.websocket_alerts import router as ws_router
 from .routers.audit import router as audit_router
 from .routers.user_data import router as user_data_router
 from .routers.activity import router as activity_router
+from .routers.system import router as system_router
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -57,6 +58,19 @@ app = FastAPI(
 
 # Compress JSON responses (the big list payloads: sales, customers, KPIs...)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+# ── request latency telemetry for the system stats endpoint ──
+@app.middleware("http")
+async def record_request_latency(request, call_next):
+    import time as _t
+
+    from .routers.system import record_request
+
+    t0 = _t.perf_counter()
+    response = await call_next(request)
+    record_request(request.url.path, (_t.perf_counter() - t0) * 1000.0)
+    return response
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -114,16 +128,29 @@ app.include_router(ws_router)
 app.include_router(audit_router)
 app.include_router(user_data_router)
 app.include_router(activity_router)
+app.include_router(system_router)
 
 
 @app.on_event("startup")
 def startup_seed():
-    """Runs on backend server start to seed database if empty."""
-    db = SessionLocal()
-    try:
-        seed_if_empty(db)
-    finally:
-        db.close()
+    """Runs on backend server start to seed database if empty.
+
+    Runs on a background thread: seeding touches every business (idempotent
+    demo-data + activity-log backfill) and each one costs several Neon
+    round-trips, so doing it inline would block the API for minutes after
+    every --reload restart. The cache warm-up already follows this pattern.
+    """
+    def _seed():
+        db = SessionLocal()
+        try:
+            seed_if_empty(db)
+        except Exception as exc:
+            import logging
+            logging.warning(f"Startup seed failed: {exc}")
+        finally:
+            db.close()
+
+    threading.Thread(target=_seed, daemon=True).start()
     _start_cache_warmup()
 
 
@@ -162,8 +189,12 @@ def _start_cache_warmup() -> None:
                     ai.get_customer_segmentation(db=wdb, current_user=fake)
                     ai.get_churn_predictions(db=wdb, current_user=fake)
                     ai.get_all_recommendations(db=wdb, current_user=fake)
-                    ai.get_anomaly_alerts(db=wdb, current_user=fake)
+                    # min_confidence must match what FastAPI passes for the
+                    # default so the warm cache key equals the request key.
+                    ai.get_anomaly_alerts(min_confidence=0.0, db=wdb, current_user=fake)
+                    ai.get_customer_lifetime_value(db=wdb, current_user=fake)
                     notif_router._sync_notifications(wdb, bid)
+                    notif_router.unread_count(db=wdb, current_user=fake)
                 finally:
                     wdb.close()
             except Exception as exc:
