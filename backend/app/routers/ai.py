@@ -91,7 +91,7 @@ def _logistic(x: float) -> float:
 # ---------------------------------------------------------------------------
 @router.get("/forecast")
 @router.get("/forecasting")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_sales_forecast(
     horizon_days: int = 14,
     db: Session = Depends(get_db),
@@ -271,7 +271,7 @@ def _name_clusters(stats: List[dict], labels: np.ndarray) -> Dict[int, str]:
 
 
 @router.get("/segmentation")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_customer_segmentation(
     db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ) -> Dict[str, Any]:
@@ -382,7 +382,7 @@ def get_customer_segmentation(
 #   - Generates personalized recommendations from each customer's own signals
 
 @router.get("/churn")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_churn_predictions(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
@@ -405,7 +405,7 @@ def train_recommendations(
     return ml_recs.train_recommendation_model(db, current_user.business_id)
 
 @router.get("/recommendations")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_all_recommendations(
     db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ) -> Dict[str, Any]:
@@ -430,12 +430,18 @@ def get_all_recommendations(
         .all()
     )
 
+    # Batch-optimised: 5 queries total instead of ~5 per customer (N+1),
+    # which cut this endpoint from ~17s to well under 5s on Neon.
+    batch = ml_recs.get_all_recommendations_batch(db, current_user.business_id, [c.id for c in customers], limit=3)
+    by_id = {c.id: c for c in customers}
     rows = []
-    for c in customers:
-        recs = ml_recs.get_personalized_recommendations(db, current_user.business_id, c.id, limit=3)
+    for cid, recs in batch:
+        c = by_id.get(cid)
+        if not c:
+            continue
         if recs:
             rows.append({
-                "customer_id": c.id,
+                "customer_id": cid,
                 "customer_name": c.name,
                 "recommended_products": [r["name"] for r in recs],
                 "reason": "Based on purchase history and similar customers."
@@ -487,7 +493,7 @@ def _is_material_outlier(sale: models.Sale) -> bool:
 
 
 @router.get("/anomalies")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_anomaly_alerts(
     min_confidence: float = 0.0,
     db: Session = Depends(get_db),
@@ -554,7 +560,7 @@ def rescan_anomalies(
 
 
 @router.get("/clv")
-@ttl_cache(ttl=120)
+@ttl_cache(ttl=600)
 def get_customer_lifetime_value(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
