@@ -38,6 +38,7 @@ def create_customer(
     db.commit()
     db.refresh(customer)
     invalidate("customers_list:")
+    invalidate("ai:")
     return customer
 
 
@@ -75,6 +76,7 @@ def delete_customer(
     db.delete(customer)
     db.commit()
     invalidate("customers_list:")
+    invalidate("ai:")
     return None
 
 
@@ -133,4 +135,5 @@ def upload_customers_csv(
 
     db.commit()
     invalidate("customers_list:")
+    invalidate("ai:")
     return {"rows_processed": int(len(df)), "customers_created": created, "rows_skipped": skipped}
