@@ -344,11 +344,11 @@ test(
     owner,
     data={
         "category": "Groceries",
-        "region": "Urban",
-        "seasonality": 1.2,
-        "demand_index": 1.1,
-        "price_index": 1.0,
-        "promotion_active": True,
+        "region": "South",
+        "seasonality": "Regular",
+        "demand": 500,
+        "price": 200,
+        "promotion": "No",
     },
     expect=200,
 )
