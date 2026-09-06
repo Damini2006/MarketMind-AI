@@ -8,6 +8,7 @@ from .. import models
 from ..database import get_db
 from ..deps import get_current_user
 from ..ml.forecasting import forecast_future_sales
+from ..ml.churn import generate_churn_predictions
 
 router = APIRouter(prefix="/api/ai", tags=["AI Intelligence"])
 
@@ -256,53 +257,463 @@ def get_customer_segmentation(
 
 @router.get("/churn")
 def get_churn_predictions(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
-    customers = db.query(models.Customer).all()
-    if not customers:
-        return {"rows": [], "accuracy": 0, "precision": 0, "f1": 0}
+    """
+    Generate AI-based customer churn predictions.
+    """
+    try:
+        return generate_churn_predictions(db)
 
-    now = dt.datetime.utcnow()
-    rows = []
+    except Exception as e:
+        return {
+            "error": str(e),
+            "customers_analyzed": 0,
+            "rows": [],
+        }
 
-    for c in customers:
-        last_sale = (
-            db.query(models.Sale)
-            .filter(models.Sale.customer_id == c.id)
-            .order_by(models.Sale.sale_date.desc())
-            .first()
-        )
 
-        days_inactive = (
-            (now - last_sale.sale_date).days
-            if last_sale and last_sale.sale_date
-            else 45
-        )
+# 03
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
 
-        if days_inactive > 60:
-            risk = "High"
-            prob = 0.88
-            rec = "Offer 15% discount code & send re-engagement email."
-        elif days_inactive > 30:
-            risk = "Medium"
-            prob = 0.45
-            rec = "Send product recommendations based on past purchases."
-        else:
-            risk = "Low"
-            prob = 0.12
-            rec = "Maintain regular communication & customer support."
+#     try:
+#         from sqlalchemy.orm import joinedload
 
-        rows.append(
-            {
-                "customer_id": c.id,
-                "customer_name": c.name,
-                "risk_category": risk,
-                "churn_probability": prob,
-                "recommendation": rec,
-            }
-        )
+#         recommendations = (
+#             db.query(models.ProductRecommendation)
+#             .options(
+#                 joinedload(models.ProductRecommendation.customer),
+#                 joinedload(models.ProductRecommendation.product).joinedload(
+#                     models.Product.category
+#                 ),
+#             )
+#             .order_by(
+#                 models.ProductRecommendation.customer_id,
+#                 models.ProductRecommendation.score.desc(),
+#             )
+#             .all()
+#         )
 
-    return {"accuracy": 0.91, "precision": 0.88, "f1": 0.89, "rows": rows}
+#         if not recommendations:
+#             return {
+#                 "customers_analyzed": 0,
+#                 "recommendations_generated": 0,
+#                 "rows": [],
+#             }
+
+#         rows_by_customer = {}
+
+#         for rec in recommendations:
+
+#             customer = rec.customer
+#             product = rec.product
+
+#             if customer is None or product is None:
+#                 continue
+
+#             customer_id = customer.id
+
+#             if customer_id not in rows_by_customer:
+#                 rows_by_customer[customer_id] = {
+#                     "customer_id": customer_id,
+#                     "customer_name": customer.full_name,
+#                     "average_order_value": None,
+#                     "total_orders": None,
+#                     "purchased_product_count": None,
+#                     "recency_days": None,
+#                     "recommendations": [],
+#                 }
+
+#             category_name = (
+#                 product.category.category_name
+#                 if product.category
+#                 else None
+#             )
+
+#             recommendation = {
+#                 "product_id": product.id,
+#                 "product_name": product.name,
+#                 "category": category_name,
+#                 "price": float(product.selling_price or 0),
+#                 "inventory_available": 0,
+#                 "recommendation_type": rec.recommendation_type,
+#                 "score": round(float(rec.score or 0), 4),
+#                 "reason": (
+#                     f"Recommended as a "
+#                     f"{(rec.recommendation_type or 'product').replace('_', ' ')} "
+#                     "based on customer purchasing behaviour."
+#                 ),
+#                 "signals": {
+#                     "collaborative_score": 0,
+#                     "association_score": 0,
+#                     "popularity_score": float(rec.score or 0),
+#                     "price_score": 0,
+#                     "signal_sources": ["popularity"],
+#                 },
+#             }
+
+#             rows_by_customer[customer_id]["recommendations"].append(
+#                 recommendation
+#             )
+
+#         rows = list(rows_by_customer.values())
+
+#         return {
+#             "customers_analyzed": len(rows),
+#             "recommendations_generated": sum(
+#                 len(row["recommendations"])
+#                 for row in rows
+#             ),
+#             "rows": rows,
+#         }
+
+#     except Exception as e:
+#         print("RECOMMENDATION API ERROR:", repr(e))
+
+#         return {
+#             "error": str(e),
+#             "customers_analyzed": 0,
+#             "recommendations_generated": 0,
+#             "rows": [],
+#         }
+
+
+
+# 02
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
+
+#     try:
+#         recommendations = (
+#             db.query(models.ProductRecommendation)
+#             .order_by(
+#                 models.ProductRecommendation.customer_id,
+#                 models.ProductRecommendation.score.desc(),
+#             )
+#             .all()
+#         )
+
+#         if not recommendations:
+#             return {
+#                 "customers_analyzed": 0,
+#                 "recommendations_generated": 0,
+#                 "rows": [],
+#             }
+
+#         rows_by_customer = {}
+
+#         for rec in recommendations:
+#             customer = rec.customer
+#             product = rec.product
+
+#             if customer is None or product is None:
+#                 continue
+
+#             customer_id = customer.id
+
+#             if customer_id not in rows_by_customer:
+#                 rows_by_customer[customer_id] = {
+#                     "customer_id": customer_id,
+#                     "customer_name": customer.full_name,
+#                     "recommendations": [],
+#                     "recommended_products": [],
+#                     "reason": (
+#                         "AI recommendation generated from customer "
+#                         "purchasing patterns."
+#                     ),
+#                 }
+
+#             category_name = (
+#                 product.category.category_name
+#                 if product.category
+#                 else None
+#             )
+
+#             recommendation = {
+#                 "product_id": product.id,
+#                 "product_name": product.name,
+#                 "category": category_name,
+#                 "price": float(product.selling_price or 0),
+#                 "recommendation_type": rec.recommendation_type,
+#                 "score": round(float(rec.score or 0), 4),
+#             }
+
+#             rows_by_customer[customer_id]["recommendations"].append(
+#                 recommendation
+#             )
+
+#             rows_by_customer[customer_id]["recommended_products"].append(
+#                 product.name
+#             )
+
+#         rows = list(rows_by_customer.values())
+
+#         return {
+#             "customers_analyzed": len(rows),
+#             "recommendations_generated": sum(
+#                 len(row["recommendations"])
+#                 for row in rows
+#             ),
+#             "rows": rows,
+#         }
+
+#     except Exception as e:
+#         print("RECOMMENDATION API ERROR:", repr(e))
+
+#         return {
+#             "error": str(e),
+#             "customers_analyzed": 0,
+#             "recommendations_generated": 0,
+#             "rows": [],
+#         }
+
+
+
+# 01
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
+
+#     try:
+#         recommendations = (
+#             db.query(models.ProductRecommendation)
+#             .order_by(
+#                 models.ProductRecommendation.customer_id,
+#                 models.ProductRecommendation.score.desc(),
+#             )
+#             .all()
+#         )
+
+#         if not recommendations:
+#             return {
+#                 "customers_analyzed": 0,
+#                 "recommendations_generated": 0,
+#                 "rows": [],
+#             }
+
+#         rows_by_customer = {}
+
+#         for rec in recommendations:
+
+#             customer = rec.customer
+#             product = rec.product
+
+#             if customer is None or product is None:
+#                 continue
+
+#             customer_id = customer.id
+
+#             if customer_id not in rows_by_customer:
+#                 rows_by_customer[customer_id] = {
+#                     "customer_id": customer_id,
+#                     "customer_name": customer.full_name,
+#                     "recommendations": [],
+#                     "recommended_products": [],
+#                     "reason": None,
+#                 }
+
+#             recommendation = {
+#                 "product_id": product.id,
+#                 "product_name": product.name,
+#                 "category": (
+#                     product.category.name
+#                     if getattr(product, "category", None)
+#                     else None
+#                 ),
+#                 "price": float(product.selling_price or 0),
+#                 "recommendation_type": rec.recommendation_type,
+#                 "score": round(float(rec.score or 0), 4),
+#             }
+
+#             rows_by_customer[customer_id]["recommendations"].append(
+#                 recommendation
+#             )
+
+#             rows_by_customer[customer_id]["recommended_products"].append(
+#                 product.name
+#             )
+
+#             if rows_by_customer[customer_id]["reason"] is None:
+#                 rows_by_customer[customer_id]["reason"] = (
+#                     "AI recommendation generated from customer purchasing patterns."
+#                 )
+
+#         rows = list(rows_by_customer.values())
+
+#         return {
+#             "customers_analyzed": len(rows),
+#             "recommendations_generated": sum(
+#                 len(row["recommendations"])
+#                 for row in rows
+#             ),
+#             "rows": rows,
+#         }
+
+#     except Exception as e:
+#         print("RECOMMENDATION API ERROR:", repr(e))
+
+#         return {
+#             "error": str(e),
+#             "customers_analyzed": 0,
+#             "recommendations_generated": 0,
+#             "rows": [],
+#         }
+
+
+
+    
+
+
+
+
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
+
+#     try:
+#         recommendations = (
+#             db.query(models.ProductRecommendation)
+#             .order_by(
+#                 models.ProductRecommendation.customer_id,
+#                 models.ProductRecommendation.score.desc(),
+#             )
+#             .all()
+#         )
+
+#         if not recommendations:
+#             return {
+#                 "customers_analyzed": 0,
+#                 "recommendations_generated": 0,
+#                 "rows": [],
+#             }
+
+#         rows_by_customer = {}
+
+#         for rec in recommendations:
+#             customer = rec.customer
+
+#             if customer is None:
+#                 continue
+
+#             if customer.id not in rows_by_customer:
+#                 rows_by_customer[customer.id] = {
+#                     "customer_id": customer.id,
+#                     "customer_name": customer.name,
+#                     "recommendations": [],
+#                     "recommended_products": [],
+#                     "reason": None,
+#                 }
+
+#             product = rec.product
+
+#             if product is None:
+#                 continue
+
+#             recommendation = {
+#                 "product_id": product.id,
+#                 "product_name": product.name,
+#                 "category": getattr(product, "category", None),
+#                 "price": float(product.selling_price or 0),
+#                 "recommendation_type": rec.recommendation_type,
+#                 "score": round(float(rec.score or 0), 4),
+#             }
+
+#             rows_by_customer[customer.id]["recommendations"].append(
+#                 recommendation
+#             )
+
+#             rows_by_customer[customer.id]["recommended_products"].append(
+#                 product.name
+#             )
+
+#             if rows_by_customer[customer.id]["reason"] is None:
+#                 rows_by_customer[customer.id]["reason"] = (
+#                     "AI recommendation generated from customer purchasing patterns."
+#                 )
+
+#         rows = list(rows_by_customer.values())
+
+#         return {
+#             "customers_analyzed": len(rows),
+#             "recommendations_generated": sum(
+#                 len(row["recommendations"]) for row in rows
+#             ),
+#             "rows": rows,
+#         }
+
+#     except Exception as e:
+#         return {
+#             "error": str(e),
+#             "customers_analyzed": 0,
+#             "recommendations_generated": 0,
+#             "rows": [],
+#         }
+
+
+
+    
+
+# @router.get("/churn")
+# def get_churn_predictions(
+#     db: Session = Depends(get_db), current_user=Depends(get_current_user)
+# ) -> Dict[str, Any]:
+#     customers = db.query(models.Customer).all()
+#     if not customers:
+#         return {"rows": [], "accuracy": 0, "precision": 0, "f1": 0}
+
+#     now = dt.datetime.utcnow()
+#     rows = []
+
+#     for c in customers:
+#         last_sale = (
+#             db.query(models.Sale)
+#             .filter(models.Sale.customer_id == c.id)
+#             .order_by(models.Sale.sale_date.desc())
+#             .first()
+#         )
+
+#         days_inactive = (
+#             (now - last_sale.sale_date).days
+#             if last_sale and last_sale.sale_date
+#             else 45
+#         )
+
+#         if days_inactive > 60:
+#             risk = "High"
+#             prob = 0.88
+#             rec = "Offer 15% discount code & send re-engagement email."
+#         elif days_inactive > 30:
+#             risk = "Medium"
+#             prob = 0.45
+#             rec = "Send product recommendations based on past purchases."
+#         else:
+#             risk = "Low"
+#             prob = 0.12
+#             rec = "Maintain regular communication & customer support."
+
+#         rows.append(
+#             {
+#                 "customer_id": c.id,
+#                 "customer_name": c.name,
+#                 "risk_category": risk,
+#                 "churn_probability": prob,
+#                 "recommendation": rec,
+#             }
+#         )
+
+#     return {"accuracy": 0.91, "precision": 0.88, "f1": 0.89, "rows": rows}
 
 
 # @router.get("/recommendations")
@@ -333,16 +744,249 @@ def get_churn_predictions(
 
 #     return {"rows": rows}
 
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db), current_user=Depends(get_current_user)
+# ) -> Dict[str, Any]:
+#     from ..ml.recommendation import generate_product_recommendations
+
+#     try:
+#         return generate_product_recommendations(db)
+#     except Exception as e:
+#         return {"error": str(e), "rows": []}
+
+
+
+
+# @router.get("/recommendations")
+# def get_product_recommendations(
+#     db: Session = Depends(get_db),
+#     current_user=Depends(get_current_user),
+# ) -> Dict[str, Any]:
+
+#     try:
+#         from sqlalchemy.orm import joinedload
+
+#         recommendations = (
+#             db.query(models.ProductRecommendation)
+#             .options(
+#                 joinedload(models.ProductRecommendation.customer),
+#                 joinedload(models.ProductRecommendation.product).joinedload(
+#                     models.Product.category
+#                 ),
+#             )
+#             .order_by(
+#                 models.ProductRecommendation.customer_id,
+#                 models.ProductRecommendation.score.desc(),
+#             )
+#             .all()
+#         )
+
+#         if not recommendations:
+#             return {
+#                 "customers_analyzed": 0,
+#                 "recommendations_generated": 0,
+#                 "rows": [],
+#             }
+
+#         # Get CURRENT inventory quantities
+#         inventory_rows = db.query(models.Inventory).all()
+
+#         inventory_map = {
+#             item.product_id: item.quantity_available
+#             for item in inventory_rows
+#         }
+
+#         rows_by_customer = {}
+
+#         for rec in recommendations:
+
+#             customer = rec.customer
+#             product = rec.product
+
+#             if customer is None or product is None:
+#                 continue
+
+#             # Check CURRENT stock
+#             current_stock = inventory_map.get(product.id, 0)
+
+#             # Never recommend an out-of-stock product
+#             if current_stock <= 0:
+#                 continue
+
+#             customer_id = customer.id
+
+#             if customer_id not in rows_by_customer:
+#                 rows_by_customer[customer_id] = {
+#                     "customer_id": customer_id,
+#                     "customer_name": customer.full_name,
+#                     "average_order_value": None,
+#                     "total_orders": None,
+#                     "purchased_product_count": None,
+#                     "recency_days": None,
+#                     "recommendations": [],
+#                 }
+
+#             category_name = (
+#                 product.category.category_name
+#                 if product.category
+#                 else None
+#             )
+
+#             recommendation = {
+#                 "product_id": product.id,
+#                 "product_name": product.name,
+#                 "category": category_name,
+#                 "price": float(product.selling_price or 0),
+
+#                 # REAL CURRENT INVENTORY
+#                 "inventory_available": current_stock,
+
+#                 "recommendation_type": rec.recommendation_type,
+#                 "score": round(float(rec.score or 0), 4),
+
+#                 "reason": (
+#                     f"Recommended as a "
+#                     f"{(rec.recommendation_type or 'product').replace('_', ' ')} "
+#                     "based on customer purchasing behaviour."
+#                 ),
+
+#                 "signals": {
+#                     "collaborative_score": 0,
+#                     "association_score": 0,
+#                     "popularity_score": float(rec.score or 0),
+#                     "price_score": 0,
+#                     "signal_sources": ["popularity"],
+#                 },
+#             }
+
+#             rows_by_customer[customer_id]["recommendations"].append(
+#                 recommendation
+#             )
+
+#         # Convert to list
+#         rows = list(rows_by_customer.values())
+
+#         # Keep maximum 5 recommendations per customer
+#         for row in rows:
+#             row["recommendations"] = sorted(
+#                 row["recommendations"],
+#                 key=lambda x: x["score"],
+#                 reverse=True,
+#             )[:5]
+
+#             row["recommended_products"] = [
+#                 item["product_name"]
+#                 for item in row["recommendations"]
+#             ]
+
+#             if row["recommendations"]:
+#                 row["reason"] = row["recommendations"][0]["reason"]
+
+#         # Remove customers who have no currently-stocked recommendations
+#         rows = [
+#             row
+#             for row in rows
+#             if row["recommendations"]
+#         ]
+
+#         return {
+#             "customers_analyzed": len(rows),
+#             "recommendations_generated": sum(
+#                 len(row["recommendations"])
+#                 for row in rows
+#             ),
+#             "rows": rows,
+#         }
+
+#     except Exception as e:
+#         print("RECOMMENDATION API ERROR:", repr(e))
+
+#         return {
+#             "error": str(e),
+#             "customers_analyzed": 0,
+#             "recommendations_generated": 0,
+#             "rows": [],
+#         }
+
+
 @router.get("/recommendations")
 def get_product_recommendations(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
-    from ..ml.recommendation import generate_product_recommendations
 
     try:
+        from ..ml.recommendation import generate_product_recommendations
+
         return generate_product_recommendations(db)
+
     except Exception as e:
-        return {"error": str(e), "rows": []}
+        print("RECOMMENDATION API ERROR:", repr(e))
+
+        return {
+            "error": str(e),
+            "customers_analyzed": 0,
+            "recommendations_generated": 0,
+            "rows": [],
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     
 @router.get("/anomalies")
 def get_anomaly_alerts(
