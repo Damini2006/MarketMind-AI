@@ -1,24 +1,24 @@
 """User data CRUD — stores scheduled reports, dashboard layouts,
-report templates, and prediction history in Neon PostgreSQL."""
+report templates, and prediction history in Neon PostgreSQL.
+
+Every endpoint is scoped to the authenticated user's own business
+(multi-tenant safe) — no cross-business reads or writes are possible.
+"""
 import json
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..deps import get_current_user
 from ..models import (
     ScheduledReport, DashboardLayout, CustomReportTemplate, PredictionHistory, ChatHistory,
 )
 
 router = APIRouter(prefix="/api/user-data", tags=["user-data"])
-
-
-def _get_bid(request: Request) -> Optional[int]:
-    user = getattr(request.state, "user", None)
-    return getattr(user, "business_id", None)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────
@@ -44,17 +44,25 @@ class PredictionHistoryIn(BaseModel):
     actual_revenue: Optional[float] = None
     horizon_days: int = 30
 
+class ChatHistoryIn(BaseModel):
+    messages: str  # JSON string of messages array
+
 
 # ══════════════════════════════════════════════════════════════════════
 #  SCHEDULED REPORTS
 # ══════════════════════════════════════════════════════════════════════
 @router.get("/scheduled-reports")
-def list_scheduled_reports(request: Request, db: Session = Depends(get_db)):
-    bid = _get_bid(request)
-    q = db.query(ScheduledReport)
-    if bid:
-        q = q.filter(ScheduledReport.business_id == bid)
-    items = q.order_by(desc(ScheduledReport.created_at)).all()
+def list_scheduled_reports(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    bid = current_user.business_id
+    items = (
+        db.query(ScheduledReport)
+        .filter(ScheduledReport.business_id == bid)
+        .order_by(desc(ScheduledReport.created_at))
+        .all()
+    )
     return [{
         "id": r.id,
         "report_type": r.report_type,
@@ -70,12 +78,11 @@ def list_scheduled_reports(request: Request, db: Session = Depends(get_db)):
 @router.post("/scheduled-reports")
 def create_scheduled_report(
     body: ScheduledReportIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
     r = ScheduledReport(
-        business_id=bid,
+        business_id=current_user.business_id,
         report_type=body.report_type,
         frequency=body.frequency,
         format=body.format,
@@ -92,10 +99,17 @@ def create_scheduled_report(
 def update_scheduled_report(
     report_id: int,
     body: ScheduledReportIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    r = db.query(ScheduledReport).get(report_id)
+    r = (
+        db.query(ScheduledReport)
+        .filter(
+            ScheduledReport.id == report_id,
+            ScheduledReport.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not r:
         raise HTTPException(404, "Report not found")
     r.report_type = body.report_type
@@ -108,8 +122,19 @@ def update_scheduled_report(
 
 
 @router.delete("/scheduled-reports/{report_id}")
-def delete_scheduled_report(report_id: int, db: Session = Depends(get_db)):
-    r = db.query(ScheduledReport).get(report_id)
+def delete_scheduled_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    r = (
+        db.query(ScheduledReport)
+        .filter(
+            ScheduledReport.id == report_id,
+            ScheduledReport.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not r:
         raise HTTPException(404, "Report not found")
     db.delete(r)
@@ -121,38 +146,49 @@ def delete_scheduled_report(report_id: int, db: Session = Depends(get_db)):
 #  DASHBOARD LAYOUTS
 # ══════════════════════════════════════════════════════════════════════
 @router.get("/dashboard-layouts")
-def list_dashboard_layouts(request: Request, db: Session = Depends(get_db)):
-    bid = _get_bid(request)
-    q = db.query(DashboardLayout)
-    if bid:
-        q = q.filter(DashboardLayout.business_id == bid)
-    items = q.order_by(desc(DashboardLayout.updated_at)).all()
-    return [{
-        "id": d.id,
-        "name": d.name,
-        "layout_json": d.layout_json,
-        "is_active": d.is_active,
-        "created_at": d.created_at.isoformat() if d.created_at else None,
-        "updated_at": d.updated_at.isoformat() if d.updated_at else None,
-    } for d in items]
+def list_dashboard_layouts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    from ..cache import get_or_set
+
+    bid = current_user.business_id
+
+    def _load():
+        items = (
+            db.query(DashboardLayout)
+            .filter(DashboardLayout.business_id == bid)
+            .order_by(desc(DashboardLayout.updated_at))
+            .all()
+        )
+        return [{
+            "id": d.id,
+            "name": d.name,
+            "layout_json": d.layout_json,
+            "is_active": d.is_active,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+            "updated_at": d.updated_at.isoformat() if d.updated_at else None,
+        } for d in items]
+
+    return get_or_set(f"user_data_layouts:{bid}", 30, _load)
 
 
 @router.post("/dashboard-layouts")
 def create_dashboard_layout(
     body: DashboardLayoutIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
-    uid = getattr(getattr(request.state, "user", None), "id", None)
     d = DashboardLayout(
-        business_id=bid, user_id=uid,
+        business_id=current_user.business_id, user_id=current_user.id,
         name=body.name, layout_json=body.layout_json,
         is_active=body.is_active,
     )
     db.add(d)
     db.commit()
     db.refresh(d)
+    from ..cache import invalidate
+    invalidate(f"user_data_layouts:{current_user.business_id}")
     return {"id": d.id, "status": "created"}
 
 
@@ -161,24 +197,47 @@ def update_dashboard_layout(
     layout_id: int,
     body: DashboardLayoutIn,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    d = db.query(DashboardLayout).get(layout_id)
+    d = (
+        db.query(DashboardLayout)
+        .filter(
+            DashboardLayout.id == layout_id,
+            DashboardLayout.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not d:
         raise HTTPException(404, "Layout not found")
     d.name = body.name
     d.layout_json = body.layout_json
     d.is_active = body.is_active
     db.commit()
+    from ..cache import invalidate
+    invalidate(f"user_data_layouts:{current_user.business_id}")
     return {"status": "updated"}
 
 
 @router.delete("/dashboard-layouts/{layout_id}")
-def delete_dashboard_layout(layout_id: int, db: Session = Depends(get_db)):
-    d = db.query(DashboardLayout).get(layout_id)
+def delete_dashboard_layout(
+    layout_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    d = (
+        db.query(DashboardLayout)
+        .filter(
+            DashboardLayout.id == layout_id,
+            DashboardLayout.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not d:
         raise HTTPException(404, "Layout not found")
     db.delete(d)
     db.commit()
+    from ..cache import invalidate
+    invalidate(f"user_data_layouts:{current_user.business_id}")
     return {"status": "deleted"}
 
 
@@ -186,17 +245,22 @@ def delete_dashboard_layout(layout_id: int, db: Session = Depends(get_db)):
 #  REPORT TEMPLATES
 # ══════════════════════════════════════════════════════════════════════
 @router.get("/report-templates")
-def list_report_templates(request: Request, db: Session = Depends(get_db)):
-    bid = _get_bid(request)
-    q = db.query(CustomReportTemplate)
-    if bid:
-        q = q.filter(CustomReportTemplate.business_id == bid)
-    items = q.order_by(desc(CustomReportTemplate.updated_at)).all()
+def list_report_templates(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    bid = current_user.business_id
+    items = (
+        db.query(CustomReportTemplate)
+        .filter(CustomReportTemplate.business_id == bid)
+        .order_by(desc(CustomReportTemplate.updated_at))
+        .all()
+    )
     return [{
         "id": t.id,
         "name": t.name,
         "description": t.description,
-        "sections": t.sections,
+        "sections": json.loads(t.sections) if t.sections else [],
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
     } for t in items]
@@ -205,12 +269,11 @@ def list_report_templates(request: Request, db: Session = Depends(get_db)):
 @router.post("/report-templates")
 def create_report_template(
     body: ReportTemplateIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
     t = CustomReportTemplate(
-        business_id=bid,
+        business_id=current_user.business_id,
         name=body.name, description=body.description,
         sections=body.sections,
     )
@@ -225,8 +288,16 @@ def update_report_template(
     template_id: int,
     body: ReportTemplateIn,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    t = db.query(CustomReportTemplate).get(template_id)
+    t = (
+        db.query(CustomReportTemplate)
+        .filter(
+            CustomReportTemplate.id == template_id,
+            CustomReportTemplate.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not t:
         raise HTTPException(404, "Template not found")
     t.name = body.name
@@ -237,8 +308,19 @@ def update_report_template(
 
 
 @router.delete("/report-templates/{template_id}")
-def delete_report_template(template_id: int, db: Session = Depends(get_db)):
-    t = db.query(CustomReportTemplate).get(template_id)
+def delete_report_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    t = (
+        db.query(CustomReportTemplate)
+        .filter(
+            CustomReportTemplate.id == template_id,
+            CustomReportTemplate.business_id == current_user.business_id,
+        )
+        .first()
+    )
     if not t:
         raise HTTPException(404, "Template not found")
     db.delete(t)
@@ -251,15 +333,18 @@ def delete_report_template(template_id: int, db: Session = Depends(get_db)):
 # ══════════════════════════════════════════════════════════════════════
 @router.get("/prediction-history")
 def list_prediction_history(
-    request: Request,
     limit: int = Query(50, le=200),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
-    q = db.query(PredictionHistory)
-    if bid:
-        q = q.filter(PredictionHistory.business_id == bid)
-    items = q.order_by(desc(PredictionHistory.created_at)).limit(limit).all()
+    bid = current_user.business_id
+    items = (
+        db.query(PredictionHistory)
+        .filter(PredictionHistory.business_id == bid)
+        .order_by(desc(PredictionHistory.created_at))
+        .limit(limit)
+        .all()
+    )
     return [{
         "id": p.id,
         "predicted_revenue": p.predicted_revenue,
@@ -272,12 +357,11 @@ def list_prediction_history(
 @router.post("/prediction-history")
 def create_prediction(
     body: PredictionHistoryIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
     p = PredictionHistory(
-        business_id=bid,
+        business_id=current_user.business_id,
         predicted_revenue=body.predicted_revenue,
         actual_revenue=body.actual_revenue,
         horizon_days=body.horizon_days,
@@ -291,20 +375,17 @@ def create_prediction(
 # ══════════════════════════════════════════════════════════════════════
 #  CHAT HISTORY
 # ══════════════════════════════════════════════════════════════════════
-class ChatHistoryIn(BaseModel):
-    messages: str  # JSON string of messages array
-
-
 @router.get("/chat-history")
-def get_chat_history(request: Request, db: Session = Depends(get_db)):
-    bid = _get_bid(request)
-    uid = getattr(getattr(request.state, "user", None), "id", None)
-    q = db.query(ChatHistory)
-    if uid:
-        q = q.filter(ChatHistory.user_id == uid)
-    elif bid:
-        q = q.filter(ChatHistory.business_id == bid)
-    item = q.order_by(desc(ChatHistory.updated_at)).first()
+def get_chat_history(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    item = (
+        db.query(ChatHistory)
+        .filter(ChatHistory.user_id == current_user.id)
+        .order_by(desc(ChatHistory.updated_at))
+        .first()
+    )
     if not item:
         return {"messages": []}
     return {"messages": item.messages_json, "id": item.id}
@@ -313,33 +394,34 @@ def get_chat_history(request: Request, db: Session = Depends(get_db)):
 @router.post("/chat-history")
 def save_chat_history(
     body: ChatHistoryIn,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    bid = _get_bid(request)
-    uid = getattr(getattr(request.state, "user", None), "id", None)
-    # Upsert: find existing or create new
-    q = db.query(ChatHistory)
-    if uid:
-        q = q.filter(ChatHistory.user_id == uid)
-    existing = q.order_by(desc(ChatHistory.updated_at)).first()
+    existing = (
+        db.query(ChatHistory)
+        .filter(ChatHistory.user_id == current_user.id)
+        .order_by(desc(ChatHistory.updated_at))
+        .first()
+    )
     if existing:
         existing.messages_json = body.messages
     else:
-        existing = ChatHistory(
-            business_id=bid, user_id=uid,
-            messages_json=body.messages,
+        db.add(
+            ChatHistory(
+                user_id=current_user.id,
+                business_id=current_user.business_id,
+                messages_json=body.messages,
+            )
         )
-        db.add(existing)
     db.commit()
-    db.refresh(existing)
-    return {"id": existing.id, "status": "saved"}
+    return {"status": "saved"}
 
 
 @router.delete("/chat-history")
-def clear_chat_history(request: Request, db: Session = Depends(get_db)):
-    uid = getattr(getattr(request.state, "user", None), "id", None)
-    if uid:
-        db.query(ChatHistory).filter(ChatHistory.user_id == uid).delete()
+def clear_chat_history(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    db.query(ChatHistory).filter(ChatHistory.user_id == current_user.id).delete()
     db.commit()
-    return {"status": "cleared"}
+    return {"status": "cleared"}
