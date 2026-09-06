@@ -90,6 +90,67 @@ def _compute_kpis(db: Session, business_id: int):
     )
 
 
+@router.get("/pulse")
+def business_pulse(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Business Pulse health score (0-100) with breakdown.
+    Mirrors the client-side score in BusinessPulse.jsx so the
+    dashboard shows a real server value instead of a 404 + fallback."""
+    kpis = get_or_set(
+        f"analytics:{current_user.business_id}:kpis",
+        300,
+        lambda: _compute_kpis(db, current_user.business_id),
+    )
+
+    # Revenue trend (40%): last 7 days avg vs previous 7 days
+    days = kpis.revenue_by_day or []
+    recent7 = days[-7:]
+    prev7 = days[-14:-7]
+    recent_avg = sum(d["revenue"] for d in recent7) / len(recent7) if recent7 else 0
+    prev_avg = sum(d["revenue"] for d in prev7) / len(prev7) if prev7 else 1
+    revenue_score = (
+        min(100, round((recent_avg / prev_avg) * 80)) if prev_avg > 0 else (70 if recent_avg > 0 else 0)
+    )
+
+    # Inventory health (30%)
+    inv_score = (
+        round(max(0, 100 - (kpis.low_stock_count / kpis.total_products) * 100))
+        if kpis.total_products > 0 else 100
+    )
+
+    # Invoice collection (30%)
+    total_inv = kpis.pending_invoices + kpis.overdue_invoices
+    invoice_score = (
+        100 if total_inv == 0
+        else round(max(0, 100 - (kpis.overdue_invoices / max(1, total_inv)) * 100))
+    )
+
+    score = round(revenue_score * 0.4 + inv_score * 0.3 + invoice_score * 0.3)
+
+    parts = []
+    if recent_avg > prev_avg:
+        parts.append("Revenue is trending up")
+    elif recent_avg < prev_avg:
+        parts.append("Revenue is trending down")
+    else:
+        parts.append("Revenue is steady")
+    if kpis.low_stock_count > 0:
+        parts.append(f"{kpis.low_stock_count} item{'s' if kpis.low_stock_count > 1 else ''} low on stock")
+    if kpis.overdue_invoices > 0:
+        parts.append(f"{kpis.overdue_invoices} overdue invoice{'s' if kpis.overdue_invoices > 1 else ''}")
+    if kpis.top_products:
+        parts.append(f"Top seller: {kpis.top_products[0]['product']}")
+
+    return {
+        "score": score,
+        "breakdown": [
+            {"label": "Revenue Trend", "key": "revenueTrend", "value": revenue_score, "weight": 40},
+            {"label": "Inventory Health", "key": "inventoryHealth", "value": inv_score, "weight": 30},
+            {"label": "Invoice Collection", "key": "invoiceCollection", "value": invoice_score, "weight": 30},
+        ],
+        "briefing": " · ".join(parts),
+    }
+
+
 @router.get("/kpis", response_model=schemas.KPIResponse)
 def kpis(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Dashboard KPIs. Cached 300s — recomputing on every page load is

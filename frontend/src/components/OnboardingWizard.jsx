@@ -350,12 +350,13 @@ export default function OnboardingWizard() {
   })
 
   useEffect(() => {
+    if (!user) return  // Don't show on landing page or when logged out
     const completed = localStorage.getItem(STORAGE_KEY)
     if (!completed) {
       const timer = setTimeout(() => setShow(true), 1500)
       return () => clearTimeout(timer)
     }
-  }, [])
+  }, [user])
 
   // Persist setup data
   useEffect(() => {

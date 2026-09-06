@@ -17,7 +17,14 @@ if "sqlite" in DATABASE_URL:
     print("  Set DATABASE_URL=postgresql://... in backend/.env", file=sys.stderr)
     sys.exit(1)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    pool_recycle=300,         # Neon drops idle connections after ~5 min
+    connect_args={"connect_timeout": 10},  # Fail fast on Neon cold-start
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
