@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import {Loading, PageHeader, Badge, EmptyState, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, Badge, ErrorBanner, PageSkeleton, EmptyState } from '../components/ui.jsx'
 import { Plus, PackagePlus, PackageMinus, Upload, Search, Download, FileText } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
@@ -97,7 +97,6 @@ export default function Inventory() {
 
   const adjustStock = async (productId, delta) => {
     try {
-      const product = products.find(p => p.id === productId)
       await api.patch(`/inventory/products/${productId}/stock`, { quantity_delta: delta })
       setLoading(true)
       load()

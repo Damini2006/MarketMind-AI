@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -16,7 +16,7 @@ import {
   Settings, Bell, ChevronDown, CheckCheck, ClipboardList, GitCompare,
   IndianRupee, Filter, LayoutTemplate, Clock,
   BarChart3, Brain, FileBarChart, Shield,
-  ChevronRight, ChevronsUpDown, HelpCircle, Zap, Download,
+  ChevronRight, ChevronsUpDown, HelpCircle, Download,
 } from 'lucide-react'
 
 // ── Grouped Navigation ──────────────────────────────────────────────
@@ -216,7 +216,6 @@ function SidebarGroup({ group, allowedPages, isExpanded, onToggle, pathname }) {
 // ── Expand/Collapse All Toggle ─────────────────────────────────────
 
 function ExpandAllToggle({ allIds, expandedGroups, toggleGroup }) {
-  const { t } = useTranslation()
   const allExpanded = allIds.every((id) => expandedGroups.includes(id))
   return (
     <button
@@ -281,7 +280,9 @@ function NotificationBell() {
       await api.post(`/notifications/${n.id}/read`)
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
       setUnread((u) => Math.max(0, u - 1))
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }
 
   const markAllRead = async () => {
@@ -289,7 +290,9 @@ function NotificationBell() {
       await api.post('/notifications/read-all')
       setItems((prev) => prev.map((x) => ({ ...x, read: true })))
       setUnread(0)
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }
 
   const handleItemClick = async (n) => {
@@ -414,21 +417,25 @@ export default function Layout() {
   const pathname = location.pathname
 
   const [expandedGroups, setExpandedGroups] = useState(() => {
+    const initial = ['overview']
     try {
       const saved = localStorage.getItem(SIDEBAR_EXPANDED_KEY)
-      if (saved) return JSON.parse(saved)
-    } catch {}
-    return ['overview']
+      if (saved) initial.push(...JSON.parse(saved))
+    } catch {
+      /* ignore */
+    }
+    return [...new Set(initial)]
   })
 
-  useEffect(() => {
-    const activeGroup = NAV_GROUPS.find((g) =>
+  const activeGroup = useMemo(() => {
+    return NAV_GROUPS.find((g) =>
       g.items.some((item) => pathname === item.to || pathname.startsWith(item.to + '/'))
     )
-    if (activeGroup && !expandedGroups.includes(activeGroup.id)) {
-      setExpandedGroups((prev) => [...prev, activeGroup.id])
-    }
-  }, [pathname]) // eslint-disable-line
+  }, [pathname])
+
+  const isGroupExpanded = useCallback((groupId) => {
+    return expandedGroups.includes(groupId) || (activeGroup?.id === groupId)
+  }, [expandedGroups, activeGroup])
 
   const toggleGroup = useCallback((groupId) => {
     setExpandedGroups((prev) => {
@@ -444,14 +451,15 @@ export default function Layout() {
   const handleLogout = () => { logout() }
 
   // Get current page name for breadcrumb
-  const currentPageName = (() => {
-    for (const group of NAV_GROUPS) {
-      for (const item of group.items) {
-        if (pathname === item.to) return t(item.labelKey)
+  let currentPageName = ''
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      if (pathname === item.to) {
+        currentPageName = t(item.labelKey)
+        break
       }
     }
-    return ''
-  })()
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -484,7 +492,7 @@ export default function Layout() {
               key={group.id}
               group={group}
               allowedPages={allowedPages}
-              isExpanded={expandedGroups.includes(group.id)}
+              isExpanded={isGroupExpanded(group.id)}
               onToggle={() => toggleGroup(group.id)}
               pathname={pathname}
             />

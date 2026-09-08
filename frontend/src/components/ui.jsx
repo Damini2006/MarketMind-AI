@@ -1,4 +1,3 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
 import { Loader2 } from 'lucide-react'
 
 // Skeleton Base: animated pulse block for placeholder content

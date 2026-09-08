@@ -4,8 +4,8 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip as MapTooltip, useMap } 
 import 'leaflet/dist/leaflet.css'
 import api from '../services/api'
 import { Loading, PageHeader } from '../components/ui.jsx'
-import { ClipboardList, Search, Download, User, Globe, Clock, Filter, BarChart3, Zap, TrendingUp, MapPin, MapPinned } from 'lucide-react'
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from 'recharts'
+import { ClipboardList, Search, Download, User, Globe, Clock, BarChart3, Zap, TrendingUp, MapPin, MapPinned } from 'lucide-react'
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 
 export default function AuditTrail() {
@@ -62,36 +62,37 @@ export default function AuditTrail() {
   const mappedLocations = loginLocations.filter((p) => p.latitude != null && p.longitude != null)
 
   // Generate heatmap data from logs
-  const heatmapData = (() => {
-    const now = Date.now()
+  const heatmapData = useMemo(() => {
+    const latestDateStr = logs.find(l => l.timestamp)?.timestamp
+    const baseTime = latestDateStr ? new Date(latestDateStr).getTime() : 1773000000000
     const dayMs = 86400000
     const days = []
     for (let i = 29; i >= 0; i--) {
-      const date = new Date(now - i * dayMs).toISOString().slice(0, 10)
+      const date = new Date(baseTime - i * dayMs).toISOString().slice(0, 10)
       const count = logs.filter(l => l.timestamp?.startsWith(date)).length
       days.push({ date, count })
     }
     return days
-  })()
+  }, [logs])
 
   // Generate hourly distribution
-  const hourlyData = (() => {
+  const hourlyData = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }))
     logs.forEach(l => {
       if (l.timestamp) {
         const h = new Date(l.timestamp).getHours()
-        hours[h].count++
+        if (h >= 0 && h < 24) hours[h].count++
       }
     })
     return hours
-  })()
+  }, [logs])
 
   // Generate action distribution
-  const actionDist = (() => {
+  const actionDist = useMemo(() => {
     const dist = {}
     logs.forEach(l => { if (l.action_type) dist[l.action_type] = (dist[l.action_type] || 0) + 1 })
     return Object.entries(dist).map(([name, value]) => ({ name, value }))
-  })()
+  }, [logs])
 
   const actionTypes = [...new Set(logs.map(l => l.action_type))].filter(Boolean)
 

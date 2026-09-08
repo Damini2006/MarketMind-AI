@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import {Loading, PageHeader, Badge, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, Badge, ErrorBanner, Loading } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import { Upload, Plus, Download, ShoppingCart, IndianRupee, Users, Calendar, FileText } from 'lucide-react'
 import { downloadCSV } from '../utils/csv'

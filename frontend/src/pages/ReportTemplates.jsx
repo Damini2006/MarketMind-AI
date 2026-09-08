@@ -1,12 +1,11 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
+import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
 import { Loading, PageHeader, Badge } from '../components/ui.jsx'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
-  FileText, Download, Eye, Settings, CheckCircle2, BarChart3,
-  ShoppingCart, Users, Boxes, IndianRupee, Calendar, Plus, Trash2,
-  LayoutTemplate, Copy, X,
+  FileText, Download, Eye, CheckCircle2, BarChart3,
+  ShoppingCart, Users, Boxes, IndianRupee, Plus, Trash2,
+  LayoutTemplate, X,
 } from 'lucide-react'
 
 // ─── Built-in report templates ────────────────────────────────────────
@@ -89,7 +88,7 @@ const SECTION_LABELS = {
 }
 
 // ─── Preview Panel ────────────────────────────────────────────────────
-function ReportPreview({ template, data, format }) {
+function ReportPreview({ template, data }) {
   if (!data) return <div className="text-center py-10 text-slate-400">Loading preview data...</div>
 
   return (
@@ -381,7 +380,6 @@ function KPIPreview({ label, value, color }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────
 export default function ReportTemplates() {
-  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState(null)
   const [selectedTemplate, setSelectedTemplate] = useState(null)
@@ -396,7 +394,6 @@ export default function ReportTemplates() {
   }, [])
 
   const load = useCallback(() => {
-    setLoading(true)
     Promise.all([
       api.get('/analytics/kpis').catch(() => ({ data: {} })),
       api.get('/sales/').catch(() => ({ data: [] })),

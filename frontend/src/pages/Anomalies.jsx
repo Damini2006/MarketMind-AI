@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import {Loading, PageHeader, Badge, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, Badge, Loading } from '../components/ui.jsx'
 import jsPDF from 'jspdf'
 import {
   AlertOctagon, LayoutGrid, List,
@@ -783,7 +783,7 @@ export default function Anomalies() {
                     <div key={m} className="text-[9px] text-slate-500 dark:text-slate-400 text-center px-1 py-1 truncate" title={METHOD_LABELS[m] || m}>{METHOD_LABELS[m] || m}</div>
                   ))}
                   {cats.map(cat => (
-                    <React.Fragment key={cat}>
+                    <Fragment key={cat}>
                       <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium pr-2 py-1 truncate">{CATEGORY_LABELS[cat] || cat}</div>
                       {methods.map(m => {
                         const cell = grid[`${cat}|${m}`]
@@ -794,12 +794,12 @@ export default function Anomalies() {
                           <button key={m} onClick={() => { setCategoryFilter(cat); setMethodFilter(m); setActiveChart(null) }}
                             className="rounded text-center py-1.5 transition-all hover:ring-1 hover:ring-indigo-400"
                             style={{ backgroundColor: bg }}
-                            title={`${CATEGORY_LABELS[cat]} × ${METHOD_LABELS[m] || m}: ${total} anomalies`}>
-                            {total > 0 && <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200">{total}</span>}
+                            title={`${CATEGORY_LABELS[cat] || cat} × ${METHOD_LABELS[m] || m}: ${total} (${cell?.high || 0}H / ${cell?.medium || 0}M / ${cell?.low || 0}L)`}>
+                            <span className="text-[10px] font-semibold text-slate-800 dark:text-slate-200">{total > 0 ? total : ''}</span>
                           </button>
                         )
                       })}
-                    </React.Fragment>
+                    </Fragment>
                   ))}
                 </div>
               </div>

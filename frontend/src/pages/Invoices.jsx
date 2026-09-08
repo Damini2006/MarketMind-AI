@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import api from '../services/api'
-import {Loading, PageHeader, Badge, EmptyState, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, Badge, ErrorBanner, PageSkeleton, EmptyState } from '../components/ui.jsx'
 import { DetailModal } from '../components/InteractiveTable.jsx'
 import { FileText, IndianRupee, Calendar, Clock, AlertTriangle, CheckCircle } from 'lucide-react'
 import QRCodeGenerator from '../components/QRCodeGenerator'
@@ -24,7 +24,6 @@ export default function Invoices() {
 
   const markPaid = async (id) => {
     try {
-      const inv = invoices.find(i => i.id === id)
       await api.patch(`/invoices/${id}/status`, { status: 'paid' })
       load()
     } catch (err) { setError(err.response?.data?.detail || 'Failed to update status.') }

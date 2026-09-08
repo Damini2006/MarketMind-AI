@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import api from '../services/api'
-import {Loading, PageHeader, ChartSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, PageSkeleton } from '../components/ui.jsx'
 import {
   Minus, IndianRupee, ShoppingCart,
   Users, BarChart3, Zap,

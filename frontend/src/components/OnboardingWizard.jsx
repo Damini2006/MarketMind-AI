@@ -2,12 +2,11 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.jsx'
-import api from '../services/api'
 import {
-  Building2, Globe, Database, CheckCircle2, Sparkles, Zap,
+  Building2, Globe, Database, CheckCircle2, Sparkles,
   ChevronRight, ChevronLeft, X, Store, ShoppingCart, Users,
   Upload, FileSpreadsheet, ArrowRight, PartyPopper, Star,
-  BarChart3, Bell, Settings, LayoutDashboard, IndianRupee,
+  BarChart3, Bell, Settings, LayoutDashboard,
 } from 'lucide-react'
 
 const STORAGE_KEY = 'marketmind_onboarding_complete'

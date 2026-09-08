@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import api from '../services/api'
-import {Loading, PageHeader, StatCard, EmptyState, ChartSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, StatCard, PageSkeleton, EmptyState } from '../components/ui.jsx'
 import { TrendingUp, TrendingDown, Minus, Target } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext.jsx'
 
