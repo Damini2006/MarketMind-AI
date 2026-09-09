@@ -388,10 +388,34 @@ export default function ReportTemplates() {
   const [showPreview, setShowPreview] = useState(false)
   const [savedTemplates, setSavedTemplates] = useState([])
 
+  // Backend stores custom templates with numeric ids and JSON-encoded
+  // sections. Normalize them so every consumer (delete check, preview,
+  // export) works with the same shape as built-in templates.
+  const normalizeTemplate = (raw) => {
+    if (!raw || raw.id == null) return null
+    let sections = raw.sections ?? []
+    if (typeof sections === 'string') {
+      try { sections = JSON.parse(sections) } catch { sections = [] }
+    }
+    if (!Array.isArray(sections)) sections = []
+    return {
+      ...raw,
+      id: String(raw.id),
+      sections,
+      builtin: false,
+      icon: raw.icon || FileText,
+      color: raw.color || 'slate',
+      category: raw.category || 'Custom',
+    }
+  }
+
   // Load saved templates from Neon
   useEffect(() => {
     api.get('/user-data/report-templates')
-      .then(res => setSavedTemplates(Array.isArray(res.data) ? res.data : []))
+      .then(res => {
+        const list = Array.isArray(res.data) ? res.data : []
+        setSavedTemplates(list.map(normalizeTemplate).filter(Boolean))
+      })
       .catch(() => setSavedTemplates([]))
   }, [])
 
@@ -539,6 +563,14 @@ export default function ReportTemplates() {
     api.post('/user-data/report-templates', {
       name: newTemplate.name, description: newTemplate.description || '',
       sections: JSON.stringify(newTemplate.sections),
+    }).then(res => {
+      // Swap the temporary local id for the real one the server generated,
+      // so delete/update calls target the correct row.
+      if (res.data?.id != null) {
+        setSavedTemplates(prev => prev.map(t =>
+          t.id === newTemplate.id ? { ...t, id: String(res.data.id) } : t
+        ))
+      }
     }).catch(() => {})
   }
 
@@ -593,7 +625,7 @@ export default function ReportTemplates() {
                     <Badge tone="slate">{template.category}</Badge>
                   </div>
                 </div>
-                {!template.builtin && template.id.startsWith('custom-') && (
+                {!template.builtin && template.id != null && (
                   <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(template.id) }}
                     className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-400">
                     <Trash2 size={14} />

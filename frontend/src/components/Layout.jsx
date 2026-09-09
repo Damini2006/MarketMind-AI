@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, Component } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext.jsx'
@@ -402,6 +402,30 @@ function ProfileMenu({ user, onLogout }) {
   )
 }
 
+// Wrap each routed page in its own error boundary so a crash on one page
+// never takes down the whole shell (sidebar included) — previously the only
+// boundary was at the app root, so one bad render made every page appear
+// broken until a manual retry.
+class PageBoundary extends Component {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(error, errorInfo) {
+    console.error('[PageBoundary]', error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="card text-center py-12">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">This page failed to load</p>
+          <p className="text-xs text-slate-400 mb-4">Your data is safe. Try again, or pick another page from the sidebar.</p>
+          <button onClick={() => this.setState({ hasError: false })} className="btn-primary text-xs">Try again</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 // ── Main Layout ────────────────────────────────────────────────────
 
 export default function Layout() {
@@ -557,7 +581,9 @@ export default function Layout() {
         </header>
         <main role="main" aria-label="Page Content" className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
           <div className="max-w-7xl mx-auto p-6 md:p-8">
-            <Outlet />
+            <PageBoundary key={pathname}>
+              <Outlet />
+            </PageBoundary>
           </div>
         </main>
       </div>

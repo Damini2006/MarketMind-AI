@@ -229,6 +229,7 @@ def root():
 
 
 @app.get("/health")
+@app.get("/api/health")  # alias: the frontend's axios base URL is /api
 def health():
     return {"status": "healthy"}
 
