@@ -29,3 +29,8 @@ backend/marketmind-preview.db
 
 # Local runtime logs
 *.log
+
+# Python virtual environments
+venv/
+.venv/
+env/
