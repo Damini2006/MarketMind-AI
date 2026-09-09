@@ -204,9 +204,8 @@ function useLiveAlerts(prefs) {
     const connectWs = () => {
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const host = window.location.hostname
-        const port = '8000' // Backend port
-        const wsUrl = `${protocol}//${host}:${port}/ws/alerts/${businessId}`
+        const wsHost = window.location.port === '5173' ? `${window.location.hostname}:8000` : window.location.host
+        const wsUrl = `${protocol}//${wsHost}/ws/alerts/${businessId}`
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 
