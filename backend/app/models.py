@@ -19,6 +19,9 @@ class Business(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     company_name = Column(String, nullable=False)
+    # Join-by-code: owners share this so teammates can sign up into the SAME
+    # business instead of each signup silently creating its own empty tenant.
+    invite_code = Column(String(8), unique=True, index=True)
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
     users = relationship("User", back_populates="business")

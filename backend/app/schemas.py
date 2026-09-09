@@ -10,6 +10,12 @@ class RegisterRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    # join_mode="create": signup creates a NEW business, requester becomes its
+    # business_owner. join_mode="join": company_name must match an existing
+    # business's invite code and the requester joins THAT business with the
+    # chosen role (admin excluded — admins can only be invited in-app).
+    join_mode: str = "create"
+    invite_code: Optional[str] = None
     role: RoleEnum = RoleEnum.business_owner
 
 

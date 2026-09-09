@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, KeyRound, Copy, RefreshCw, Check } from "lucide-react";
 import api from "../services/api";
 import { PageHeader, ErrorBanner, Loading } from "../components/ui";
 
@@ -13,6 +13,38 @@ export default function Team() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [regenBusy, setRegenBusy] = useState(false);
+
+  const loadInviteCode = () => {
+    api.get("/users/invite-code")
+      .then((res) => setInviteCode(res.data.invite_code || ""))
+      .catch(() => {});
+  };
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(inviteCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const regenerateCode = async () => {
+    if (!window.confirm("Invalidate the current invite code and generate a new one?")) return;
+    setRegenBusy(true);
+    try {
+      const res = await api.post("/users/invite-code/regenerate");
+      setInviteCode(res.data.invite_code);
+    } catch {
+      /* owners only */
+    } finally {
+      setRegenBusy(false);
+    }
+  };
 
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
@@ -38,6 +70,7 @@ export default function Team() {
     }
 
     startFetching();
+    loadInviteCode();
     return () => {
       cancelled = true;
     };
@@ -87,6 +120,29 @@ export default function Team() {
           </button>
         }
       />
+
+      {/* Join-by-code: teammates enter this at sign-up ("Join a Team") */}
+      {inviteCode && (
+        <div className="card mb-4 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400">
+              <KeyRound size={18} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wide">Team Invite Code</p>
+              <p className="text-lg font-bold tracking-[0.2em] text-slate-800 dark:text-slate-100">{inviteCode}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={copyCode} className="btn-secondary flex items-center gap-1.5 text-xs">
+              {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Copied" : "Copy"}
+            </button>
+            <button onClick={regenerateCode} disabled={regenBusy} className="btn-secondary flex items-center gap-1.5 text-xs">
+              <RefreshCw size={14} className={regenBusy ? "animate-spin" : ""} /> Regenerate
+            </button>
+          </div>
+        </div>
+      )}
 
       <ErrorBanner message={error} />
 

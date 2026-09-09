@@ -16,7 +16,7 @@ async function buildKB() {
   if (kbPromise) return kbPromise
   kbPromise = (async () => {
     const [sales, customers, invoices, products, alerts, kpis, forecast, segments, clv, activity] = await Promise.all([
-      api.get('/sales/').catch(() => ({ data: [] })),
+      api.get('/sales/', { params: { limit: 1000 } }).catch(() => ({ data: [] })),
       api.get('/customers/').catch(() => ({ data: [] })),
       api.get('/invoices/').catch(() => ({ data: [] })),
       api.get('/inventory/products').catch(() => ({ data: [] })),
@@ -27,7 +27,11 @@ async function buildKB() {
       api.get('/ai/clv').catch(() => ({ data: {} })),
       api.get('/activity/stats').catch(() => ({ data: {} })),
     ])
-    const S = sales.data || [], C = customers.data || [], I = invoices.data || [], P = products.data || []
+    // Some list endpoints are paginated ({items, total, ...}) — normalize to arrays.
+    // Without this, `.reduce` on an object threw and the KB never built, so the
+    // bot answered every question with "still loading your data..." forever.
+    const arr = (d) => (Array.isArray(d) ? d : Array.isArray(d?.items) ? d.items : [])
+    const S = arr(sales.data), C = arr(customers.data), I = arr(invoices.data), P = arr(products.data)
     const totalRev = S.reduce((s, x) => s + (x.total_amount || 0), 0)
     const avgOrd = S.length ? totalRev / S.length : 0
     const pQty = {}, pRev = {}

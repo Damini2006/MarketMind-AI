@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Mail, Lock, User, Building2, ArrowRight, Sparkles, CheckCircle2, Eye, EyeOff, ShieldCheck, Crown, Briefcase, UserCheck, Shield } from "lucide-react";
+import { Mail, Lock, User, Building2, ArrowRight, Sparkles, CheckCircle2, Eye, EyeOff, ShieldCheck, Briefcase, UserCheck, Shield, Users } from "lucide-react";
 import api from "../services/api.js";
 import { ErrorBanner } from "../components/ui.jsx";
 import AnimateShape from "../components/AnimateShape.jsx";
@@ -12,7 +12,9 @@ export default function Register() {
     company_name: "",
     name: "",
     email: "",
-    role: "business_owner",
+    join_mode: "create", // "create" = new business (owner) | "join" = existing business via invite code
+    invite_code: "",
+    role: "store_manager",
     password: "",
     confirmPassword: "",
   });
@@ -55,6 +57,11 @@ export default function Register() {
       return;
     }
 
+    if (formData.join_mode === "join" && !formData.invite_code.trim()) {
+      setError("Invite code is required to join a team.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -62,8 +69,13 @@ export default function Register() {
         company_name: formData.company_name,
         name: formData.name,
         email: formData.email,
-        role: formData.role,
         password: formData.password,
+        join_mode: formData.join_mode,
+        invite_code:
+          formData.join_mode === "join"
+            ? formData.invite_code.trim().toUpperCase()
+            : undefined,
+        role: formData.join_mode === "create" ? "business_owner" : formData.role,
       });
 
       setSuccessMsg("Account registered successfully! Redirecting to login...");
@@ -157,23 +169,68 @@ export default function Register() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
-                Business / Company Name
-              </label>
-              <div className="relative">
-                <Building2 size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
-                <input
-                  type="text"
-                  name="company_name"
-                  required
-                  value={formData.company_name}
-                  onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
-                  placeholder="e.g. Mega Mart"
-                />
-              </div>
+            {/* Signup mode: start a business vs. join an existing team */}
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
+              {[
+                { value: 'create', label: 'Start a Business', icon: Building2 },
+                { value: 'join', label: 'Join a Team', icon: Users },
+              ].map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, join_mode: value }))}
+                  className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                    formData.join_mode === value
+                      ? 'bg-white dark:bg-slate-700 text-[#2e2b8f] dark:text-indigo-300 shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {label}
+                </button>
+              ))}
             </div>
+
+            {formData.join_mode === 'create' ? (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Business / Company Name
+                </label>
+                <div className="relative">
+                  <Building2 size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    name="company_name"
+                    required
+                    value={formData.company_name}
+                    onChange={handleChange}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
+                    placeholder="e.g. Mega Mart"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">You'll be the Business Owner and get an invite code for your team.</p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+                  Invite Code
+                </label>
+                <div className="relative">
+                  <Shield size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
+                  <input
+                    type="text"
+                    name="invite_code"
+                    required
+                    value={formData.invite_code}
+                    onChange={(e) => setFormData(prev => ({ ...prev, invite_code: e.target.value.toUpperCase() }))}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-slate-100 tracking-widest uppercase focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-[#2e2b8f]/20 dark:focus:ring-indigo-500/30 focus:border-[#2e2b8f] dark:focus:border-indigo-500 transition-all"
+                    placeholder="e.g. A7K2M9XQ"
+                    maxLength={8}
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Ask your business owner for the 8-character code (Team page).</p>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
@@ -211,16 +268,15 @@ export default function Register() {
               </div>
             </div>
 
+            {formData.join_mode === 'join' && (
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
                 Account Role
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { value: 'business_owner', label: 'Business Owner', icon: Crown },
                   { value: 'store_manager', label: 'Store Manager', icon: Briefcase },
                   { value: 'sales_executive', label: 'Sales Executive', icon: UserCheck },
-                  { value: 'admin', label: 'Admin', icon: Shield },
                 ].map(({ value, label, icon: Icon }) => (
                   <button
                     key={value}
@@ -260,10 +316,8 @@ export default function Register() {
                 </div>
               </div>
 
-              {formData.role === 'admin' && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">Admin role requires an invite from an existing admin.</p>
-              )}
             </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

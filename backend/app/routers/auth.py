@@ -1,4 +1,5 @@
 import os
+import secrets
 import time
 import random
 import smtplib
@@ -109,6 +110,19 @@ class ResetPasswordOTPRequest(BaseModel):
     new_password: str
 
 
+def _generate_invite_code(db: Session) -> str:
+    """8-char unambiguous join code, retried until unique."""
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no I/L/O/0/1 (look-alikes)
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if (
+            not db.query(models.Business)
+            .filter(models.Business.invite_code == code)
+            .first()
+        ):
+            return code
+
+
 # --- Core Auth Routes ---
 
 @router.post(
@@ -136,11 +150,45 @@ def register(
             detail="Email address is already registered",
         )
 
-    # Multi-tenant registration: each signup creates its own business,
-    # and the person who registers becomes that business's owner.
-    business = models.Business(company_name=payload.company_name)
-    db.add(business)
-    db.flush()
+    # Join-by-code: teammates register into an EXISTING business so roles are
+    # meaningful. Creating a business is reserved for the owner path.
+    if payload.join_mode == "join":
+        code = (payload.invite_code or "").strip().upper()
+        if not code:
+            raise HTTPException(
+                status_code=400,
+                detail="Invite code is required to join a business.",
+            )
+        if payload.role == models.RoleEnum.admin:
+            raise HTTPException(
+                status_code=400,
+                detail="Admin accounts can only be created by invite from an existing admin.",
+            )
+        if payload.role == models.RoleEnum.business_owner:
+            raise HTTPException(
+                status_code=400,
+                detail="Business Owner accounts are created by starting a new business.",
+            )
+        business = (
+            db.query(models.Business)
+            .filter(models.Business.invite_code == code)
+            .first()
+        )
+        if not business:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid invite code. Ask your business owner for the correct code.",
+            )
+    else:
+        # Multi-tenant registration: each "create" signup starts its own
+        # business, and the person who registers becomes that business's owner.
+        payload.role = models.RoleEnum.business_owner
+        business = models.Business(
+            company_name=payload.company_name,
+            invite_code=_generate_invite_code(db),
+        )
+        db.add(business)
+        db.flush()
 
     user = models.User(
         full_name=payload.name,
@@ -153,8 +201,10 @@ def register(
     db.flush()
     db.commit()
 
-    # Auto-seed demo data so new users see a populated dashboard
-    try:
+    # Auto-seed demo data so NEW businesses see a populated dashboard.
+    # Joiners must not dump demo rows into an existing business's data.
+    if payload.join_mode != "join":
+      try:
         import random as _rnd, datetime as _dt
         bid = business.id
         _cats = ['Groceries', 'Electronics', 'Clothing', 'Home & Kitchen', 'Personal Care']
@@ -186,7 +236,7 @@ def register(
                 sale_date=_dt.datetime.combine(day, _dt.time(9, 0)),
                 business_id=bid))
         db.commit()
-    except Exception as e:
+      except Exception as e:
         import sys; print(f"SEED ERROR: {e}", file=sys.stderr, flush=True)
         try: db.rollback()
         except: pass
