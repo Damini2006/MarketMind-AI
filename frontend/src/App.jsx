@@ -31,7 +31,6 @@ const Suppliers = lazy(() => import('./pages/Suppliers.jsx'))
 const Datasets = lazy(() => import('./pages/Datasets.jsx'))
 const Team = lazy(() => import('./pages/Team.jsx'))
 const Settings = lazy(() => import('./pages/Settings.jsx'))
-const ActivityLog = lazy(() => import('./pages/ActivityLog.jsx'))
 const AuditTrail = lazy(() => import('./pages/AuditTrail.jsx'))
 const FunnelAnalysis = lazy(() => import('./pages/FunnelAnalysis.jsx'))
 const ReportTemplates = lazy(() => import('./pages/ReportTemplates.jsx'))
@@ -90,8 +89,8 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-    <SplashScreen>
-      <Toaster
+      <SplashScreen>
+        <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
@@ -163,7 +162,7 @@ export default function App() {
         </Routes>
         </Suspense>
       </div>
-    </SplashScreen>
+      </SplashScreen>
     </ErrorBoundary>
   )
 }

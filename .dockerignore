@@ -1,0 +1,7 @@
+.git
+.gitignore
+.env
+*.log
+backend/venv
+frontend/node_modules
+frontend/dist

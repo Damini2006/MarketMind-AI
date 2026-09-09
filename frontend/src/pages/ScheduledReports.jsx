@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import { Loading, PageHeader, Badge } from '../components/ui.jsx'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
   Calendar, Clock, Mail, Send, Plus, Trash2, Edit3, Check, X,
-  FileText, Download, RefreshCw, Users, Bell, Eye,
-  ShoppingCart, Boxes, IndianRupee, BarChart3, LayoutTemplate, AlertTriangle,
+  FileText, Download, RefreshCw, Users,
+  ShoppingCart, Boxes, IndianRupee, LayoutTemplate, AlertTriangle,
 } from 'lucide-react'
 
 const API_BASE = '/user-data'

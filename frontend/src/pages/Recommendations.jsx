@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import api from '../services/api'
-import {Loading, PageHeader, EmptyState, Badge, CardsSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, EmptyState, Badge, PageSkeleton } from '../components/ui.jsx'
 import { ShoppingBag } from 'lucide-react'
 
 export default function Recommendations() {

@@ -87,7 +87,10 @@ export default function GuidedTour({ show, onClose, role }) {
 
   useEffect(() => {
     if (!show) return
-    if (isCenter) { if (highlightRect) setTimeout(() => setHighlightRect(null), 0); return }
+    if (isCenter) {
+      const timer = setTimeout(() => setHighlightRect(null), 0)
+      return () => clearTimeout(timer)
+    }
     let retries = 0
     const maxRetries = 15
     const updatePos = () => {

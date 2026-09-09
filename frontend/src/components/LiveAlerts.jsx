@@ -71,10 +71,8 @@ function AlertToast({ alert, onDismiss }) {
 }
 
 // ─── Settings panel for notification preferences ──────────────────────
-function NotificationPrefs({ prefs, onChange, onClose }) {
-  const { t } = useTranslation()
-
-  const Toggle = ({ label, checked, onChange }) => (
+function Toggle({ label, checked, onChange }) {
+  return (
     <label className="flex items-center justify-between py-2">
       <span className="text-xs font-medium text-slate-700 dark:text-slate-300">{label}</span>
       <div
@@ -85,6 +83,10 @@ function NotificationPrefs({ prefs, onChange, onClose }) {
       </div>
     </label>
   )
+}
+
+function NotificationPrefs({ prefs, onChange, onClose }) {
+  const { t } = useTranslation()
 
   return (
     <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 p-4">
@@ -145,7 +147,7 @@ function NotificationPrefs({ prefs, onChange, onClose }) {
 }
 
 // ─── Main LiveAlerts hook ─────────────────────────────────────────────
-export function useLiveAlerts(prefs) {
+function useLiveAlerts(prefs) {
   const [toasts, setToasts] = useState([])
   const [connected, setConnected] = useState(false)
   const wsRef = useRef(null)
@@ -202,9 +204,8 @@ export function useLiveAlerts(prefs) {
     const connectWs = () => {
       try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const host = window.location.hostname
-        const port = '8000' // Backend port
-        const wsUrl = `${protocol}//${host}:${port}/ws/alerts/${businessId}`
+        const wsHost = window.location.port === '5173' ? `${window.location.hostname}:8000` : window.location.host
+        const wsUrl = `${protocol}//${wsHost}/ws/alerts/${businessId}`
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 

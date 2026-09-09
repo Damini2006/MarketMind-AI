@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import api from '../services/api'
-import {Loading, PageHeader, Badge, ErrorBanner, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+import { PageHeader, Badge, ErrorBanner, PageSkeleton } from '../components/ui.jsx'
 import InteractiveTable, { DetailModal } from '../components/InteractiveTable.jsx'
 import {
   Plus, Users, Mail, Phone, IndianRupee, ShoppingCart,

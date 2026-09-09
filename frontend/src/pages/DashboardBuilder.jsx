@@ -1,25 +1,21 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import GridLayout from 'react-grid-layout'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import api from '../services/api'
-import { Loading, PageHeader, Badge } from '../components/ui.jsx'
+import { Loading, PageHeader } from '../components/ui.jsx'
 import {
   Plus, Trash2, Save, RotateCcw, Settings, Move,
   ShoppingCart, IndianRupee, Users, Boxes, TrendingUp, AlertTriangle,
   LayoutTemplate, Download, Eye, EyeOff, GripVertical, PieChart as PieIcon,
-  BarChart3, Activity, Zap, Target, Layers, Star, Clock, Shield, Search,
+  BarChart3, Activity, Zap, Target, Star, Clock, Search,
 } from 'lucide-react'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, RadarChart, Radar,
-  PolarGrid, PolarAngleAxis, PolarRadiusAxis, Legend,
+  PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts'
-
-import 'react-grid-layout/css/styles.css'
-import 'react-resizable/css/styles.css'
 
 // ─── Widget Registry ──────────────────────────────────────────────────
 const WIDGET_REGISTRY = {
@@ -460,7 +456,6 @@ function WidgetRenderer({ widgetId, data }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────
 export default function DashboardBuilder() {
-  const { t } = useTranslation()
   const [measuredWidth, setMeasuredWidth] = useState(800)
   useEffect(() => {
     const measure = () => {
@@ -611,7 +606,7 @@ export default function DashboardBuilder() {
   // Widget library filtered
   const filteredWidgets = useMemo(() => {
     const search = widgetSearch.toLowerCase()
-    return Object.entries(WIDGET_REGISTRY).filter(([id, w]) => {
+    return Object.entries(WIDGET_REGISTRY).filter(([, w]) => {
       if (search && !w.name.toLowerCase().includes(search) && !w.category.toLowerCase().includes(search)) return false
       return true
     })
@@ -789,7 +784,6 @@ export default function DashboardBuilder() {
             {Array.from(hiddenWidgets).map(id => {
               const widget = WIDGET_REGISTRY[id]
               if (!widget) return null
-              const Icon = widget.icon
               return (
                 <button key={id} onClick={() => toggleWidget(id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 text-[11px] transition-colors">

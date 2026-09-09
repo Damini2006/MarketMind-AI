@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import Avatar from '../components/Avatar'
 import { User, Lock, Shield, Globe, CheckCircle2, Save, KeyRound, Eye, EyeOff, Building2, Camera, Loader2, Calendar, RotateCcw, Download, Smartphone, ShieldCheck } from 'lucide-react'
@@ -91,7 +90,6 @@ function generateTOTPUri(email) {
 }
 
 function TwoFactorSection() {
-  const { t } = useTranslation()
   const { user } = useAuth()
   const [enabled, setEnabled] = useState(() => {
     try { return JSON.parse(localStorage.getItem(TOTP_KEY))?.enabled || false } catch { return false }
@@ -263,14 +261,15 @@ function TwoFactorSection() {
   )
 }
 
-// ─── Install App Section ─────────────────────────────────────────────
 function InstallAppSection() {
-  const [isInstalled, setIsInstalled] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(() => (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone)) || false)
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-      setIsInstalled(true)
-    }
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(display-mode: standalone)')
+    const handler = (e) => setIsInstalled(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [])
 
   const openModal = () => window.dispatchEvent(new CustomEvent('open-install-modal'))
@@ -313,6 +312,37 @@ function InstallAppSection() {
           <Download size={16} /> View Install Guide
         </button>
       </div>
+    </div>
+  )
+}
+
+function SectionCard({ children, className = '' }) {
+  return (
+    <div className={`bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden ${className}`}>
+      {children}
+    </div>
+  )
+}
+
+function SectionHeader({ icon: Icon, title, subtitle, iconBg = 'bg-brand-100 dark:bg-brand-500/20', iconColor = 'text-brand-600 dark:text-brand-400' }) {
+  return (
+    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
+        <Icon size={20} className={iconColor} />
+      </div>
+      <div>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{title}</h3>
+        {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
+      </div>
+    </div>
+  )
+}
+
+function InputField({ label, children }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">{label}</label>
+      {children}
     </div>
   )
 }
@@ -451,31 +481,6 @@ export default function Settings() {
     { label: 'Preferences set', done: !!currency && !!timezone },
   ]
   const completionPct = Math.round((completionItems.filter((i) => i.done).length / completionItems.length) * 100)
-
-  const SectionCard = ({ children, className = '' }) => (
-    <div className={`bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden ${className}`}>
-      {children}
-    </div>
-  )
-
-  const SectionHeader = ({ icon: Icon, title, subtitle, iconBg = 'bg-brand-100 dark:bg-brand-500/20', iconColor = 'text-brand-600 dark:text-brand-400' }) => (
-    <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
-        <Icon size={20} className={iconColor} />
-      </div>
-      <div>
-        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">{title}</h3>
-        {subtitle && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
-      </div>
-    </div>
-  )
-
-  const InputField = ({ label, children }) => (
-    <div>
-      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">{label}</label>
-      {children}
-    </div>
-  )
 
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 dark:bg-slate-900 dark:border-slate-600 dark:text-slate-100"
 

@@ -7,7 +7,7 @@ import api from '../../services/api'
 import DetailModal from '../DetailModal.jsx'
 import { IndianRupee, ShoppingCart, Users, Boxes, AlertTriangle, FileWarning, Activity, Clock, ChevronRight, Download, FileText, Smartphone } from 'lucide-react'
 import { exportToPDF, exportToExcel } from '../../utils/exportUtils'
-import { CountUp, useCountUp } from '../../hooks/useCountUp.jsx'
+import { CountUp } from '../../hooks/useCountUp.jsx'
 import { useTheme } from '../../context/ThemeContext.jsx'
 import BusinessPulse from '../BusinessPulse.jsx'
 

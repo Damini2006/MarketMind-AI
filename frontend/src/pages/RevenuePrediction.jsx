@@ -1,14 +1,13 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from 'react-i18next';
 import api from "../services/api";
 import {
-  IndianRupee, TrendingUp, Zap, BarChart3, History, Sparkles,
-  ArrowUp, ArrowDown, Minus, ChevronDown, ChevronUp, Download, Trash2,
-  ShoppingCart, Users, Boxes, Target, Clock, Star,
+  Zap, BarChart3, History,
+  ChevronDown, ChevronUp, Download, Trash2,
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  BarChart, Bar, Cell,
 } from "recharts";
 import { exportToPDF, exportToExcel } from "../utils/exportUtils";
 
@@ -39,7 +38,6 @@ function FactorBar({ label, value, max, color }) {
 
 // ─── Scenario Card ────────────────────────────────────────────────────
 function ScenarioCard({ scenario, index, onRemove }) {
-  const change = index > 0 ? scenario.revenue - scenarios?.[index - 1]?.revenue : 0
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
       <div className="flex items-center justify-between mb-2">
@@ -83,8 +81,6 @@ function HistoryEntry({ entry, index }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────
-let scenarios = []
-
 export default function RevenuePrediction() {
   const { t } = useTranslation()
   const [formData, setFormData] = useState({

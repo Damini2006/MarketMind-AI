@@ -156,6 +156,9 @@ def startup_seed():
             logging.warning(f"Startup seed skipped: {exc}")
 
     threading.Thread(target=_seed, daemon=True).start()
+    # Warm caches at startup (not just on first request); _ensure_warmup
+    # guards with a flag so the lazy per-request path never double-starts it.
+    _ensure_warmup()
 
 
 def _start_cache_warmup() -> None:

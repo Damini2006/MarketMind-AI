@@ -3,22 +3,19 @@ import api from '../services/api'
 
 export default function SplashScreen({ children }) {
   const [ready, setReady] = useState(false)
-  const [warming, setWarming] = useState(true)
 
   useEffect(() => {
     // Quick health check — if backend is cold, this wakes it up
-    const start = Date.now()
     api.get('/health', { timeout: 30000 })
       .then(() => {
         setReady(true)
-        setWarming(false)
       })
       .catch(() => {
         // Backend might still be waking up — wait and retry once
         setTimeout(() => {
           api.get('/health', { timeout: 30000 })
-            .then(() => { setReady(true); setWarming(false) })
-            .catch(() => { setReady(true); setWarming(false) })
+            .then(() => { setReady(true) })
+            .catch(() => { setReady(true) })
         }, 3000)
       })
   }, [])

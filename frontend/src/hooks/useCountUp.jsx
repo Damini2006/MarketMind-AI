@@ -4,20 +4,17 @@ import { useState, useEffect, useRef } from 'react'
  * useCountUp: Animates a number from 0 to target over duration ms.
  * Returns the current displayed value.
  */
-export function useCountUp(target, { duration = 1200, delay = 0 } = {}) {
-  const [value, setValue] = useState(0)
+function useCountUp(target, { duration = 1200, delay = 0 } = {}) {
+  const [value, setValue] = useState(() => {
+    const num = Number(target)
+    return isNaN(num) || num === 0 ? (target || 0) : 0
+  })
   const startTime = useRef(null)
   const rafId = useRef(null)
 
   useEffect(() => {
-    if (target === 0 || target === null || target === undefined) {
-      setValue(target || 0)
-      return
-    }
-
     const numTarget = Number(target)
-    if (isNaN(numTarget)) {
-      setValue(target)
+    if (isNaN(numTarget) || numTarget === 0) {
       return
     }
 
@@ -50,18 +47,22 @@ export function useCountUp(target, { duration = 1200, delay = 0 } = {}) {
 
 /**
  * CountUp: Animated number display component.
- * Usage: <CountUp value={45000} prefix=₹ suffix= />
+ * Usage: <CountUp value={45000} prefix="₹" suffix="" />
  */
 export function CountUp({ value, prefix = '', suffix = '', decimals = 0, duration = 1200, delay = 0 }) {
   const numericValue = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]/g, '')) : value
   const animated = useCountUp(Math.round(numericValue || 0), { duration, delay })
 
   // Format with locale separators
-  const formatted = animated.toLocaleString('en-IN')
+  const formatted = decimals > 0
+    ? Number(animated).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : animated.toLocaleString('en-IN')
 
   return (
-    <span className="tabular-nums">
-      {prefix}{formatted}{suffix}
+    <span>
+      {prefix}
+      {formatted}
+      {suffix}
     </span>
   )
 }

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import api from '../services/api'
-import {Loading,
+import {
   PageHeader,
-  EmptyState, TableSkeleton, PageSkeleton} from '../components/ui.jsx'
+  EmptyState,
+  Loading
+} from '../components/ui.jsx'
 import {
   UserMinus,
   Percent,

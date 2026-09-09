@@ -26,14 +26,13 @@ if IS_POSTGRES:
     #  - pool_pre_ping: drop dead connections Neon has recycled (free tier
     #    suspends idle compute, which kills pooled connections)
     #  - pool_recycle: refresh connections before Neon's 5-min idle timeout
-    #  - pool_timeout: fail fast if all connections are busy
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"connect_timeout": 5},
+        connect_args={"connect_timeout": 10},
         pool_pre_ping=True,
         pool_recycle=280,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=10,
+        max_overflow=5,
         pool_timeout=10,
     )
 else:

@@ -1,30 +1,27 @@
 import { useState, useEffect } from 'react'
-import { Download, X, Monitor, Smartphone, ChevronRight, Info, CheckCircle2 } from 'lucide-react'
+import { Download, X, Monitor, Smartphone, CheckCircle2 } from 'lucide-react'
 
 export default function InstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
-  const [isInstalled, setIsInstalled] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(() => (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone)) || false)
   const [showModal, setShowModal] = useState(false)
   const [installing, setInstalling] = useState(false)
 
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-  const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent)
-  const isAndroid = /Android/i.test(navigator.userAgent)
-  const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edg/i.test(navigator.userAgent)
-  const isEdge = /Edg/i.test(navigator.userAgent)
-
   useEffect(() => {
-    // Already installed?
-    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
-      setIsInstalled(true)
-      return
-    }
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(display-mode: standalone)')
+    const mqHandler = (e) => setIsInstalled(e.matches)
+    mq.addEventListener('change', mqHandler)
+
     const handler = (e) => {
       e.preventDefault()
       setDeferredPrompt(e)
     }
     window.addEventListener('beforeinstallprompt', handler)
-    return () => window.removeEventListener('beforeinstallprompt', handler)
+    return () => {
+      mq.removeEventListener('change', mqHandler)
+      window.removeEventListener('beforeinstallprompt', handler)
+    }
   }, [])
 
   // Listen for custom event from Settings page or header

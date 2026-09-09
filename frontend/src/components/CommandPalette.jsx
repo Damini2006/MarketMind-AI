@@ -5,7 +5,7 @@ import {
   Search, LayoutDashboard, ShoppingCart, Boxes, FileText, Users,
   UsersRound, Tags, Truck, Database, TrendingUp, PieChart, UserMinus,
   Sparkles, ShieldAlert, ClipboardList, GitCompare, IndianRupee,
-  Settings, Moon, Sun, X, ArrowRight,
+  Settings, ArrowRight,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -37,8 +37,11 @@ export default function CommandPalette({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      setQuery('');
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timer = setTimeout(() => {
+        setQuery('');
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [isOpen]);
 

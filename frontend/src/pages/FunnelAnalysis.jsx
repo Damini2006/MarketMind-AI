@@ -1,15 +1,14 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useTranslation } from 'react-i18next'
 import api from '../services/api'
 import { Loading, PageHeader } from '../components/ui.jsx'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
-  Download, TrendingDown, Users, ShoppingCart, ArrowDown, Eye, Clock,
-  Repeat, Star, Crown, Filter, ChevronDown, BarChart3, Target, Zap,
+  Download, TrendingDown, Users, ShoppingCart, Clock,
+  Repeat, Star, Crown, Filter, BarChart3, Target, Zap,
 } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar, Cell, AreaChart, Area, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, AreaChart, Area, Legend,
 } from 'recharts'
 
 // ─── Time Range Options ───────────────────────────────────────────────
@@ -93,9 +92,7 @@ function SegmentBar({ segment, total }) {
   )
 }
 
-// ─── Main Component ───────────────────────────────────────────────────
 export default function FunnelAnalysis() {
-  const { t } = useTranslation()
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState([])
   const [sales, setSales] = useState([])
@@ -226,14 +223,20 @@ export default function FunnelAnalysis() {
     return null
   }, [segment, customers, filteredSales, products])
 
-  // Conversion trend data (simulated for demo)
+  // Conversion trend data (deterministic baseline)
   const trendData = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-    return months.map((m, i) => ({
+    const baseRates = [
+      { visitorToPurchase: 36, purchaseToRepeat: 28, repeatToHighValue: 24 },
+      { visitorToPurchase: 39, purchaseToRepeat: 31, repeatToHighValue: 26 },
+      { visitorToPurchase: 42, purchaseToRepeat: 29, repeatToHighValue: 28 },
+      { visitorToPurchase: 38, purchaseToRepeat: 33, repeatToHighValue: 25 },
+      { visitorToPurchase: 44, purchaseToRepeat: 35, repeatToHighValue: 31 },
+      { visitorToPurchase: 41, purchaseToRepeat: 32, repeatToHighValue: 29 },
+    ]
+    return months.map((m, idx) => ({
       month: m,
-      visitorToPurchase: Math.round(30 + Math.random() * 15),
-      purchaseToRepeat: Math.round(25 + Math.random() * 10),
-      repeatToHighValue: Math.round(20 + Math.random() * 15),
+      ...baseRates[idx],
     }))
   }, [])
 

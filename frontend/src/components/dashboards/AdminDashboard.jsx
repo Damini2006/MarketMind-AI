@@ -152,7 +152,7 @@ export default function AdminDashboard() {
                 <p className="text-sm text-slate-500 dark:text-slate-400">No geolocated logins yet</p>
                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs">
                   Pins appear once users sign in from real IP addresses — logins from this
-                  machine are recorded as "Local".
+                  machine are recorded as “Local”.
                 </p>
               </div>
             )}
