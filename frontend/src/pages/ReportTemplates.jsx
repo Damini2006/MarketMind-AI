@@ -580,20 +580,21 @@ export default function ReportTemplates() {
                     <Badge tone="slate">{template.category}</Badge>
                   </div>
                 </div>
-                {!template.builtin && template.id.startsWith('custom-') && (
+                {!template.builtin && (
                   <button onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(template.id) }}
-                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-400">
+                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-400"
+                    title="Delete template">
                     <Trash2 size={14} />
                   </button>
                 )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">{template.description}</p>
               <div className="flex items-center gap-1 flex-wrap">
-                {template.sections.slice(0, 3).map(s => (
-                  <span key={s} className="text-[9px] px-1.5 py-0.5 bg-white/80 dark:bg-slate-800/80 rounded text-slate-500">{SECTION_LABELS[s]}</span>
+                {(template.sections || []).slice(0, 3).map(s => (
+                  <span key={s} className="text-[9px] px-1.5 py-0.5 bg-white/80 dark:bg-slate-800/80 rounded text-slate-500">{SECTION_LABELS[s] || s}</span>
                 ))}
-                {template.sections.length > 3 && (
-                  <span className="text-[9px] text-slate-400">+{template.sections.length - 3} more</span>
+                {(template.sections || []).length > 3 && (
+                  <span className="text-[9px] text-slate-400">+{(template.sections || []).length - 3} more</span>
                 )}
               </div>
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-700/50">

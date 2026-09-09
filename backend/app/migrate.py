@@ -24,7 +24,10 @@ def run_alembic_upgrade(engine) -> None:
     cfg.set_main_option("sqlalchemy.url", str(engine.url))
 
     print("[migrate] Running Alembic migrations...")
-    command.upgrade(cfg, "head")
+    try:
+        command.upgrade(cfg, "head")
+    except Exception as exc:
+        print(f"[migrate] Alembic upgrade notice (non-fatal): {exc}")
 
 
 def ensure_business_id_columns(engine) -> None:

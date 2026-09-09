@@ -63,11 +63,20 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const clone = response.clone();
-          caches.open(API_CACHE).then((cache) => cache.put(request, clone));
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(API_CACHE).then((cache) => cache.put(request, clone));
+          }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(async () => {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          return new Response(JSON.stringify({ error: 'Offline / Network error' }), {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        })
     );
     return;
   }
@@ -84,11 +93,13 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       });
-    }).catch(() => {
+    }).catch(async () => {
       // Offline fallback: return cached index.html for navigation requests
       if (request.mode === 'navigate') {
-        return caches.match('/index.html');
+        const fallback = await caches.match('/index.html');
+        if (fallback) return fallback;
       }
+      return new Response('Network error', { status: 408, headers: { 'Content-Type': 'text/plain' } });
     })
   );
 });
