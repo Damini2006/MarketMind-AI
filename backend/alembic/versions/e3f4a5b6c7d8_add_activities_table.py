@@ -1,4 +1,9 @@
-"""Add activities table for audit trail
+"""Neutralize dead activities table
+
+The ``activities`` table is created here but no ``Activity`` model (or any
+application code) ever used it — the audit trail reads ``audit_logs``
+instead. This revision drops it so databases left over from the earlier
+forked history converge on the models' real schema.
 
 Revision ID: e3f4a5b6c7d8
 Revises: d1e2f3a4b5c6
@@ -17,6 +22,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Table was created in the pre-repair history but never used by models.
+    op.execute("DROP TABLE IF EXISTS activities")
+
+
+def downgrade() -> None:
     op.create_table(
         "activities",
         sa.Column("id", sa.Integer(), primary_key=True, index=True),
@@ -30,15 +40,3 @@ def upgrade() -> None:
         sa.Column("ip_address", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),
     )
-    op.create_index("ix_activities_business_id", "activities", ["business_id"])
-    op.create_index("ix_activities_user_id", "activities", ["user_id"])
-    op.create_index("ix_activities_action", "activities", ["action"])
-    op.create_index("ix_activities_created_at", "activities", ["created_at"])
-
-
-def downgrade() -> None:
-    op.drop_index("ix_activities_created_at", table_name="activities")
-    op.drop_index("ix_activities_action", table_name="activities")
-    op.drop_index("ix_activities_user_id", table_name="activities")
-    op.drop_index("ix_activities_business_id", table_name="activities")
-    op.drop_table("activities")

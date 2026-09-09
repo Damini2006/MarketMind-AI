@@ -1,7 +1,7 @@
 """Add DOB and 2FA fields to users
 
 Revision ID: d1e2f3a4b5c6
-Revises: ba757f8ac6d8
+Revises: e2d4f8a1c3b5
 Create Date: 2026-08-13 10:00:00.000000
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "d1e2f3a4b5c6"
-down_revision = "ba757f8ac6d8"
+down_revision = "e2d4f8a1c3b5"
 branch_labels = None
 depends_on = None
 

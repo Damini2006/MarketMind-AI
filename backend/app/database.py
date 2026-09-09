@@ -1,10 +1,21 @@
 import os
+import sys
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Defaults to a local SQLite file so the project runs with zero external setup.
-# Set DATABASE_URL=postgresql://user:pass@host:5432/dbname to use PostgreSQL instead.
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./marketmind.db")
+# DATABASE_URL is REQUIRED. No silent fallback to a local SQLite file: that
+# fallback made the app quietly create/point at ./marketmind.db whenever .env
+# was missing or incomplete, which looked like "the database lost my account".
+# Fail fast instead.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    sys.stderr.write(
+        "\n[config] DATABASE_URL is not set.\n"
+        "[config] Add it to backend/.env, e.g.\n"
+        "[config]   DATABASE_URL=postgresql://user:pass@host:5432/dbname?sslmode=require\n\n"
+    )
+    raise SystemExit(1)
 
 IS_POSTGRES = DATABASE_URL.startswith("postgresql")
 connect_args = {"check_same_thread": False} if not IS_POSTGRES else {}

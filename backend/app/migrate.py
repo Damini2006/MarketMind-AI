@@ -7,8 +7,7 @@ into a default business so existing data keeps working.
 
 For PostgreSQL (and any other non-SQLite database) the hand-rolled SQLite path
 cannot apply, so the project's Alembic migrations are run instead (see
-backend/migrations/). The first revision upgrades the legacy Neon schema to the
-current models.
+backend/alembic/versions/).
 """
 import datetime as dt
 import os
@@ -37,27 +36,17 @@ USER_EXTRA_COLUMNS = {
     "avatar_color": "VARCHAR",
     "avatar_url": "VARCHAR",
     "bio": "TEXT",
+    "dob": "DATE",
+    "tour_completed": "BOOLEAN DEFAULT FALSE",
 }
 
 
 def run_alembic_upgrade(engine) -> None:
     """Apply Alembic migrations (PostgreSQL and other non-SQLite databases)."""
-    # Quick check: if already at head, skip the slow Alembic bootstrap
-    # to avoid NeonDB connection timeouts on startup.
-    try:
-        with engine.connect() as conn:
-            current = conn.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar()
-            if current:
-                print(f"[migrate] Already at migration version '{current}' — skipping upgrade.")
-                return
-    except Exception:
-        pass  # table may not exist yet; fall through to Alembic
-
     try:
         from alembic import command
         from alembic.config import Config
+        from alembic.script import ScriptDirectory
     except ImportError:
         print(
             "[migrate] alembic is not installed — run "
@@ -77,11 +66,65 @@ def run_alembic_upgrade(engine) -> None:
     cfg.set_main_option("script_location", alembic_dir)
     cfg.set_main_option("sqlalchemy.url", str(engine.url))
 
-    print("[migrate] Running Alembic migrations...")
+    # Compare the DB's stamped revision(s) against the script head instead of
+    # skipping on "any stamp exists": DBs stamped with a retired revision
+    # (old forked history, retired custom numbering) must be brought up to
+    # head, or their schema silently diverges from the models.
+    try:
+        heads = ScriptDirectory.from_config(cfg).get_heads()
+    except Exception:
+        heads = []
+    try:
+        with engine.connect() as conn:
+            stamps = [r[0] for r in conn.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).fetchall()]
+    except Exception:
+        stamps = []  # no alembic_version table yet — fresh database
+
+    if stamps == heads:
+        print(f"[migrate] Already at migration head '{heads[0] if heads else '?'}' — skipping upgrade.")
+        return
+
+    if len(stamps) == 1 and stamps[0] not in heads:
+        try:
+            ScriptDirectory.from_config(cfg).get_revision(stamps[0])
+        except Exception:
+            # Unknown stamp: schema was built by other means (retired custom
+            # migrations). create_all has already reconciled tables/columns,
+            # so re-stamp instead of replaying history over existing tables.
+            print(
+                f"[migrate] Unknown stamp '{stamps[0]}' (retired migration "
+                "history) — re-stamping to head instead of replaying."
+            )
+            try:
+                # Alembic cannot re-stamp while the current stamp is unknown,
+                # so clear the version table first.
+                with engine.begin() as conn:
+                    conn.execute(text("DELETE FROM alembic_version"))
+            except Exception as exc:
+                print(f"[migrate] Could not clear stale stamp (non-fatal): {exc}")
+            try:
+                command.stamp(cfg, "head")
+            except Exception as exc:
+                print(f"[migrate] Alembic stamp failed (non-fatal): {exc}")
+            return
+
+    print(f"[migrate] Running Alembic migrations (stamped {stamps or 'nothing'} -> head)...")
     try:
         command.upgrade(cfg, "head")
     except Exception as exc:
-        print(f"[migrate] Alembic upgrade failed (non-fatal): {exc}")
+        msg = str(exc)
+        if "already exists" in msg:
+            # Tables were created by create_all on a previous run (fresh DB
+            # bootstrapped without migrations). Adopt them instead of failing.
+            print("[migrate] Tables already exist (create_all ran earlier) — stamping head instead.")
+            try:
+                command.stamp(cfg, "head")
+            except Exception as exc2:
+                print(f"[migrate] Alembic stamp failed (non-fatal): {exc2}")
+        else:
+            print(f"[migrate] Alembic upgrade failed (non-fatal): {exc}")
 
 
 def ensure_business_id_columns(engine) -> None:
