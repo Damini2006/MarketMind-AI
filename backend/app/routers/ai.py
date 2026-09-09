@@ -405,48 +405,131 @@ def train_recommendations(
     return ml_recs.train_recommendation_model(db, current_user.business_id)
 
 @router.get("/recommendations")
-@ttl_cache(ttl=600)
 def get_all_recommendations(
-    db: Session = Depends(get_db), current_user=Depends(get_current_user)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    page: int = 1,
+    page_size: int = 5,
 ) -> Dict[str, Any]:
-    """Get recommendations for a sample of top customers."""
-    # Order customers by total sales amount (Customer model has no total_spent column)
-    from sqlalchemy import func as sa_func
-    cust_spending = (
-        db.query(
-            models.Sale.customer_id,
-            sa_func.coalesce(sa_func.sum(models.Sale.total_amount), 0).label("total")
-        )
-        .filter(models.Sale.business_id == current_user.business_id)
-        .group_by(models.Sale.customer_id)
-        .subquery()
-    )
-    customers = (
-        db.query(models.Customer)
-        .outerjoin(cust_spending, models.Customer.id == cust_spending.c.customer_id)
-        .filter(models.Customer.business_id == current_user.business_id)
-        .order_by(sa_func.coalesce(cust_spending.c.total, 0).desc())
-        .limit(10)
-        .all()
-    )
+    """Rich paginated recommendations feed (per-customer, per-item detail).
 
-    # Batch-optimised: 5 queries total instead of ~5 per customer (N+1),
-    # which cut this endpoint from ~17s to well under 5s on Neon.
-    batch = ml_recs.get_all_recommendations_batch(db, current_user.business_id, [c.id for c in customers], limit=3)
-    by_id = {c.id: c for c in customers}
-    rows = []
-    for cid, recs in batch:
-        c = by_id.get(cid)
-        if not c:
-            continue
-        if recs:
-            rows.append({
-                "customer_id": cid,
-                "customer_name": c.name,
-                "recommended_products": [r["name"] for r in recs],
-                "reason": "Based on purchase history and similar customers."
-            })
-    return {"rows": rows}
+    Each item carries recommendation_type (cross_sell / personalized / popular),
+    a 0–1 score, price and category, and each customer row carries order stats
+    so the frontend renders metric cards, filters and match rings without
+    extra requests. Manual pagination instead of @ttl_cache so page params
+    never collide in the cache key.
+    """
+    from sqlalchemy import func as sa_func
+    from ..cache import get_or_set
+
+    bid = current_user.business_id
+
+    def _load():
+        # Order customers by total spend (Customer model has no total_spent column)
+        cust_stats = (
+            db.query(
+                models.Sale.customer_id,
+                sa_func.coalesce(sa_func.sum(models.Sale.total_amount), 0).label("total"),
+                sa_func.count(models.Sale.id).label("orders"),
+            )
+            .filter(models.Sale.business_id == bid)
+            .group_by(models.Sale.customer_id)
+            .subquery()
+        )
+        total_customers = (
+            db.query(sa_func.count(models.Customer.id))
+            .filter(models.Customer.business_id == bid)
+            .scalar()
+            or 0
+        )
+        customers = (
+            db.query(models.Customer)
+            .outerjoin(cust_stats, models.Customer.id == cust_stats.c.customer_id)
+            .filter(models.Customer.business_id == bid)
+            .order_by(sa_func.coalesce(cust_stats.c.total, 0).desc())
+            .all()
+        )
+
+        page_size_c = max(1, min(page_size, 25))
+        page_c = max(1, page)
+        start = (page_c - 1) * page_size_c
+        page_customers = customers[start : start + page_size_c]
+
+        # Batch-optimised: 5 queries total instead of ~5 per customer (N+1),
+        # which cut this endpoint from ~17s to well under 5s on Neon.
+        batch = ml_recs.get_all_recommendations_batch(
+            db, bid, [c.id for c in page_customers], limit=4
+        )
+        by_id = {c.id: c for c in page_customers}
+        rows = []
+        for cid, recs in batch:
+            c = by_id.get(cid)
+            if not c:
+                continue
+            rows.append(
+                {
+                    "customer_id": cid,
+                    "customer_name": c.name,
+                    "total_orders": None,
+                    "average_order_value": None,
+                    "recommendations": [
+                        {
+                            "product_id": r.get("product_id"),
+                            "product_name": r.get("name"),
+                            "name": r.get("name"),
+                            "price": r.get("price"),
+                            "category": r.get("category"),
+                            "score": r.get("score"),
+                            "recommendation_type": r.get("recommendation_type", "popular"),
+                            "signals": {
+                                "association_score": r.get("score")
+                                if r.get("recommendation_type") == "cross_sell"
+                                else 0,
+                                "collaborative_score": r.get("score")
+                                if r.get("recommendation_type") == "personalized"
+                                else 0,
+                                "popularity_score": r.get("score")
+                                if r.get("recommendation_type") == "popular"
+                                else 0,
+                                "price_score": 0,
+                            },
+                        }
+                        for r in (recs or [])
+                    ],
+                }
+            )
+
+        # Fill per-customer order stats from the stats subquery
+        stats_map = {
+            row[0]: (row[1], row[2])
+            for row in db.query(
+                cust_stats.c.customer_id,
+                cust_stats.c.total,
+                cust_stats.c.orders,
+            ).all()
+        }
+        for row in rows:
+            total, orders = stats_map.get(row["customer_id"], (0, 0))
+            row["total_orders"] = int(orders or 0)
+            row["average_order_value"] = round(float(total or 0) / orders, 2) if orders else None
+
+        type_counts: Dict[str, int] = {"all": 0}
+        for row in rows:
+            for r in row["recommendations"]:
+                t = r["recommendation_type"]
+                type_counts[t] = type_counts.get(t, 0) + 1
+                type_counts["all"] += 1
+
+        return {
+            "rows": rows,
+            "page": page_c,
+            "page_size": page_size_c,
+            "total_pages": max(1, -(-total_customers // page_size_c)),
+            "total_customers": total_customers,
+            "type_counts": type_counts,
+        }
+
+    return get_or_set(f"ai:{bid}:recommendations_feed:p{page}:s{page_size}", 600, _load)
 
 @router.get("/recommendations/customer/{customer_id}")
 def get_personalized_recs(

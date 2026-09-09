@@ -9,6 +9,7 @@ All functions are stateless — computed on the fly from current sales data.
 Optimised to minimise round-trips to remote Postgres (Neon).
 """
 
+import math
 from collections import defaultdict
 from typing import Any, Dict, List
 
@@ -170,9 +171,14 @@ def _recommend_for_customer(
     pop: Dict[int, float],
     limit: int,
 ) -> List[Dict[str, Any]]:
-    """Core recommendation logic shared by single and batch endpoints."""
+    """Core recommendation logic shared by single and batch endpoints.
 
-    # Strategy 1: Co-purchase matrix
+    Each result carries a ``recommendation_type`` naming the strategy that
+    produced it (cross_sell / personalized / popular) and a ``score``
+    normalized to 0–1 so the UI can render match-percentage rings.
+    """
+
+    # Strategy 1: Co-purchase matrix (association rules → cross-sell)
     if matrix:
         candidate_scores: Dict[int, float] = defaultdict(float)
         for pid in purchased:
@@ -181,20 +187,28 @@ def _recommend_for_customer(
                     candidate_scores[other_id] += count
         if candidate_scores:
             ranked = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-            return _hydrate_products(db, ranked)
+            items = _hydrate_products(db, ranked)
+            _normalize_scores(items)
+            for it in items:
+                it["recommendation_type"] = "cross_sell"
+            return items
 
     # Strategy 2: Category-based — suggest popular items from categories
     # the customer has bought from (but not products they already own)
     if purchased:
         liked_cats = {cat_map.get(pid, "Uncategorized") for pid in purchased}
-        candidate_scores: Dict[int, float] = defaultdict(float)
+        candidate_scores = defaultdict(float)
         for cat in liked_cats:
             for pid, score in cat_pop.get(cat, {}).items():
                 if pid not in purchased:
                     candidate_scores[pid] += score
         if candidate_scores:
             ranked = sorted(candidate_scores.items(), key=lambda x: x[1], reverse=True)[:limit]
-            return _hydrate_products(db, ranked)
+            items = _hydrate_products(db, ranked)
+            _normalize_scores(items)
+            for it in items:
+                it["recommendation_type"] = "personalized"
+            return items
 
     # Strategy 3: Pure popularity — top-selling items not yet purchased
     ranked_pop = [
@@ -203,11 +217,31 @@ def _recommend_for_customer(
         if pid not in purchased
     ][:limit]
     if ranked_pop:
-        return _hydrate_products(db, ranked_pop)
+        items = _hydrate_products(db, ranked_pop)
+        _normalize_scores(items)
+        for it in items:
+            it["recommendation_type"] = "popular"
+        return items
 
     # If customer bought everything, show top sellers as "reorder suggestions"
     ranked_all = sorted(pop.items(), key=lambda x: x[1], reverse=True)[:limit]
-    return _hydrate_products(db, ranked_all)
+    items = _hydrate_products(db, ranked_all)
+    _normalize_scores(items)
+    for it in items:
+        it["recommendation_type"] = "popular"
+    return items
+
+
+def _normalize_scores(items: List[Dict[str, Any]]) -> None:
+    """Squash raw co-purchase/category counts into a 0–1 confidence score.
+
+    Raw counts are unbounded, so map them through a logistic: score ≈ 0.5 at
+    5 co-purchases, ≈ 0.73 at 10, ≈ 0.88 at 20 — reads as a believable
+    match-percentage in the UI without pretending to be a probability.
+    """
+    for it in items:
+        raw = float(it.get("score") or 0)
+        it["score"] = round(1.0 / (1.0 + math.exp(-0.2 * (raw - 5.0))), 3)
 
 
 def get_cross_sell_recommendations(
