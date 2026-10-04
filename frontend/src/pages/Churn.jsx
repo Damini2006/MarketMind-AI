@@ -197,6 +197,8 @@ export default function Churn() {
   const accuracy = data.accuracy ?? data.model_performance?.accuracy ?? null
   const precision = data.precision ?? data.model_performance?.precision ?? null
   const f1 = data.f1 ?? data.model_performance?.f1 ?? null
+  const auc = data.auc ?? data.model_performance?.auc ?? null
+  const decisionThreshold = data.decision_threshold ?? data.model_performance?.decision_threshold ?? null
   const usingHeuristic = accuracy == null
 
   const totalCustomers = visibleRows.length || 1
@@ -325,7 +327,7 @@ export default function Churn() {
 
       <PageHeader
         title="Churn Prediction"
-        subtitle="AI-powered customer retention risk analysis using purchase inactivity and engagement signals."
+        subtitle="Current risk scoring: who is at risk of lapsing right now, based on purchase recency against each customer's own visit cadence."
       />
 
       {/* ===================== KPI CARDS ===================== */}
@@ -350,7 +352,10 @@ export default function Churn() {
               <p className="mt-2 text-2xl font-bold text-slate-900 dark:text-white">
                 {accuracy != null ? `${(Number(accuracy) * 100).toFixed(1)}%` : '—'}
               </p>
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">Cross-validated</p>
+              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Cross-validated, current risk
+                {auc != null && ` · AUC ${Number(auc).toFixed(3)}`}
+              </p>
             </div>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-500/10">
               <Percent size={21} className="text-emerald-600 dark:text-emerald-400" />
@@ -406,6 +411,14 @@ export default function Churn() {
       </div>
 
       
+      {accuracy != null && (
+        <p className="mb-6 text-xs text-slate-400 dark:text-slate-500">
+          Scores are current-risk probabilities: each customer's recency measured against their own visit cadence.
+          Probabilities are calibrated and the decision threshold is tuned (currently {decisionThreshold ?? '—'}), so the
+          High/Medium/Low tiers reflect real likelihoods rather than a fixed 50% cut.
+        </p>
+      )}
+
       {/* ===================== RISK DISTRIBUTION + PROBABILITY HISTOGRAM (unchanged) ===================== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm dark:shadow-black/20 transition-colors duration-300">

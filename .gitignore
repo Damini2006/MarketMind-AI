@@ -34,3 +34,9 @@ backend/marketmind-preview.db
 venv/
 .venv/
 env/
+
+# Frontend production build output
+frontend/dist/
+
+# Freebuff agent runtime state
+.freebuff/

@@ -19,6 +19,8 @@ const TYPE_CONFIG = {
 const SIGNAL_REASON_CONFIG = [
   { key: 'collaborative_score', icon: Users, label: 'Similar customers', text: 'Customers with similar purchase patterns also bought this.' },
   { key: 'association_score', icon: Layers3, label: 'Frequently bought together', text: "Often purchased alongside items in this customer's history." },
+  { key: 'reorder_score', icon: RefreshCw, label: 'Repeat purchase due', text: 'A repeat item this customer may be ready to buy again.' },
+  { key: 'category_score', icon: Layers3, label: 'Category fit', text: "Matches the categories this customer buys from most." },
   { key: 'popularity_score', icon: TrendingUp, label: 'Popular choice', text: 'Frequently purchased and currently in stock.' },
   { key: 'price_score', icon: Wallet, label: 'Price fit', text: "Closely matches this customer's typical spending range." },
 ]
@@ -58,10 +60,23 @@ function matchTier(score) {
   return { label: 'Fair match', color: '#f59e0b' }
 }
 
-// Picks the single best "why" for a card: prefer the dominant real signal
-// (so the explanation reflects what actually drove the score), and only
-// fall back to a generic type-based reason when no signal detail exists.
+// Channels the four signal scores above cannot express. A repeat-purchase or
+// category-affinity pick has no matching signal slot, so without these the
+// card labelled it "Popular choice" while the engine's own reason text said
+// "a repeat item this customer may be ready to buy again". The engine reports
+// which channel actually drove each pick, so the label follows it.
+const CHANNEL_REASON_CONFIG = {
+  reorder: { icon: RefreshCw, label: 'Repeat purchase due', text: 'A repeat item this customer may be ready to buy again.' },
+  category: { icon: Layers3, label: 'Category fit', text: "Matches the categories this customer buys from most." },
+}
+
+// Picks the single best "why" for a card: prefer the channel/signal that
+// actually drove the score, and only fall back to a generic type-based reason
+// when the engine reported neither.
 function getReasonInfo(recommendation) {
+  const channelEntry = CHANNEL_REASON_CONFIG[recommendation.dominant_channel]
+  if (channelEntry) return channelEntry
+
   const signals = recommendation.signals || {}
   const scored = SIGNAL_REASON_CONFIG
     .map((entry) => ({ ...entry, value: Number(signals[entry.key] || 0) }))
@@ -117,16 +132,29 @@ function RecommendationCard({ recommendation, rank, delay }) {
   // Sort the breakdown so the signal that actually drove the score appears
   // first, rather than a fixed collaborative/association/popularity/price
   // order that can bury the one signal that matters for this product.
+  // Every channel the engine can score, so the rows shown always include the
+  // one that actually drove the pick (a reorder or category pick used to fall
+  // outside this table entirely and read as two empty bars).
   const signalRows = useMemo(() => {
     return [
       { label: 'Collaborative', value: Number(signals.collaborative_score || 0) },
       { label: 'Association', value: Number(signals.association_score || 0) },
+      { label: 'Reorder due', value: Number(signals.reorder_score || 0) },
+      { label: 'Category fit', value: Number(signals.category_score || 0) },
       { label: 'Popularity', value: Number(signals.popularity_score || 0) },
       { label: 'Price fit', value: Number(signals.price_score || 0) },
     ].sort((a, b) => b.value - a.value)
-  }, [signals.collaborative_score, signals.association_score, signals.popularity_score, signals.price_score])
+  }, [
+    signals.collaborative_score, signals.association_score, signals.reorder_score,
+    signals.category_score, signals.popularity_score, signals.price_score,
+  ])
 
-  const hasSignalDetail = signalRows.some((row) => row.value > 0)
+  // Only rows with real evidence are drawn. Empty channels move to a footnote
+  // instead of rendering as 0% bars, which read as missing data rather than
+  // as "this channel found nothing for this product".
+  const activeRows = signalRows.filter((row) => row.value > 0)
+  const silentChannels = signalRows.filter((row) => row.value === 0).map((row) => row.label)
+  const hasSignalDetail = activeRows.length > 0
 
   return (
     <article
@@ -145,7 +173,7 @@ function RecommendationCard({ recommendation, rank, delay }) {
                 <span className="h-1 w-1 rounded-full bg-current" />
                 <span style={{ color: tier.color }}>{tier.label}</span>
               </div>
-              <h4 className="mt-0.5 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{recommendation.product_name}</h4>
+              <h4 className="mt-0.5 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{recommendation.product_name || recommendation.name}</h4>
               {recommendation.category && <p className="mt-0.5 truncate text-[11px] text-slate-400 dark:text-slate-500">{recommendation.category}</p>}
             </div>
             <p className="shrink-0 text-sm font-extrabold tabular-nums text-slate-900 dark:text-white">{formatCurrency(recommendation.price)}</p>
@@ -179,7 +207,7 @@ function RecommendationCard({ recommendation, rank, delay }) {
           </button>
           {showDetail && (
             <div className="mt-2 space-y-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
-              {signalRows.map(({ label, value }, index) => {
+              {activeRows.map(({ label, value }, index) => {
                 const p = Math.max(0, Math.min(100, value * 100))
                 const isDominant = index === 0 && value > 0
                 return (
@@ -194,6 +222,11 @@ function RecommendationCard({ recommendation, rank, delay }) {
                   </div>
                 )
               })}
+              {silentChannels.length > 0 && (
+                <p className="pt-1 text-[9px] leading-relaxed text-slate-400 dark:text-slate-500">
+                  No evidence for: {silentChannels.join(', ')}.
+                </p>
+              )}
             </div>
           )}
         </>
@@ -206,8 +239,16 @@ function MiniStat({ label, value }) {
   return <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-right dark:border-slate-800 dark:bg-slate-800/60"><p className="text-[8px] font-bold uppercase tracking-wider text-slate-400">{label}</p><p className="text-xs font-extrabold tabular-nums text-slate-700 dark:text-slate-200">{value}</p></div>
 }
 
+// The API has returned the per-customer list as `recommendations` and, in
+// older responses, as `items`. Accept either: a tab that rendered against one
+// shape and re-rendered against the other used to show every card as "No
+// recommendations available" even though the products were right there.
+function rowRecommendations(customer) {
+  return customer?.recommendations || customer?.items || []
+}
+
 function CustomerCard({ customer, expanded, onToggle }) {
-  const recommendations = customer.recommendations || []
+  const recommendations = rowRecommendations(customer)
   const bestScore = recommendations.reduce((max, r) => Math.max(max, Number(r.score || 0)), 0)
 
   return (
@@ -245,8 +286,7 @@ function CustomerCard({ customer, expanded, onToggle }) {
             <div className="flex items-center gap-1.5 rounded-full border border-violet-100 bg-violet-50 px-2.5 py-1 text-[9px] font-bold text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-300"><Cpu size={10} />AI ranked</div>
           </div>
           {recommendations.length > 0 ? (
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {recommendations.map((recommendation, index) => (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">                  {recommendations.map((recommendation, index) => (
                 <RecommendationCard key={`${recommendation.product_id}-${index}`} recommendation={recommendation} rank={index + 1} delay={index * 60} />
               ))}
             </div>
@@ -336,19 +376,19 @@ export default function Recommendations() {
 
   useEffect(() => { fetchRecommendations(1) }, [])
 
-  const totalRecommendations = useMemo(() => rows.reduce((total, customer) => total + (customer.recommendations?.length || 0), 0), [rows])
-  const strongMatches = useMemo(() => rows.reduce((total, customer) => total + (customer.recommendations || []).filter((item) => Number(item.score || 0) >= 0.75).length, 0), [rows])
+  const totalRecommendations = useMemo(() => rows.reduce((total, customer) => total + rowRecommendations(customer).length, 0), [rows])
+  const strongMatches = useMemo(() => rows.reduce((total, customer) => total + rowRecommendations(customer).filter((item) => Number(item.score || 0) >= 0.75).length, 0), [rows])
   const typeCounts = useMemo(() => {
     if (globalTypeCounts) return globalTypeCounts
     const counts = { all: 0 }
-    rows.forEach((customer) => (customer.recommendations || []).forEach((item) => { const type = item.recommendation_type || 'other'; counts[type] = (counts[type] || 0) + 1; counts.all += 1 }))
+    rows.forEach((customer) => rowRecommendations(customer).forEach((item) => { const type = item.recommendation_type || 'other'; counts[type] = (counts[type] || 0) + 1; counts.all += 1 }))
     return counts
   }, [rows, globalTypeCounts])
   const countsAreGlobal = Boolean(globalTypeCounts)
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase()
     return rows.map((customer) => {
-      const recommendations = (customer.recommendations || []).filter((item) => typeFilter === 'all' || (item.recommendation_type || 'other') === typeFilter)
+      const recommendations = rowRecommendations(customer).filter((item) => typeFilter === 'all' || (item.recommendation_type || 'other') === typeFilter)
       const customerMatches = customer.customer_name?.toLowerCase().includes(query)
       const productMatches = recommendations.some((item) => item.product_name?.toLowerCase().includes(query))
       return !query || customerMatches || productMatches ? { ...customer, recommendations } : null

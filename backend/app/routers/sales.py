@@ -3,13 +3,15 @@ import datetime as dt
 from typing import List, Optional
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
+from .core.uploads import read_csv_upload
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from .. import models, schemas
-from ..cache import get_or_set, invalidate
-from ..database import get_db
-from ..deps import get_current_user, require_roles
+from . import models, schemas
+from .cache import get_or_set, invalidate
+from .database import get_db
+from .deps import get_current_user, require_roles
 from .inventory import _check_and_create_alert, _ensure_inventory_row, _record_inventory_transaction
 from ..ml.business_alerts import check_sale_business_rules
 
@@ -141,10 +143,7 @@ def upload_sales_csv(
     Performs validation, auto-creates missing products/customers (matched case/whitespace-insensitively),
     and stores transactions.
     """
-    if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only .csv files are supported")
-
-    raw = file.file.read()
+    raw = read_csv_upload(file)
     try:
         df = pd.read_csv(io.BytesIO(raw))
     except Exception as exc:
@@ -161,7 +160,52 @@ def upload_sales_csv(
     df = df.dropna(subset=["quantity", "unit_price"])
     df = df[(df["quantity"] > 0) & (df["unit_price"] >= 0)]
 
-    created, skipped = 0, 0
+    # Parse the date column once up front. The duplicate guard below compares
+    # the exact timestamp that will be stored, so the parsed value has to be
+    # decided here rather than inside the insert loop (where a failed parse
+    # silently became "now" -- a value that can never match an existing row).
+    if "sale_date" in df.columns:
+        parsed = pd.to_datetime(df["sale_date"], errors="coerce")
+        if getattr(parsed.dt, "tz", None) is not None:
+            # The column is a naive DateTime, so an offset cannot be kept.
+            parsed = parsed.dt.tz_localize(None)
+        df["sale_date"] = parsed
+    else:
+        df["sale_date"] = pd.NaT
+
+    # ── Duplicate guard ──────────────────────────────────────────────
+    # Uploading the same file twice used to insert a second (and third) copy of
+    # every row, multiplying that period's revenue -- business 1's Aug 1-10
+    # rows were imported three times and trebled. A row counts as a duplicate
+    # only when the FULL transaction identity matches: same product, customer,
+    # quantity, unit price AND timestamp. A genuine repeat purchase later the
+    # same day carries a different timestamp and is still imported.
+    def _as_naive(value):
+        return value.to_pydatetime() if hasattr(value, "to_pydatetime") else value
+
+    parsed_dates = df["sale_date"].dropna()
+    existing_keys = set()
+    if not parsed_dates.empty:
+        lo = _as_naive(parsed_dates.min())
+        hi = _as_naive(parsed_dates.max() + pd.Timedelta(days=1))
+        existing_rows = (
+            db.query(
+                models.Sale.product_id,
+                models.Sale.customer_id,
+                models.Sale.quantity,
+                models.Sale.unit_price,
+                models.Sale.sale_date,
+            )
+            .filter(
+                models.Sale.business_id == current_user.business_id,
+                models.Sale.sale_date >= lo,
+                models.Sale.sale_date < hi,
+            )
+            .all()
+        )
+        existing_keys = {(p, c, int(q), float(u), d) for p, c, q, u, d in existing_rows}
+
+    created, skipped, duplicates = 0, 0, 0
     for _, row in df.iterrows():
         try:
             pname = str(row["product_name"]).strip()
@@ -199,17 +243,20 @@ def upload_sales_csv(
                     db.add(customer)
                     db.flush()
 
-            sale_date = dt.datetime.utcnow()
-            if "sale_date" in df.columns and pd.notna(row.get("sale_date")):
-                try:
-                    sale_date = pd.to_datetime(row["sale_date"]).to_pydatetime()
-                except Exception as exc:
-                    import logging
-                    logging.warning(f"CSV date parse failed for row: {exc}")
-                    sale_date = dt.datetime.utcnow()
-
+            sale_date = (
+                row["sale_date"].to_pydatetime()
+                if pd.notna(row["sale_date"])
+                else dt.datetime.utcnow()
+            )
             qty = int(row["quantity"])
             price = float(row["unit_price"])
+
+            key = (product.id, customer.id if customer else None, qty, price, sale_date)
+            if key in existing_keys:
+                duplicates += 1
+                continue
+            existing_keys.add(key)  # also guards duplicates WITHIN one file
+
             sale = models.Sale(
                 customer_id=customer.id if customer else None,
                 product_id=product.id,
@@ -241,13 +288,16 @@ def upload_sales_csv(
 
     db.commit()
 
-    # Record the upload in the datasets log so the Datasets page can show it
+    # Record the upload in the datasets log so the Datasets page can show it.
+    # Duplicates are counted as "invalid" so the page's arithmetic holds
+    # (total = valid + invalid); the response reports them separately so the
+    # UI can say "duplicate" rather than implying the data was malformed.
     dataset = models.UploadedDataset(
         file_name=file.filename,
         validation_status="valid",
         total_records=int(len(df)),
         valid_records=created,
-        invalid_records=skipped,
+        invalid_records=skipped + duplicates,
         uploaded_by=current_user.id,
         business_id=current_user.business_id,
     )
@@ -259,4 +309,9 @@ def upload_sales_csv(
     invalidate("customers_list:")
     invalidate("ai:")
 
-    return {"rows_processed": int(len(df)), "sales_created": created, "rows_skipped": skipped}
+    return {
+        "rows_processed": int(len(df)),
+        "sales_created": created,
+        "rows_skipped": skipped,
+        "rows_duplicate": duplicates,
+    }

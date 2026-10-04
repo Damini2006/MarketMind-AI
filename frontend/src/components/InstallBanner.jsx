@@ -2,10 +2,19 @@ import { useState, useEffect } from 'react'
 import { Download, X, Monitor, Smartphone, CheckCircle2 } from 'lucide-react'
 
 export default function InstallBanner() {
-  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  // Seeded from the prompt captured in main.jsx: `beforeinstallprompt` fires
+  // once, usually before this component mounts, so a listener alone would miss
+  // it and the Install button would never appear.
+  const [deferredPrompt, setDeferredPrompt] = useState(() =>
+    (typeof window !== 'undefined' && window.__deferredInstallPrompt) || null
+  )
   const [isInstalled, setIsInstalled] = useState(() => (typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone)) || false)
   const [showModal, setShowModal] = useState(false)
   const [installing, setInstalling] = useState(false)
+  const [note, setNote] = useState('')
+
+  const isEmbedded = typeof window !== 'undefined' && window.self !== window.top
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/i.test(navigator.userAgent)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -15,12 +24,23 @@ export default function InstallBanner() {
 
     const handler = (e) => {
       e.preventDefault()
+      window.__deferredInstallPrompt = e
       setDeferredPrompt(e)
     }
+    const stashHandler = () => setDeferredPrompt(window.__deferredInstallPrompt || null)
+    const installedHandler = () => {
+      setIsInstalled(true)
+      setDeferredPrompt(null)
+      setShowModal(false)
+    }
     window.addEventListener('beforeinstallprompt', handler)
+    window.addEventListener('pwa-install-available', stashHandler)
+    window.addEventListener('pwa-installed', installedHandler)
     return () => {
       mq.removeEventListener('change', mqHandler)
       window.removeEventListener('beforeinstallprompt', handler)
+      window.removeEventListener('pwa-install-available', stashHandler)
+      window.removeEventListener('pwa-installed', installedHandler)
     }
   }, [])
 
@@ -33,6 +53,7 @@ export default function InstallBanner() {
 
   const handleInstall = async () => {
     setInstalling(true)
+    setNote('')
     try {
       if (deferredPrompt) {
         deferredPrompt.prompt()
@@ -40,16 +61,34 @@ export default function InstallBanner() {
         if (outcome === 'accepted') {
           setIsInstalled(true)
           setShowModal(false)
+        } else {
+          setNote('Install was dismissed — you can start it again from this button.')
         }
-        setDeferredPrompt(null)
       } else {
         setShowModal(true)
       }
     } catch {
       setShowModal(true)
     } finally {
+      setDeferredPrompt(null)
+      window.__deferredInstallPrompt = null
       setInstalling(false)
     }
+  }
+
+  // No native prompt available (browser never offered it, we're inside a frame,
+  // or it's iOS). Still give the user a real action instead of a dead end.
+  const handleFallback = () => {
+    if (isEmbedded) {
+      setNote('Install is blocked inside a preview frame — installing from the new tab will work.')
+      window.open(window.location.href, '_blank', 'noopener,noreferrer')
+      return
+    }
+    setNote(
+      isIOS
+        ? 'In Safari: tap the Share button, then "Add to Home Screen".'
+        : 'Your browser runs the install dialog itself — click the install icon in the address bar, or open the ⋮ menu → "Install MarketMind AI".'
+    )
   }
 
   if (isInstalled) return null
@@ -72,12 +111,16 @@ export default function InstallBanner() {
                   <p className="text-xs text-white/70">Quick access from your home screen</p>
                 </div>
               </div>
-              {deferredPrompt && (
-                <button onClick={handleInstall} disabled={installing}
-                  className="w-full py-3 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
-                  <Download size={16} />
-                  {installing ? 'Installing...' : 'Install Now'}
-                </button>
+              {/* Always present: a real install action, whatever this browser allows */}
+              <button onClick={deferredPrompt ? handleInstall : handleFallback} disabled={installing}
+                className="w-full py-3 rounded-xl bg-white text-indigo-700 font-bold text-sm hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2 shadow-lg disabled:opacity-60">
+                <Download size={16} />
+                {deferredPrompt
+                  ? (installing ? 'Installing...' : 'Install Now')
+                  : (isEmbedded ? 'Open in a new tab to install' : 'Install from your browser')}
+              </button>
+              {note && (
+                <p className="mt-2 text-[11px] text-white/85">{note}</p>
               )}
             </div>
 
@@ -86,7 +129,7 @@ export default function InstallBanner() {
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {deferredPrompt
                   ? 'Click "Install Now" above, or follow the steps below:'
-                  : 'Follow these steps to install on your device:'}
+                  : 'No one-click install from this browser, so use the step that matches your device:'}
               </p>
 
               {/* Chrome Desktop */}

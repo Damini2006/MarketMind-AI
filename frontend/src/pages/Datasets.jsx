@@ -66,8 +66,10 @@ export default function Datasets() {
       formData.append('file', file)
 
       const res = await uploadSalesCSV(formData)
+      const dup = res.data.rows_duplicate ?? 0
       setMessage(
-        `Imported ${res.data.sales_created ?? 0} sales from "${file.name}".`
+        `Imported ${res.data.sales_created ?? 0} sales from "${file.name}".` +
+        (dup ? ` ${dup} row(s) were already in the database and were left alone.` : '')
       )
       load()
     } catch (err) {

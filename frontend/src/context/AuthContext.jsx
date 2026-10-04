@@ -138,3 +138,14 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+
+// The JWT itself is NOT in context (state churn would needlessly re-render
+// consumers); components that need it outside axios (e.g. the WebSocket
+// handshake, where browsers cannot set Authorization headers) read it here.
+export function getToken() {
+  try {
+    return localStorage.getItem("marketmind_token") || "";
+  } catch {
+    return "";
+  }
+}

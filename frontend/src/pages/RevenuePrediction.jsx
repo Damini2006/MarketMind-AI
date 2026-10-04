@@ -11,6 +11,10 @@ import {
 } from "recharts";
 import { exportToPDF, exportToExcel } from "../utils/exportUtils";
 
+// Colors for the model-faithful factor bars (assigned in order; negative
+// values are rendered in red inside FactorBar).
+const FACTOR_COLORS = ['#6366f1', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899']
+
 // ─── Quick Presets ────────────────────────────────────────────────────
 const PRESETS = [
   { label: 'Festival Season', emoji: '🎉', category: 'Groceries', region: 'South', seasonality: 'Festival', demand: 800, price: 350, promotion: 'Yes' },
@@ -21,16 +25,22 @@ const PRESETS = [
 ]
 
 // ─── Factor Contribution Bar ──────────────────────────────────────────
-function FactorBar({ label, value, max, color }) {
+function FactorBar({ label, value, max, color, description }) {
   const pct = max > 0 ? Math.min(100, (Math.abs(value) / max) * 100) : 0
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" title={description || ''}>
       <span className="text-xs text-slate-600 dark:text-slate-400 w-28 shrink-0">{label}</span>
       <div className="flex-1 h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color }} />
+        {value >= 0 ? (
+          // Positive contributions grow right from the centre of the track.
+          <div className="h-full rounded-full transition-all duration-500 ml-[50%]" style={{ width: `${pct / 2}%`, backgroundColor: color }} />
+        ) : (
+          // Negative contributions grow left from the centre, in red.
+          <div className="h-full rounded-full transition-all duration-500 bg-red-400" style={{ width: `${pct / 2}%`, marginLeft: `${50 - pct / 2}%` }} />
+        )}
       </div>
-      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 w-16 text-right">
-        {typeof value === 'number' ? `₹${value.toLocaleString('en-IN')}` : value}
+      <span className={`text-xs font-bold w-20 text-right ${value < 0 ? 'text-red-500 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
+        {typeof value === 'number' ? `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : value}
       </span>
     </div>
   )
@@ -87,7 +97,6 @@ export default function RevenuePrediction() {
     category: "", region: "", seasonality: "", demand: "", price: "", promotion: "",
   })
   const [predictedRevenue, setPredictedRevenue] = useState(null)
-  const [confidence, setConfidence] = useState(null)
   const [factors, setFactors] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -126,7 +135,6 @@ export default function RevenuePrediction() {
     setLoading(true)
     setError("")
     setPredictedRevenue(null)
-    setConfidence(null)
     setFactors(null)
 
     try {
@@ -142,24 +150,37 @@ export default function RevenuePrediction() {
       const rev = response.data.predicted_revenue
       setPredictedRevenue(rev)
 
-      // Simulate confidence (±15% range)
-      const conf = Math.round(75 + Math.random() * 20)
-      setConfidence(conf)
-
-      // Simulate factor breakdown
-      const basePrice = Number(formData.price) || 100
-      const baseDemand = Number(formData.demand) || 100
-      const promoBoost = formData.promotion === 'Yes' ? 0.2 : 0
-      setFactors([
-        { label: 'Base Revenue', value: Math.round(basePrice * baseDemand * 0.8), color: '#6366f1' },
-        { label: 'Demand Factor', value: Math.round(basePrice * baseDemand * 0.15), color: '#10b981' },
-        { label: 'Promotion Boost', value: Math.round(basePrice * baseDemand * promoBoost), color: '#f59e0b' },
-        { label: 'Seasonality', value: Math.round(basePrice * baseDemand * 0.05), color: '#8b5cf6' },
-      ])
+      // Real model-faithful breakdown from /revenue/explain: each factor is a
+      // counterfactual re-run of the SAME trained model, and the factors sum
+      // EXACTLY to the headline prediction. (The old bars were hard-coded
+      // percentages + Math.random() confidence — they never matched.)
+      let factorData = null
+      try {
+        const expl = await api.post("/revenue/explain", {
+          category: formData.category,
+          region: formData.region,
+          seasonality: formData.seasonality,
+          demand: Number(formData.demand),
+          price: Number(formData.price),
+          promotion: formData.promotion,
+        })
+        factorData = expl.data
+        if (factorData?.predicted_revenue != null) {
+          setPredictedRevenue(factorData.predicted_revenue)
+        }
+      } catch {
+        factorData = null // breakdown stays hidden rather than showing fake bars
+      }
+      setFactors(
+        factorData?.factors?.map((f, i) => ({
+          ...f,
+          color: FACTOR_COLORS[i % FACTOR_COLORS.length],
+        })) || null
+      )
 
       // Save to history
       const entry = {
-        revenue: rev, confidence: conf, inputs: { ...formData },
+        revenue: rev, confidence: null, inputs: { ...formData },
         timestamp: new Date().toISOString(),
       }
       setHistory(prev => [entry, ...prev].slice(0, 20))
@@ -206,7 +227,7 @@ export default function RevenuePrediction() {
       ['Price', formData.price], ['Promotion', formData.promotion],
       ['---', '---'],
       ['Predicted Revenue', `₹${predictedRevenue.toLocaleString('en-IN')}`],
-      ['Confidence', `${confidence}%`],
+      ...(factors || []).map(f => [f.label, `₹${Math.round(f.value).toLocaleString('en-IN')}`]),
     ]
     exportToPDF({ title: 'Revenue Prediction', subtitle: `Predicted: ₹${predictedRevenue.toLocaleString('en-IN')}`, headers, rows, filename: 'revenue-prediction' })
   }
@@ -220,7 +241,7 @@ export default function RevenuePrediction() {
       ['Price', formData.price], ['Promotion', formData.promotion],
       ['---', '---'],
       ['Predicted Revenue', `₹${predictedRevenue.toLocaleString('en-IN')}`],
-      ['Confidence', `${confidence}%`],
+      ...(factors || []).map(f => [f.label, `₹${Math.round(f.value).toLocaleString('en-IN')}`]),
     ]
     exportToExcel({ title: 'Revenue Prediction', headers, rows, filename: 'revenue-prediction' })
   }
@@ -343,8 +364,11 @@ export default function RevenuePrediction() {
               {showFactors && (
                 <div className="mt-4 space-y-3">
                   {factors.map((f, i) => (
-                    <FactorBar key={i} label={f.label} value={f.value} max={Math.max(...factors.map(x => x.value))} color={f.color} />
+                    <FactorBar key={i} label={f.label} value={f.value} description={f.description} max={Math.max(...factors.map(x => Math.abs(x.value)))} color={f.color} />
                   ))}
+                  <p className="text-[10px] text-slate-400 pt-1">
+                    These factors are re-runs of the same ML model and always add up to the predicted revenue.
+                  </p>
                 </div>
               )}
             </div>
@@ -369,14 +393,9 @@ export default function RevenuePrediction() {
                     ₹{predictedRevenue.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </h2>
 
-                  {confidence && (
-                    <div className="mt-4 flex items-center gap-3">
-                      <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full" style={{ width: `${confidence}%` }} />
-                      </div>
-                      <span className="text-xs font-bold text-emerald-400">{confidence}% confidence</span>
-                    </div>
-                  )}
+                  <p className="mt-3 text-xs text-indigo-200/80">
+                    Breakdown below adds up to exactly this number.
+                  </p>
 
                   <div className="mt-4 pt-4 border-t border-white/10 grid grid-cols-2 gap-3">
                     <div>

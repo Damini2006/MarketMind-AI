@@ -35,7 +35,6 @@ from .routers import (
     datasets,
     users,
     notifications,
-    forecasting,
     revenue,
 )
 from .routers.websocket_alerts import router as ws_router
@@ -121,14 +120,12 @@ app.include_router(suppliers.router)
 app.include_router(datasets.router)
 app.include_router(users.router)
 app.include_router(notifications.router)
-app.include_router(forecasting.router)
+app.include_router(system_router)
 app.include_router(revenue.router)
 app.include_router(ws_router)
 app.include_router(audit_router)
 app.include_router(user_data_router)
 app.include_router(activity_router)
-app.include_router(system_router)
-
 
 @app.on_event("startup")
 def startup_seed():
@@ -159,6 +156,36 @@ def startup_seed():
     # Warm caches at startup (not just on first request); _ensure_warmup
     # guards with a flag so the lazy per-request path never double-starts it.
     _ensure_warmup()
+
+
+@app.on_event("startup")
+def start_report_scheduler():
+    """Give Scheduled Reports a purpose: actually RUN them on schedule.
+
+    Until now a schedule was only a row the user could "run now" by hand —
+    daily/weekly/monthly settings never fired on their own. This daemon ticks
+    every 60s and executes due schedules via run_due_scheduled_reports (same
+    pipeline as the manual run button, recorded in the delivery history).
+    Single uvicorn worker => exactly one runner.
+    """
+    import logging
+
+    def _tick():
+        while True:
+            try:
+                from .routers.user_data import run_due_scheduled_reports
+                db = SessionLocal()
+                try:
+                    ran = run_due_scheduled_reports(db)
+                    if ran:
+                        logging.info(f"Report scheduler executed {ran} due report(s)")
+                finally:
+                    db.close()
+            except Exception as exc:
+                logging.warning(f"Report scheduler tick failed: {exc}")
+            time.sleep(60)
+
+    threading.Thread(target=_tick, daemon=True).start()
 
 
 def _start_cache_warmup() -> None:
@@ -195,7 +222,14 @@ def _start_cache_warmup() -> None:
                     ai.get_sales_forecast(horizon_days=30, db=wdb, current_user=fake)
                     ai.get_customer_segmentation(db=wdb, current_user=fake)
                     ai.get_churn_predictions(db=wdb, current_user=fake)
-                    ai.get_all_recommendations(db=wdb, current_user=fake)
+                    # page/page_size must be passed EXPLICITLY: this is a direct
+                    # call, so FastAPI never resolves the Query defaults and the
+                    # handler would receive Query objects instead of ints. It
+                    # also builds the shared recommendation context, which the
+                    # dashboard's own page size then reuses.
+                    ai.get_all_recommendations(
+                        page=1, page_size=10, db=wdb, current_user=fake
+                    )
                     # min_confidence must match what FastAPI passes for the
                     # default so the warm cache key equals the request key.
                     ai.get_anomaly_alerts(min_confidence=0.0, db=wdb, current_user=fake)

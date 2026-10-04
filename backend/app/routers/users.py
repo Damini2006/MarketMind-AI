@@ -8,15 +8,19 @@ from email.mime.text import MIMEText
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from .. import models, schemas
+from . import models, schemas
 from ..cache import invalidate
-from ..database import get_db
-from ..deps import get_current_user, require_roles
+from .database import get_db
+from .deps import get_current_user, require_roles
 from ..core.security import hash_password
+from ..core.uploads import MAX_AVATAR_BYTES
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
+
+# Reuse the auth router's limiter so all rate limiting shares one store.
+from .auth import _check_rate_limit
 
 # Uploaded avatars live in backend/uploads/avatars and are served from /uploads
 # (users.py is backend/app/routers/ — go up three levels to reach backend/)
@@ -31,7 +35,7 @@ ALLOWED_AVATAR_TYPES = {
     "image/webp": ".webp",
     "image/gif": ".gif",
 }
-MAX_AVATAR_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_AVATAR_SIZE = MAX_AVATAR_BYTES  # 5 MB
 
 
 class InviteRequest(BaseModel):
@@ -60,6 +64,19 @@ async def upload_avatar(
         raise HTTPException(status_code=400, detail="Empty file.")
     if len(data) > MAX_AVATAR_SIZE:
         raise HTTPException(status_code=400, detail="Image must be 5 MB or smaller.")
+
+    # Content-Type is client-controlled: verify the bytes really are an
+    # image (magic numbers) before anything is written to disk.
+    from ..core.uploads import sniff_image_type
+    sniffed = sniff_image_type(data)
+    if sniffed is None or sniffed != file.content_type:
+        raise HTTPException(status_code=400, detail="File content is not a valid image.")
+
+    # Cached instances are detached snapshots; mutate a fresh session-bound
+    # row so db.commit() actually persists.
+    from ..deps import _fresh_user
+    current_user = _fresh_user(db, current_user)
+    invalidate(f"user:{current_user.id}")
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -90,6 +107,8 @@ def delete_avatar(
     current_user=Depends(get_current_user),
 ):
     """Remove the profile photo and fall back to initials."""
+    from ..deps import _fresh_user
+    current_user = _fresh_user(db, current_user)
     invalidate(f"user:{current_user.id}")
     if current_user.avatar_url:
         old_path = os.path.join(UPLOAD_DIR, os.path.basename(current_user.avatar_url))
@@ -207,10 +226,23 @@ def invite_user(
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
+    # Invites email real credentials: cap issuance per inviter per hour.
+    import time as _time
+    _check_rate_limit(f"invite:{current_user.id}", max_attempts=20, window=3600)
+
     try:
         role = models.RoleEnum(payload.role_name)
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid role: {payload.role_name}")
+
+    # Privilege-escalation guard: platform admins are appointed by admins
+    # only. A business owner inviting "admin" would mint a cross-tenant
+    # superuser account inside their own business.
+    if role == models.RoleEnum.admin and current_user.role != models.RoleEnum.admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only platform admins can create admin accounts.",
+        )
 
     user = models.User(
         full_name=payload.full_name,
@@ -334,8 +366,17 @@ def get_tour_status(current_user=Depends(get_current_user)):
     return {"tour_completed": getattr(current_user, "tour_completed", False)}
 
 
+class TourStatusIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")  # reject tampered/unknown fields
+    tour_completed: bool = True
+
+
 @router.put("/tour-status")
-def update_tour_status(body: dict, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
-    current_user.tour_completed = body.get("tour_completed", True)
+def update_tour_status(body: TourStatusIn, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    # Typed model instead of a raw dict: unknown fields are rejected and
+    # the value is a real boolean, not attacker-chosen JSON.
+    from ..deps import _fresh_user
+    current_user = _fresh_user(db, current_user)
+    current_user.tour_completed = body.tour_completed
     db.commit()
     return {"tour_completed": current_user.tour_completed}

@@ -405,6 +405,23 @@ class ScheduledReport(Base):
     created_at = Column(DateTime, default=dt.datetime.utcnow)
 
 
+class ReportRun(Base):
+    """Delivery history for scheduled reports: every generated run is
+    recorded so users can audit what was produced and when."""
+
+    __tablename__ = "report_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, ForeignKey("businesses.id"), nullable=True)
+    schedule_id = Column(Integer, ForeignKey("scheduled_reports.id"), nullable=True)
+    report_type = Column(String, nullable=False)
+    format = Column(String, default="pdf")
+    recipients = Column(Text, nullable=True)  # JSON array snapshot
+    status = Column(String, default="success")  # success | failed
+    detail = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=dt.datetime.utcnow, index=True)
+
+
 class DashboardLayout(Base):
     """Custom dashboard layouts stored in Neon."""
 

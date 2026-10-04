@@ -13,10 +13,41 @@ from typing import Dict, Set
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
 
-from ..database import get_db, SessionLocal
-from .. import models
+from .database import get_db, SessionLocal
+from . import models
 
 router = APIRouter(tags=["websocket"])
+
+
+async def _authenticate_ws(websocket: WebSocket) -> int:
+    """Validate the connecting user's token and tenant before accepting.
+
+    The frontend appends the JWT as ?token= (browsers cannot set headers on
+    WebSocket handshakes). On ANY failure the socket is closed with 4401
+    BEFORE accept() so unauthenticated clients never enter the broadcast
+    pool: previously anyone could subscribe to any business_id and read
+    stock levels, sale amounts and anomaly stats for every tenant.
+    """
+    from ..core.security import decode_access_token
+
+    token = websocket.query_params.get("token", "")
+    payload = decode_access_token(token) if token else None
+    user_id = payload.get("sub") if payload else None
+    if not user_id:
+        await websocket.close(code=4401)
+        raise WebSocketDisconnect(code=4401)
+
+    # Resolve the caller's real business membership from the DB (never trust
+    # a business_id taken from the URL or even from the token claims alone).
+    db = SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+        if user is None or not user.is_active or user.business_id is None:
+            await websocket.close(code=4403)
+            raise WebSocketDisconnect(code=4403)
+        return int(user.business_id)
+    finally:
+        db.close()
 
 
 class AlertBroadcaster:
@@ -197,9 +228,13 @@ async def start_alert_monitor():
 
 @router.websocket("/ws/alerts/{business_id}")
 async def websocket_alerts(websocket: WebSocket, business_id: str):
-    """WebSocket endpoint for real-time alerts.
+    """Authenticated WebSocket endpoint for real-time alerts.
 
-    Connect: ws://localhost:8000/ws/alerts/{business_id}
+    Connect: ws://host/ws/alerts/{business_id}?token=<JWT>
+
+    The token must belong to an active user; the subscription is forced to
+    that user's own business (a valid token for another tenant's id is
+    remapped, not honoured).
 
     Messages sent by server:
     {
@@ -209,6 +244,13 @@ async def websocket_alerts(websocket: WebSocket, business_id: str):
         ...additional fields
     }
     """
+    # Authenticate BEFORE accepting the socket (the helper is async: it
+    # awaits websocket.close on every failure path).
+    user_business_id = await _authenticate_ws(websocket)
+
+    # Never trust the URL's business_id: pin the subscription to the
+    # authenticated user's own tenant.
+    business_id = str(user_business_id)
     await broadcaster.connect(websocket, business_id)
     try:
         # Send initial snapshot on connect

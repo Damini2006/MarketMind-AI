@@ -1,4 +1,5 @@
 import os
+import hmac
 import secrets
 import time
 import random
@@ -18,24 +19,43 @@ _rate_store = defaultdict(list)
 def _check_rate_limit(key: str, max_attempts: int = 5, window: int = 300):
     """Reject if more than max_attempts in window seconds."""
     now = time.time()
-    _rate_store[key] = [t for t in _rate_store[key] if now - t < window]
-    if len(_rate_store[key]) >= max_attempts:
+    attempts = [t for t in _rate_store[key] if now - t < window]
+    if attempts:
+        _rate_store[key] = attempts
+    else:
+        # Drop fully-expired keys so the store cannot grow without bound.
+        _rate_store.pop(key, None)
+    if len(attempts) >= max_attempts:
         raise HTTPException(
             status_code=429,
             detail=f"Too many attempts. Try again in {window}s.",
         )
     _rate_store[key].append(now)
 
-from .. import models, schemas
-from ..cache import invalidate
-from ..database import get_db
-from ..seed_data import seed_business_demo_data
+def _peek_rate_limit(key: str, max_attempts: int, window: int = 300):
+    """Raise 429 if the key is over budget WITHOUT recording an attempt.
+
+    Used before password verification for per-account failure counters:
+    the counter is only ever filled by real failures (never successes),
+    and the pre-check must not itself consume budget.
+    """
+    now = time.time()
+    attempts = [t for t in _rate_store.get(key, []) if now - t < window]
+    if len(attempts) >= max_attempts:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed attempts. Try again later.",
+        )
+
+from . import models, schemas
+from .cache import invalidate
+from .database import get_db
 from ..core.security import (
     hash_password,
     verify_password,
     create_access_token,
 )
-from ..deps import get_current_user
+from .deps import get_current_user
 
 # --- Correct Prefix with /api/auth ---
 router = APIRouter(
@@ -201,46 +221,6 @@ def register(
     db.flush()
     db.commit()
 
-    # Auto-seed demo data so NEW businesses see a populated dashboard.
-    # Joiners must not dump demo rows into an existing business's data.
-    if payload.join_mode != "join":
-      try:
-        import random as _rnd, datetime as _dt
-        bid = business.id
-        _cats = ['Groceries', 'Electronics', 'Clothing', 'Home & Kitchen', 'Personal Care']
-        for c in _cats:
-            db.add(models.Category(category_name=c, business_id=bid))
-        _prods = [
-            ('Whole Wheat Atta 10kg', 480, 50, 1), ('Basmati Rice 5kg', 650, 35, 1),
-            ('Sunflower Oil 1L', 180, 80, 1), ('Toothpaste Pack', 120, 60, 5),
-            ('Notebook 200pg', 80, 100, 4), ('USB Cable', 250, 40, 2),
-            ('Rice Cooker', 2500, 15, 2), ('Cotton T-Shirt', 350, 50, 3),
-            ('Dish Soap 1L', 150, 70, 5), ('Pressure Cooker 5L', 1800, 20, 2),
-        ]
-        prod_ids = []
-        for name, price, stock, cat_id in _prods:
-            p = models.Product(name=name, price=price, stock_quantity=stock, business_id=bid)
-            db.add(p); db.flush(); prod_ids.append(p.id)
-        cust_names = ['Amit Sharma','Priya Patel','Ravi Kumar','Sneha Gupta','Vikram Singh','Anjali Reddy','Rohit Verma','Neha Kulkarni','Deepak Nair','Kavita Joshi','Suresh Iyer','Meera Das','Arjun Rao','Divya Menon','Rajesh Pillai']
-        cust_ids = []
-        for n in cust_names:
-            c = models.Customer(name=n, email=f"{n.split()[0].lower()}@example.com", business_id=bid)
-            db.add(c); db.flush(); cust_ids.append(c.id)
-        ref = _dt.date(2026, 7, 1)
-        for i in range(50):
-            day = ref + _dt.timedelta(days=_rnd.randint(0, 60))
-            db.add(models.Sale(
-                product_id=_rnd.choice(prod_ids), customer_id=_rnd.choice(cust_ids),
-                quantity=_rnd.randint(1, 10), unit_price=round(_rnd.uniform(80, 2500), 2),
-                total_amount=round(_rnd.uniform(200, 15000), 2),
-                sale_date=_dt.datetime.combine(day, _dt.time(9, 0)),
-                business_id=bid))
-        db.commit()
-      except Exception as e:
-        import sys; print(f"SEED ERROR: {e}", file=sys.stderr, flush=True)
-        try: db.rollback()
-        except: pass
-
     db.refresh(user)
     return user
 
@@ -296,6 +276,10 @@ def login(
 ):
     ip = request.client.host if request.client else "unknown"
     _check_rate_limit(f"login:{ip}", max_attempts=10, window=300)
+    # Per-ACCOUNT lockout driven by failures only (never successes). The
+    # pre-verify peek blocks further tries once an account has accumulated
+    # 10 failures; the counter itself is filled in the failure branch below.
+    _peek_rate_limit(f"login:acct:{payload.email.lower()}", max_attempts=10, window=300)
 
     user = (
         db.query(models.User)
@@ -304,6 +288,12 @@ def login(
     )
 
     if not user or not verify_password(payload.password, user.hashed_password):
+        # Record the failure against this mailbox so the pre-verify peek can
+        # lock the account after repeated misses, even across rotating IPs.
+        now = time.time()
+        acct_key = f"login:acct:{payload.email.lower()}"
+        _rate_store[acct_key] = [t for t in _rate_store[acct_key] if now - t < 300]
+        _rate_store[acct_key].append(now)
         raise HTTPException(
             status_code=401,
             detail="Incorrect email or password",
@@ -371,7 +361,10 @@ def update_profile(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    # Drop the user cache entry BEFORE mutating the shared cached object.
+    # Cached instances are detached snapshots; mutate a fresh session-bound
+    # row so db.commit() actually persists.
+    from ..deps import _fresh_user
+    current_user = _fresh_user(db, current_user)
     invalidate(f"user:{current_user.id}")
     existing = (
         db.query(models.User)
@@ -406,7 +399,12 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    from ..deps import _fresh_user
+    current_user = _fresh_user(db, current_user)
     invalidate(f"user:{current_user.id}")
+    # A leaked session must not freely rotate the credential: prove knowledge
+    # of the current password at a sane rate before accepting a new one.
+    _check_rate_limit(f"chpass:{current_user.id}", max_attempts=5, window=300)
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=400,
@@ -424,28 +422,42 @@ def change_password(
 @router.post("/send-otp")
 def send_otp(
     payload: SendOTPRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    # Rate-limit OTP issuance per IP and per mailbox: each send emails a real
+    # code, so an unlimited endpoint is both a mail-bomb and a code-flood vector.
+    ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"otp-send:{ip}", max_attempts=5, window=600)
+    _check_rate_limit(f"otp-send:acct:{payload.email.lower()}", max_attempts=3, window=600)
+
     user = db.query(models.User).filter(models.User.email == payload.email).first()
 
     if not user:
+        # Identical response and timing for unknown emails so the endpoint
+        # cannot be used to enumerate registered addresses.
+        random.randint(100000, 999999)  # burn comparable RNG work
         return {"message": "If an account with that email exists, an OTP code has been sent."}
 
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
 
-    # Save OTP & set 15-minute expiry
+    # Save OTP & set 10-minute expiry
     user.reset_otp = otp
-    user.reset_otp_expiry = dt.datetime.utcnow() + dt.timedelta(minutes=15)
+    user.reset_otp_expiry = dt.datetime.utcnow() + dt.timedelta(minutes=10)
     db.commit()
 
     # Send Real Email via SMTP
     try:
         send_email_otp(payload.email, otp)
     except Exception as e:
+        # Log the detail server-side; the client gets a generic 502 so SMTP
+        # errors never leak the mailer config back to the requester.
+        import logging
+        logging.warning(f"OTP email delivery failed for {payload.email}: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send OTP email: {str(e)}"
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to send OTP email. Please try again later."
         )
 
     return {"message": f"OTP code sent to {payload.email}."}
@@ -454,20 +466,33 @@ def send_otp(
 @router.post("/reset-password-otp")
 def reset_password_otp(
     payload: ResetPasswordOTPRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    # A 6-digit code has 1e6 possibilities, so verification MUST be rate
+    # limited (10 tries per mailbox per 10 min) or it is brute-forceable.
+    _check_rate_limit(f"otp-reset:acct:{payload.email.lower()}", max_attempts=10, window=600)
+
     user = db.query(models.User).filter(models.User.email == payload.email).first()
 
-    if not user or not user.reset_otp or user.reset_otp != payload.otp:
+    if (
+        not user
+        or not user.reset_otp
+        or user.reset_otp_expiry is None
+        or user.reset_otp_expiry < dt.datetime.utcnow()
+        or not hmac.compare_digest(user.reset_otp, payload.otp or "")
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid OTP code or email.",
+            detail="Invalid or expired OTP code.",
         )
 
-    if user.reset_otp_expiry < dt.datetime.utcnow():
+    # Enforce a minimum password length on the reset path (matches the
+    # registration policy) before persisting anything.
+    if len(payload.new_password or "") < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="OTP code has expired. Please request a new code.",
+            detail="Password must be at least 8 characters.",
         )
 
     # Update password and clear reset OTP fields

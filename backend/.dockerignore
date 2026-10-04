@@ -1,15 +1,25 @@
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
+# Never bake secrets or local state into the image
+.env
+.env.*
+!.env.example
+
+# Local Python environment (host-specific, huge)
 venv/
 .venv/
-.env
-.git
-.gitignore
-.pytest_cache
-.coverage
-htmlcov/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local databases, backups and runtime artifacts
+*.db
+*.sqlite3
 *.log
+uploads/
+.freebuff/
+
+# Dev/test-only tooling
+venv*/
+tests/
+check_all_endpoints.py
+tmp_*.py
+sales_gap_repair.py

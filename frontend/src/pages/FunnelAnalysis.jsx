@@ -223,22 +223,54 @@ export default function FunnelAnalysis() {
     return null
   }, [segment, customers, filteredSales, products])
 
-  // Conversion trend data (deterministic baseline)
+  // Customer progression trend — computed from REAL sales history.
+  // The old version generated this chart with Math.random(), i.e. fabricated
+  // analytics that re-rolled on every render. 'Visitors' aren't tracked
+  // anywhere in this app, so the honest computable series are cumulative
+  // cohort rates from actual purchases: by the end of each month, what share
+  // of the paying base had become repeat (2+) / engaged (3+) buyers.
   const trendData = useMemo(() => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']
-    const baseRates = [
-      { visitorToPurchase: 36, purchaseToRepeat: 28, repeatToHighValue: 24 },
-      { visitorToPurchase: 39, purchaseToRepeat: 31, repeatToHighValue: 26 },
-      { visitorToPurchase: 42, purchaseToRepeat: 29, repeatToHighValue: 28 },
-      { visitorToPurchase: 38, purchaseToRepeat: 33, repeatToHighValue: 25 },
-      { visitorToPurchase: 44, purchaseToRepeat: 35, repeatToHighValue: 31 },
-      { visitorToPurchase: 41, purchaseToRepeat: 32, repeatToHighValue: 29 },
-    ]
-    return months.map((m, idx) => ({
-      month: m,
-      ...baseRates[idx],
-    }))
-  }, [])
+    if (!sales.length) return []
+    const now = new Date()
+    const months = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    }
+    // Per customer: number of purchases in each calendar month.
+    const ordersByCid = new Map()
+    for (const s of sales) {
+      if (!s.customer_id || !s.sale_date) continue
+      const m = String(s.sale_date).slice(0, 7)
+      if (!/^\d{4}-\d{2}$/.test(m)) continue
+      if (!ordersByCid.has(s.customer_id)) ordersByCid.set(s.customer_id, {})
+      const rec = ordersByCid.get(s.customer_id)
+      rec[m] = (rec[m] || 0) + 1
+    }
+    const label = (m) => {
+      const [y, mo] = m.split('-').map(Number)
+      return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][mo - 1] + ' ' + String(y).slice(2)
+    }
+    return months.map((m) => {
+      let base = 0
+      let repeat = 0
+      let engaged = 0
+      for (const rec of ordersByCid.values()) {
+        let cum = 0
+        for (const [mo, n] of Object.entries(rec)) {
+          if (mo <= m) cum += n
+        }
+        if (cum >= 1) base++
+        if (cum >= 2) repeat++
+        if (cum >= 3) engaged++
+      }
+      return {
+        month: label(m),
+        repeatBuyerShare: base ? Math.round((repeat / base) * 100) : 0,
+        engagedShare: base ? Math.round((engaged / base) * 100) : 0,
+      }
+    })
+  }, [sales])
 
   const handleExportPDF = () => {
     const headers = ['Stage', 'Count', 'Conversion Rate', 'Drop-off']
@@ -357,7 +389,7 @@ export default function FunnelAnalysis() {
       <div className="card">
         <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-4 flex items-center gap-2">
           <Clock size={16} className="text-indigo-500" />
-          Conversion Trend (6 months)
+          Customer Progression (last 6 months, from real purchase history)
         </h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
@@ -367,9 +399,8 @@ export default function FunnelAnalysis() {
               <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}%`} />
               <Tooltip formatter={v => `${v}%`} />
               <Legend wrapperStyle={{ fontSize: '10px' }} />
-              <Area type="monotone" dataKey="visitorToPurchase" name="Visit → Purchase" stroke="#6366f1" fill="#6366f1" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="purchaseToRepeat" name="Purchase → Repeat" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="repeatToHighValue" name="Repeat → High Value" stroke="#d946ef" fill="#d946ef" fillOpacity={0.1} strokeWidth={2} />
+              <Area type="monotone" dataKey="repeatBuyerShare" name="Repeat buyers (2+) share" stroke="#a855f7" fill="#a855f7" fillOpacity={0.1} strokeWidth={2} />
+              <Area type="monotone" dataKey="engagedShare" name="Engaged buyers (3+) share" stroke="#d946ef" fill="#d946ef" fillOpacity={0.1} strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

@@ -22,7 +22,7 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-from .. import models
+from . import models
 
 
 @dataclass
@@ -842,16 +842,33 @@ def detect_duplicate_transactions(sales: List[Any]) -> List[AnomalyResult]:
     return results
 
 
-def run_full_detection(db) -> Dict[str, Any]:
+def run_full_detection(db, business_id=None) -> Dict[str, Any]:
+    """Run every detector over ONE tenant's data.
+
+    business_id is REQUIRED from callers that serve user requests: loading
+    sales/customers/products across all tenants leaked other businesses'
+    customer names and sale amounts into shared anomaly results (and made
+    the scan O(entire database) — the endpoint timed out at 60s+).
+    """
     from sqlalchemy.orm import joinedload
-    sales = (
-        db.query(models.Sale)
-        .options(joinedload(models.Sale.sale_items))
-        .all()
+
+    sales_q = db.query(models.Sale).options(joinedload(models.Sale.sale_items))
+    customers_q = db.query(models.Customer)
+    products_q = db.query(models.Product)
+    # Inventory has no business_id column; scope it through its product.
+    inventory_q = db.query(models.Inventory).join(
+        models.Product, models.Inventory.product_id == models.Product.id
     )
-    inventory = db.query(models.Inventory).all()
-    customers = db.query(models.Customer).all()
-    products = db.query(models.Product).all()
+    if business_id is not None:
+        sales_q = sales_q.filter(models.Sale.business_id == business_id)
+        customers_q = customers_q.filter(models.Customer.business_id == business_id)
+        products_q = products_q.filter(models.Product.business_id == business_id)
+        inventory_q = inventory_q.filter(models.Product.business_id == business_id)
+
+    sales = sales_q.all()
+    inventory = inventory_q.all()
+    customers = customers_q.all()
+    products = products_q.all()
 
     all_anomalies = []
 
@@ -989,7 +1006,9 @@ def run_full_detection(db) -> Dict[str, Any]:
         "timeline": timeline,
         "confidence_distribution": conf_brackets,
         "detection_accuracy": round(1 - (len(all_anomalies) / max(len(sales), 1)), 3),
-        "false_positive_rate": 0.021,
+        # No invented number: a real false-positive rate needs labelled
+        # ground truth, which we don't have. The UI renders null as "—".
+        "false_positive_rate": None,
         "scan_timestamp": dt.datetime.utcnow().isoformat(),
         "total_records_scanned": len(sales) + len(inventory) + len(customers),
     }

@@ -457,8 +457,8 @@ export default function Settings() {
     if (newPassword !== confirmPassword) {
       setPasswordMsg({ type: 'error', text: 'New passwords do not match.' }); return
     }
-    if (newPassword.length < 6) {
-      setPasswordMsg({ type: 'error', text: 'Password must be at least 6 characters.' }); return
+    if (newPassword.length < 8) {
+      setPasswordMsg({ type: 'error', text: 'Password must be at least 8 characters.' }); return
     }
     setPasswordLoading(true)
     try {
@@ -692,7 +692,7 @@ export default function Settings() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <InputField label="New Password">
                     <div className="relative">
-                      <input type={showNewPass ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" placeholder="At least 6 characters" className={`${inputClass} pr-10`} required />
+                      <input type={showNewPass ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" placeholder="At least 8 characters" className={`${inputClass} pr-10`} required />
                       <button type="button" onClick={() => setShowNewPass(!showNewPass)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300">
                         {showNewPass ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>

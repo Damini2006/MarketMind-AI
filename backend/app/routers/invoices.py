@@ -4,10 +4,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import models, schemas
-from ..cache import get_or_set, invalidate
-from ..database import get_db
-from ..deps import get_current_user, require_roles
+from . import models, schemas
+from .cache import get_or_set, invalidate
+from .database import get_db
+from .deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/invoices", tags=["Invoices"])
 

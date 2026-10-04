@@ -19,7 +19,7 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from .. import models
+from . import models
 
 # NOTE: This project uses the ``Notification`` model instead of a separate
 # ``Alert`` model.  Field mappings applied:

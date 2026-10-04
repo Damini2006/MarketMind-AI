@@ -84,7 +84,11 @@ export default function Sales() {
     setUploadMsg('Uploading...')
     try {
       const res = await api.post('/sales/upload-csv', data, { headers: { 'Content-Type': 'multipart/form-data' } })
-      setUploadMsg(`Uploaded: ${res.data.sales_created} sales created, ${res.data.rows_skipped} rows skipped.`)
+      const dup = res.data.rows_duplicate ?? 0
+      setUploadMsg(
+        `Uploaded: ${res.data.sales_created} sales created, ${res.data.rows_skipped} rows skipped` +
+        (dup ? `, ${dup} already imported so not counted twice.` : '.')
+      )
       reload()
     } catch (err) { setUploadMsg(err.response?.data?.detail || 'Upload failed.') }
     e.target.value = ''

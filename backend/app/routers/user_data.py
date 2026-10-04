@@ -4,6 +4,7 @@ report templates, and prediction history in Neon PostgreSQL.
 Every endpoint is scoped to the authenticated user's own business
 (multi-tenant safe) — no cross-business reads or writes are possible.
 """
+import datetime as dt
 import json
 from typing import Optional, List
 
@@ -12,13 +13,56 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from ..database import get_db
-from ..deps import get_current_user
+from .database import get_db
+from .deps import get_current_user
 from ..models import (
     ScheduledReport, DashboardLayout, CustomReportTemplate, PredictionHistory, ChatHistory,
+    ReportRun,
 )
 
 router = APIRouter(prefix="/api/user-data", tags=["user-data"])
+
+
+# ── Schedule helpers ──────────────────────────────────────────────
+def _compute_next_run(frequency: str, last_run: Optional[dt.datetime],
+                      now: Optional[dt.datetime] = None) -> Optional[dt.datetime]:
+    """Next 9:00 AM local run time for a daily/weekly/monthly schedule.
+
+    "Weekly" fires on Mondays and "monthly" on the 1st (matching the UI
+    copy). Both the last-run check and the next-run computation use the
+    same local "now", so the next occurrence is always strictly in the
+    future — previously the frontend showed a hardcoded null.
+    """
+    now = now or dt.datetime.now()
+    nine_am = now.replace(hour=9, minute=0, second=0, microsecond=0)
+
+    if frequency == "daily":
+        candidate = nine_am if now.hour < 9 else nine_am + dt.timedelta(days=1)
+    elif frequency == "weekly":
+        days_until_monday = (7 - now.weekday()) % 7  # Monday == 0
+        candidate = nine_am + dt.timedelta(days=days_until_monday)
+        if candidate <= now:
+            candidate += dt.timedelta(days=7)
+    elif frequency == "monthly":
+        candidate = (now.replace(day=28) + dt.timedelta(days=4)).replace(
+            day=1, hour=9, minute=0, second=0, microsecond=0
+        )
+        if now.day == 1 and now.hour < 9:
+            candidate = nine_am
+    else:
+        return None
+
+    # Never schedule into the past relative to the last run.
+    if last_run and candidate <= last_run:
+        if frequency == "daily":
+            candidate += dt.timedelta(days=1)
+        elif frequency == "weekly":
+            candidate += dt.timedelta(days=7)
+        elif frequency == "monthly":
+            candidate = (candidate.replace(day=28) + dt.timedelta(days=4)).replace(
+                day=1, hour=9, minute=0, second=0, microsecond=0
+            )
+    return candidate
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────
@@ -71,6 +115,8 @@ def list_scheduled_reports(
         "recipients": json.loads(r.recipients) if r.recipients else [],
         "enabled": r.enabled,
         "last_run": r.last_run.isoformat() if r.last_run else None,
+        "next_run": _compute_next_run(r.frequency, r.last_run).isoformat()
+        if r.enabled else None,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     } for r in items]
 
@@ -142,6 +188,205 @@ def delete_scheduled_report(
     return {"status": "deleted"}
 
 
+# ── Report runs (delivery history + manual runs) ──────────────────
+def _build_report_payload(db: Session, business_id: int, report_type: str) -> dict:
+    """Compute the actual data a report run contains, from live tenant data.
+
+    This is what makes scheduled reports REAL: the content is generated
+    server-side from the same KPI pipeline the dashboard uses, instead of
+    being a client-side fiction.
+    """
+    from ..routers.analytics import _compute_kpis
+
+    kpis = _compute_kpis(db, business_id)
+    payload = {
+        "report_type": report_type,
+        "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "total_revenue": float(kpis.total_revenue or 0),
+        "total_sales": kpis.total_sales,
+        "total_customers": kpis.total_customers,
+        "total_products": kpis.total_products,
+        "low_stock_count": kpis.low_stock_count,
+        "pending_invoices": kpis.pending_invoices,
+        "overdue_invoices": kpis.overdue_invoices,
+        "top_products": kpis.top_products or [],
+    }
+    if report_type == "anomaly-report":
+        from ..routers.ai import get_anomaly_alerts
+        anomalies = get_anomaly_alerts(min_confidence=0.0, db=db, current_user=_FakeUser(business_id))
+        payload["anomaly_count"] = anomalies.get("summary", {}).get("total_anomalies", 0)
+    return payload
+
+
+class _FakeUser:
+    """Minimal stand-in with business_id for internal endpoint reuse."""
+
+    def __init__(self, business_id: int):
+        self.business_id = business_id
+
+
+def _period_slot(frequency: str, now: dt.datetime) -> Optional[dt.datetime]:
+    """This period's 9:00 AM schedule slot (the time the report is DUE).
+
+    daily -> today 09:00, weekly -> this week's Monday 09:00,
+    monthly -> the 1st of this month 09:00 — matching the UI copy and
+    _compute_next_run's anchors. None for an unknown frequency.
+    """
+    nine_am = now.replace(hour=9, minute=0, second=0, microsecond=0)
+    if frequency == "daily":
+        return nine_am
+    if frequency == "weekly":
+        days_since_monday = now.weekday()  # Monday == 0
+        return nine_am - dt.timedelta(days=days_since_monday)
+    if frequency == "monthly":
+        return nine_am.replace(day=1)
+    return None
+
+
+def run_due_scheduled_reports(db: Session, now: Optional[dt.datetime] = None) -> int:
+    """Execute every enabled schedule whose slot has passed since its last run.
+
+    This is what makes Scheduled Reports real: a daily/weekly/monthly setting
+    used to be a row the user could only "run now" by hand. The startup
+    scheduler thread (main.py) calls this every 60s; `now` is injectable so
+    tests can assert due-detection without waiting for a 9 AM wall clock.
+
+    Due rule: the schedule fires once per period, when `now` is past this
+    period's 9 AM slot AND last_run predates that slot. A server that was
+    down at the slot catches up on the next tick (once — last_run is stamped,
+    so no duplicate fire). NOTE: _compute_next_run is deliberately NOT used
+    for due detection — it returns the next strictly-future occurrence, so
+    comparing it against `now` could never trigger.
+
+    Returns the number of schedules executed (success or failed — both are
+    recorded as ReportRun rows so the delivery history shows them).
+    """
+    now = now or dt.datetime.now()
+    executed = 0
+    schedules = (
+        db.query(ScheduledReport)
+        .filter(ScheduledReport.enabled.is_(True))
+        .all()
+    )
+    for r in schedules:
+        if r.business_id is None:
+            continue
+        slot = _period_slot(r.frequency, now)
+        if slot is None or now < slot:
+            continue  # unknown frequency, or the slot hasn't arrived yet
+        if r.last_run is not None and r.last_run >= slot:
+            continue  # already ran at/after this period's slot
+        try:
+            _build_report_payload(db, r.business_id, r.report_type)
+            status = "success"
+            detail = f"Auto-run: generated {r.report_type} on schedule"
+        except Exception as exc:
+            status = "failed"
+            detail = str(exc)[:300]
+        db.add(ReportRun(
+            business_id=r.business_id, schedule_id=r.id,
+            report_type=r.report_type, format=r.format,
+            recipients=r.recipients, status=status, detail=detail,
+        ))
+        r.last_run = now
+        executed += 1
+    if executed:
+        db.commit()
+    return executed
+
+
+@router.post("/scheduled-reports/{report_id}/run")
+def run_scheduled_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Generate the report NOW from live data and record the delivery.
+
+    Returns the computed payload so the UI can show/exports it, persists a
+    ReportRun history row, and stamps last_run on the schedule.
+    """
+    r = (
+        db.query(ScheduledReport)
+        .filter(
+            ScheduledReport.id == report_id,
+            ScheduledReport.business_id == current_user.business_id,
+        )
+        .first()
+    )
+    if not r:
+        raise HTTPException(404, "Report not found")
+
+    try:
+        payload = _build_report_payload(db, current_user.business_id, r.report_type)
+        status = "success"
+        detail = f"Generated {r.report_type} for {len(json.loads(r.recipients)) if r.recipients else 0} recipient(s)"
+    except Exception as exc:
+        payload = {}
+        status = "failed"
+        detail = str(exc)[:300]
+
+    run = ReportRun(
+        business_id=current_user.business_id,
+        schedule_id=r.id,
+        report_type=r.report_type,
+        format=r.format,
+        recipients=r.recipients,
+        status=status,
+        detail=detail,
+    )
+    db.add(run)
+    r.last_run = dt.datetime.utcnow()
+    db.commit()
+
+    return {
+        "run_id": run.id,
+        "status": status,
+        "report": payload,
+        "last_run": r.last_run.isoformat(),
+        "next_run": _compute_next_run(r.frequency, r.last_run).isoformat(),
+    }
+
+
+@router.get("/scheduled-reports/{report_id}/runs")
+def list_report_runs(
+    report_id: int,
+    limit: int = Query(20, le=100),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Delivery history for one schedule (newest first)."""
+    exists = (
+        db.query(ScheduledReport.id)
+        .filter(
+            ScheduledReport.id == report_id,
+            ScheduledReport.business_id == current_user.business_id,
+        )
+        .first()
+    )
+    if not exists:
+        raise HTTPException(404, "Report not found")
+    runs = (
+        db.query(ReportRun)
+        .filter(
+            ReportRun.schedule_id == report_id,
+            ReportRun.business_id == current_user.business_id,
+        )
+        .order_by(desc(ReportRun.created_at))
+        .limit(limit)
+        .all()
+    )
+    return [{
+        "id": run.id,
+        "report_type": run.report_type,
+        "format": run.format,
+        "recipients": json.loads(run.recipients) if run.recipients else [],
+        "status": run.status,
+        "detail": run.detail,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+    } for run in runs]
+
+
 # ══════════════════════════════════════════════════════════════════════
 #  DASHBOARD LAYOUTS
 # ══════════════════════════════════════════════════════════════════════
@@ -173,6 +418,23 @@ def list_dashboard_layouts(
     return get_or_set(f"user_data_layouts:{bid}", 30, _load)
 
 
+def _deactivate_other_layouts(db: Session, business_id: int, exclude_id: Optional[int] = None) -> None:
+    """Enforce exactly ONE active layout per business.
+
+    The old builder POSTed a new row on every save without deactivating the
+    previous one, so tenants accumulated several is_active=true rows and the
+    main Dashboard's pick depended on row order. Saving with is_active=true
+    now demotes every sibling in the same transaction.
+    """
+    q = db.query(DashboardLayout).filter(
+        DashboardLayout.business_id == business_id,
+        DashboardLayout.is_active.is_(True),
+    )
+    if exclude_id is not None:
+        q = q.filter(DashboardLayout.id != exclude_id)
+    q.update({"is_active": False}, synchronize_session=False)
+
+
 @router.post("/dashboard-layouts")
 def create_dashboard_layout(
     body: DashboardLayoutIn,
@@ -185,6 +447,9 @@ def create_dashboard_layout(
         is_active=body.is_active,
     )
     db.add(d)
+    if body.is_active:
+        db.flush()
+        _deactivate_other_layouts(db, current_user.business_id, exclude_id=d.id)
     db.commit()
     db.refresh(d)
     from ..cache import invalidate
@@ -212,6 +477,8 @@ def update_dashboard_layout(
     d.name = body.name
     d.layout_json = body.layout_json
     d.is_active = body.is_active
+    if body.is_active:
+        _deactivate_other_layouts(db, current_user.business_id, exclude_id=d.id)
     db.commit()
     from ..cache import invalidate
     invalidate(f"user_data_layouts:{current_user.business_id}")

@@ -2,13 +2,15 @@ import io
 from typing import List
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
+from .core.uploads import read_csv_upload
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from .. import models, schemas
-from ..cache import get_or_set, invalidate
-from ..database import get_db
-from ..deps import get_current_user, require_roles
+from . import models, schemas
+from .cache import get_or_set, invalidate
+from .database import get_db
+from .deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/inventory", tags=["Inventory"])
 
@@ -193,10 +195,7 @@ def upload_products_csv(
     Required columns: name, price. Optional: category, stock_quantity, reorder_threshold, warehouse_location.
     Existing products (matched by name, case/whitespace-insensitive) get their price/stock updated rather than duplicated.
     """
-    if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only .csv files are supported")
-
-    raw = file.file.read()
+    raw = read_csv_upload(file)
     try:
         df = pd.read_csv(io.BytesIO(raw))
     except Exception as exc:

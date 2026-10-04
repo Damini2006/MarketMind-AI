@@ -1,6 +1,6 @@
 import datetime as dt
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 from .models import RoleEnum
 
 
@@ -17,6 +17,15 @@ class RegisterRequest(BaseModel):
     join_mode: str = "create"
     invite_code: Optional[str] = None
     role: RoleEnum = RoleEnum.business_owner
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        # Server-side policy: the reset path enforces the same floor. The
+        # frontend mirrors this, but the API is the actual boundary.
+        if len(v or "") < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        return v
 
 
 class UserCreate(BaseModel):
@@ -135,8 +144,8 @@ class StockUpdate(BaseModel):
 class SaleCreate(BaseModel):
     customer_id: Optional[int] = None
     product_id: Optional[int] = None
-    quantity: int = 1
-    unit_price: float
+    quantity: int = Field(default=1, gt=0, description="Units sold — must be positive")
+    unit_price: float = Field(gt=0, description="Price per unit — must be positive")
     sale_date: Optional[dt.datetime] = None
 
 

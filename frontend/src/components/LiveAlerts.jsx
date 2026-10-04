@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAuth } from '../context/AuthContext.jsx'
+import { useAuth, getToken } from '../context/AuthContext.jsx'
+import { STATIC_BASE_URL } from '../services/api.js'
 
 import {
   Bell, BellOff, AlertTriangle, ShoppingCart, TrendingDown,
@@ -203,9 +204,17 @@ function useLiveAlerts(prefs) {
 
     const connectWs = () => {
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-        const wsHost = window.location.port === '5173' ? `${window.location.hostname}:8000` : window.location.host
-        const wsUrl = `${protocol}//${wsHost}/ws/alerts/${businessId}`
+        // In dev the API lives on :8000 (vite proxies /ws there too, but a
+        // direct socket avoids proxy flakiness). In prod the API base (e.g.
+        // VITE_API_BASE_URL=https://api.example.com) decides the socket host.
+        const isDev = import.meta.env.DEV && window.location.port === '5173'
+        const apiOrigin = new URL(STATIC_BASE_URL, window.location.origin)
+        const wsProtocol = apiOrigin.protocol === 'https:' ? 'wss:' : 'ws:'
+        const wsHost = isDev ? `${window.location.hostname}:8000` : apiOrigin.host
+        // Browsers cannot set headers on WebSocket handshakes, so the JWT
+        // rides as a query param and is verified server-side before accept.
+        const token = getToken()
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/alerts/${businessId}${token ? `?token=${encodeURIComponent(token)}` : ''}`
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 

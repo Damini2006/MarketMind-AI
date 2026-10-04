@@ -414,6 +414,38 @@ Full interactive API documentation at `http://localhost:8000/docs`
 
 ---
 
+## Deployment
+
+The app is two deployables: a FastAPI backend (any Python host or the provided `backend/Dockerfile`) and a Vite static frontend.
+
+### Backend (Render / Railway / Fly.io / Docker)
+
+1. Provision a **Neon PostgreSQL** database and copy its pooled connection string.
+2. Set environment variables on the host:
+   - `DATABASE_URL` — Neon pooled URL, `?sslmode=require` (required)
+   - `JWT_SECRET_KEY` — strong random secret ≥ 32 chars (required)
+   - `CORS_ORIGINS` — **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only)
+   - `SENDER_EMAIL` / `SMTP_SERVER` / `SMTP_PORT` / `SENDER_PASSWORD` — optional, enables OTP password-reset emails
+3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (tables auto-create; startup warm-up precomputes AI caches).
+
+### Frontend (Vercel / Netlify / static hosting)
+
+1. Build: `npm run build` → publish `dist/`.
+2. Same-origin option (no CORS needed): reverse-proxy `/api`, `/uploads` and `/ws` to the backend (see `vite.config.js`'s proxy block for the three prefixes to forward).
+3. Split-origin option: set `VITE_API_BASE_URL=https://your-api-host` at build time, and add the frontend origin to the backend's `CORS_ORIGINS`. WebSocket alerts follow `VITE_API_BASE_URL` automatically.
+4. SPA routing: add a rewrite of all paths to `/index.html` (Vercel/Netlify do this via framework presets).
+
+### Production checklist
+
+- [ ] `DATABASE_URL` points at Neon with `sslmode=require`
+- [ ] `JWT_SECRET_KEY` is a fresh ≥ 32-char secret (not the dev value)
+- [ ] `CORS_ORIGINS` lists the real frontend origin(s)
+- [ ] `VITE_API_BASE_URL` set at frontend build time (split deployments)
+- [ ] SMTP credentials present if password-reset emails are wanted
+- [ ] Smoke-test after deploy: `GET /api/health`, then log in and load the Dashboard
+
+---
+
 ## Contributing
 
 1. Fork the repository
