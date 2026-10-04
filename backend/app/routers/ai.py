@@ -391,6 +391,23 @@ def get_churn_predictions(
     return run_churn_prediction(db, business_id=current_user.business_id)
 
 
+@router.get("/churn/features")
+def get_churn_feature_contributions(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("business_owner", "store_manager", "admin")),
+) -> Dict[str, Any]:
+    """Per-customer churn feature contributions.
+
+    Explains *why* each customer is flagged: for every risk signal (recency,
+    frequency, spend, regularity, overdue ratio) the endpoint returns that
+    customer's percentile within its own business cohort, so the owner sees
+    whether a customer's risk is driven by inactivity, dropping spend, or
+    erratic purchasing rather than by a global threshold.
+    """
+    from ..ml.churn import run_churn_prediction
+    return run_churn_prediction(db, business_id=current_user.business_id)
+
+
 # ---------------------------------------------------------------------------
 # 4) Product recommendations — intelligent collaborative filtering
 # ---------------------------------------------------------------------------

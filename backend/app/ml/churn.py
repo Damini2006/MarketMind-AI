@@ -302,26 +302,24 @@ def run_churn_prediction(db: Session, business_id: int = None) -> dict:
     monetary_median = float(np.median(monetary_totals)) if monetary_totals else 0.0
     monetary_p75 = float(np.percentile(monetary_totals, 75)) if len(monetary_totals) >= 4 else monetary_median
     frequency_median = float(np.median(frequencies)) if frequencies else 1.0
-    regularity_median = float(np.median(regularities)) if regularities else 0.0
-
-    rows = []
+    regularity_median = float(np.median(regularities)) if regularities else 0.0    # Population-relative percentiles so the Churn page can show each
+    # customer's signals against THIS business's own cohort.
+    percentile = np.percentile
+    recency_percentiles = {}
+    frequency_percentiles = {}
+    spend_trend_percentiles = {}
+    monetary_percentiles = {}
+    regularity_percentiles = {}
+    overdue_percentiles = {}
     for i, cid in enumerate(ids):
-        prob = float(probs[i])
-        base_row = {
-            "customer_id": cid,
-            "customer_name": names[i],
-            "churn_probability": round(prob, 3),
-            "risk_category": _risk_category(prob),
-            "recency_days": recencies[i],
-            "order_count": frequencies[i],
-            "monetary_total": monetary_totals[i],
-            "spend_trend": spend_trends[i],
-            "purchase_regularity": regularities[i],
-        }
-        is_vip = monetary_totals[i] >= monetary_p75 and monetary_p75 > 0
-        is_frequent = frequencies[i] >= frequency_median and frequency_median > 1
-        base_row["recommendation"] = _recommendation(base_row, prob, is_vip, is_frequent, regularity_median)
-        rows.append(base_row)
+        recency_percentiles[cid] = float(percentile(recencies, i + 1)) if len(recencies) else 0.0
+        frequency_percentiles[cid] = float(percentile(frequencies, i + 1)) if len(frequencies) else 0.0
+        spend_trend_percentiles[cid] = float(percentile(spend_trends, i + 1)) if len(spend_trends) else 0.0
+        monetary_percentiles[cid] = float(percentile(monetary_totals, i + 1)) if len(monetary_totals) else 0.0
+        regularity_percentiles[cid] = float(percentile(regularities, i + 1)) if len(regularities) else 0.0
+        overdue_percentiles[cid] = float(percentile(overdue_ratios, i + 1)) if len(overdue_ratios) else 0.0
 
-    rows.sort(key=lambda r: -r["churn_probability"])
-    return {"rows": rows, **metrics}
+    rows = []    for i, cid in enumerate(ids):        prob = float(probs[i])
+        base_row = {            "customer_id": cid,            "customer_name": names[i],            "churn_probability": round(prob, 3),            "risk_category": _risk_category(prob),            "recency_days": recencies[i],            "order_count": frequencies[i],            "monetary_total": monetary_totals[i],            "spend_trend": spend_trends[i],            "purchase_regularity": regularities[i],            # population-relative feature contributions (0-100); higher =            # more atypical / more at risk for recency, overdue, regularity,            # and lower = more atypical / more at risk for spend_trend,            # frequency, monetary.            "recency_percentile": recency_percentiles[cid],            "frequency_percentile": frequency_percentiles[cid],            "spend_trend_percentile": spend_trend_percentiles[cid],            "monetary_percentile": monetary_percentiles[cid],            "regularity_percentile": regularity_percentiles[cid],            "overdue_percentile": overdue_percentiles[cid],        }        is_vip = monetary_totals[i] >= monetary_p75 and monetary_p75 > 0        is_frequent = frequencies[i] >= frequency_median and frequency_median > 1        base_row["recommendation"] = _recommendation(base_row, prob, is_vip, is_frequent, regularity_median)        rows.append(base_row)
+
+    rows.sort(key=lambda r: -r["churn_probability"])    return {"rows": rows, **metrics}
