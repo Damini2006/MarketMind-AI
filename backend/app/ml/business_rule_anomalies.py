@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 
 from sqlalchemy.orm import Session
 
-from . import models
+from .. import models
 
 
 def get_business_rule_alerts(

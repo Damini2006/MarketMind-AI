@@ -22,7 +22,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from .cache import get_or_set
+from ..cache import get_or_set
 
 from sklearn.linear_model import HuberRegressor, LogisticRegression
 from sklearn.cluster import KMeans
@@ -35,9 +35,9 @@ from sklearn.metrics import (
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import StratifiedKFold, cross_validate
 
-from . import models
-from .database import get_db
-from .deps import get_current_user, require_roles
+from .. import models
+from ..database import get_db
+from ..deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/ai", tags=["AI Intelligence"])
 

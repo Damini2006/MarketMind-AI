@@ -13,8 +13,8 @@ from typing import Dict, Set
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
 
-from .database import get_db, SessionLocal
-from . import models
+from ..database import get_db, SessionLocal
+from .. import models
 
 router = APIRouter(tags=["websocket"])
 

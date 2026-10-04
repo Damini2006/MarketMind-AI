@@ -3,14 +3,14 @@ from typing import List
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 
-from .core.uploads import read_csv_upload
+from ..core.uploads import read_csv_upload
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from . import models, schemas
-from .cache import get_or_set, invalidate
-from .database import get_db
-from .deps import get_current_user, require_roles
+from .. import models, schemas
+from ..cache import get_or_set, invalidate
+from ..database import get_db
+from ..deps import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/customers", tags=["Customers"])
 

@@ -135,7 +135,7 @@ def _probe_neon() -> dict:
     A missing DATABASE_URL or a dead connection raises, so the endpoint reports
     the failure instead of 500ing silently.
     """
-    from .database import SessionLocal, engine
+    from ..database import SessionLocal, engine
     from sqlalchemy import text
 
     try:

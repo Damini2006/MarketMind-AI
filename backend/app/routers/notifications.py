@@ -17,10 +17,10 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from . import models, schemas
-from .cache import get_or_set, invalidate
-from .database import SessionLocal, get_db
-from .deps import get_current_user
+from .. import models, schemas
+from ..cache import get_or_set, invalidate
+from ..database import SessionLocal, get_db
+from ..deps import get_current_user
 from .ai import _detect_outlier_sales, _is_material_outlier
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])

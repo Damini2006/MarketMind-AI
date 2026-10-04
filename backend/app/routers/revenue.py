@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .deps import get_current_user
+from ..deps import get_current_user
 from app.ml.inference import predict_revenue, explain_prediction
 
 router = APIRouter(

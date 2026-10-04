@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from .database import get_db
-from .deps import get_current_user
+from ..database import get_db
+from ..deps import get_current_user
 from ..models import AuditLog
 
 router = APIRouter(prefix="/api/audit", tags=["audit"])

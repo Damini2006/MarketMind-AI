@@ -34,7 +34,7 @@ import numpy as np
 from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session
 
-from . import models
+from .. import models
 
 LIFT_MIN_SCORE = 1.1          # co-purchase lift must beat this to count as "strong"
 REORDER_MIN_QTY = 2.0         # total qty before a product counts as a repeat item

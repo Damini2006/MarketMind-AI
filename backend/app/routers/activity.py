@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from . import models, schemas
-from .database import get_db
-from .deps import get_current_user
+from .. import models, schemas
+from ..database import get_db
+from ..deps import get_current_user
 
 router = APIRouter(
     prefix="/api/activity",

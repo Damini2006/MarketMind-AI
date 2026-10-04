@@ -13,8 +13,8 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from .database import get_db
-from .deps import get_current_user
+from ..database import get_db
+from ..deps import get_current_user
 from ..models import (
     ScheduledReport, DashboardLayout, CustomReportTemplate, PredictionHistory, ChatHistory,
     ReportRun,

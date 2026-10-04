@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 
-from . import models, schemas
+from .. import models, schemas
 from ..cache import invalidate
-from .database import get_db
-from .deps import get_current_user, require_roles
+from ..database import get_db
+from ..deps import get_current_user, require_roles
 from ..core.security import hash_password
 from ..core.uploads import MAX_AVATAR_BYTES
 

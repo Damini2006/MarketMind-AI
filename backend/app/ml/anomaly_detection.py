@@ -22,7 +22,7 @@ from dataclasses import dataclass, asdict
 
 import numpy as np
 
-from . import models
+from .. import models
 
 
 @dataclass

@@ -4,10 +4,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from . import models, schemas
-from .cache import get_or_set
-from .database import get_db
-from .deps import get_current_user
+from .. import models, schemas
+from ..cache import get_or_set
+from ..database import get_db
+from ..deps import get_current_user
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 

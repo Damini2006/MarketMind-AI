@@ -47,15 +47,15 @@ def _peek_rate_limit(key: str, max_attempts: int, window: int = 300):
             detail="Too many failed attempts. Try again later.",
         )
 
-from . import models, schemas
-from .cache import invalidate
-from .database import get_db
+from .. import models, schemas
+from ..cache import invalidate
+from ..database import get_db
 from ..core.security import (
     hash_password,
     verify_password,
     create_access_token,
 )
-from .deps import get_current_user
+from ..deps import get_current_user
 
 # --- Correct Prefix with /api/auth ---
 router = APIRouter(

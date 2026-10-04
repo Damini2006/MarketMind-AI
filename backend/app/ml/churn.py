@@ -114,7 +114,7 @@ from sklearn.metrics import (
 )
 from sqlalchemy.orm import Session
 
-from . import models
+from .. import models
 
 MIN_ROWS_FOR_ML = 8
 MIN_PER_CLASS_FOR_CV = 3
@@ -826,6 +826,25 @@ def run_churn_prediction(db: Session, business_id: int = None) -> dict:
     frequency_median = float(np.median(frequencies)) if frequencies else 1.0
     regularity_median = float(np.median(regularities)) if regularities else 0.0
 
+    # FEATURE CONTRIBUTIONS: where does each customer sit inside THIS tenant's
+    # own cohort for every signal the model can see? A raw churn probability
+    # says a customer is risky but not WHY, and an absolute cut-off ("overdue
+    # for 30 days") means something different for a weekly shopper than for a
+    # monthly one. Ranking each signal cohort-relative turns the risk score
+    # into an explanation the owner can act on: this customer is in the 91st
+    # percentile for inactivity within your own customer base.
+    #
+    # Higher percentile = more atypical in the risk-increasing direction, so
+    # recency / overdue / regularity read "high = risky" while spend_trend /
+    # frequency / monetary read "low = risky" (they are upside signals). The
+    # Churn page's driver card keys off exactly that orientation.
+    def _pct_rank(values, value):
+        """Percentile of `value` within `values`, as 0-100."""
+        arr = np.asarray(values, dtype=float)
+        if arr.size == 0:
+            return 0.0
+        return 100.0 * float((arr < value).sum()) / float(arr.size)
+
     rows = []
     for i, cid in enumerate(ids):
         prob = float(probs[i])
@@ -839,6 +858,12 @@ def run_churn_prediction(db: Session, business_id: int = None) -> dict:
             "monetary_total": monetary_totals[i],
             "spend_trend": spend_trends[i],
             "purchase_regularity": regularities[i],
+            "recency_percentile": round(_pct_rank(recencies, recencies[i]), 1),
+            "frequency_percentile": round(_pct_rank(frequencies, frequencies[i]), 1),
+            "spend_trend_percentile": round(_pct_rank(spend_trends, spend_trends[i]), 1),
+            "monetary_percentile": round(_pct_rank(monetary_totals, monetary_totals[i]), 1),
+            "regularity_percentile": round(_pct_rank(regularities, regularities[i]), 1),
+            "overdue_percentile": round(_pct_rank(overdue_ratios, overdue_ratios[i]), 1),
         }
         is_vip = monetary_totals[i] >= monetary_p75 and monetary_p75 > 0
         is_frequent = frequencies[i] >= frequency_median and frequency_median > 1
