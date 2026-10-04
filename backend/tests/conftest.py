@@ -73,6 +73,43 @@ def client(app):
         yield c
 
 
+# --------------------------------------------------------------------------
+# Seeded history design
+# --------------------------------------------------------------------------
+# The churn model anchors "how long ago did they last buy" on
+# `reference_date = max(sale_date)` across the tenant, NOT on wall-clock
+# time. So a customer only reads as lapsed if their last visit sits well
+# BEFORE the newest visit in the dataset. The seed therefore keeps a set of
+# customers ordering right up to the final day, and gives a second set their
+# own end-of-history cutoff.
+#
+# Twelve months (365 days) rather than the old 90 days because:
+#   * `ml/churn.py` needs `frequency >= 4` per customer for a spend_trend,
+#     and `_pick_holdout_cutoffs` needs >= 10 visit dates before it can carve
+#     PAST->FUTURE out-of-time training windows at all.
+#   * With only ~90 days the model saw ~20 total samples, which pinned
+#     cross-validated accuracy at the small-sample ceiling.
+HISTORY_DAYS = 365
+
+# (visit interval in days, last active day offset within the 365-day window)
+# A `last_day` well below HISTORY_DAYS-1 means that customer went quiet and
+# therefore carries a large recency_days against the global reference date.
+CUSTOMER_ROUTES = {
+    0:  (3, 364),   # loyal, every 3 days, active through the end
+    1:  (4, 364),   # loyal, every 4 days, active through the end
+    2:  (5, 364),   # loyal, every 5 days, active through the end
+    3:  (3, 364),   # loyal, every 3 days, active through the end
+    4:  (4, 364),   # loyal, every 4 days, active through the end
+    5:  (6, 364),   # loyal, slower cadence but still active at the end
+    6:  (3, 364),   # loyal, every 3 days, active through the end
+    7:  (4, 300),   # lapsed ~64 days before the newest sale  -> churn
+    8:  (6, 265),   # lapsed ~99 days before the newest sale  -> churn
+    9:  (8, 235),   # lapsed ~129 days before the newest sale -> churn
+    10: (5, 195),   # lapsed ~169 days before the newest sale -> churn
+    11: (7, 155),   # lapsed deepest; still has real history  -> churn
+}
+
+
 @pytest.fixture(scope="session")
 def seeded_business():
     """One business with rich data (owner + sales exec), created once."""
@@ -98,8 +135,8 @@ def seeded_business():
         )
         db.add_all([owner, sales_exec])
 
-        # Products + customers + a deterministic sales history long enough
-        # for forecast/churn/segmentation to train on.
+        # Products + customers + a deterministic 12-month sales history long
+        # enough for forecast/churn/segmentation to train on.
         import datetime as _dt
         prods = []
         for i in range(6):
@@ -118,63 +155,11 @@ def seeded_business():
             custs.append(c)
         db.flush()
 
-        start = _dt.datetime.utcnow() - _dt.timedelta(days=90)
-        # Realistic shopping behaviour: every customer has PRODUCT
-        # PREFERENCES (80% of purchases from 2 favourite products) and a
-        # personal spend level, so segments/recommendations/churn all have
-        # genuine per-customer signal to learn from -- a fixture where
-        # everyone buys everything equally makes identical model outputs
-        # the CORRECT answer and the tests meaningless.
-        import random as _random
-        rng = _random.Random(7)
-
-        def _pick_product(idx):
-            favourites = (idx % len(prods), (idx + 2) % len(prods))
-            if rng.random() < 0.8:
-                return prods[favourites[rng.randint(0, 1)]]
-            return prods[rng.randrange(len(prods))]
-
-        # Customers 0-8 buy steadily with per-customer quantities GROWING
-        # over time (1x -> 2x); 9-11 lapse mid-way. The growth of the 9
-        # steady customers dominates the lapse of 3, so the aggregate daily
-        # revenue genuinely trends upward -- which is what the forecast
-        # tests assert (the model must agree with the data's direction).
-# Products + customers + a deterministic sales history long enough
-        # for EVERY ML page to train on (12 months, not 90 days). The churn
-        # model needs ~200+ visits per customer plus a healthy churn signal
-        # (active customers + customers who lapse mid-window) to push accuracy
-        # past the 20-sample ceiling. We keep the SAME cadence/recommendation
-        # logic as before; only the time window changes.
-        import datetime as _dt
-        prods = []
-        for i in range(6):
-            p = models.Product(
-                name=f"Product {i}", category="Grocery", price=100.0 + i,
-                stock_quantity=50, reorder_threshold=10, business_id=biz.id,
-            )
-            db.add(p)
-            prods.append(p)
-        custs = []
-        for i in range(12):
-            c = models.Customer(
-                name=f"Customer {i}", email=f"c{i}@test.com", business_id=biz.id,
-            )
-            db.add(c)
-            custs.append(c)
-        db.flush()
-
-        # 12-month window: 365 days. The 'now' anchor sits roughly 21 days
-        # before the window end so the model has a full trailing month of
-        # history (12 months - 21 days) to train on.
-        start = _dt.datetime.utcnow() - _dt.timedelta(days=365)
-        end = _dt.datetime.utcnow() - _dt.timedelta(days=21)
-
-        # Realistic shopping behaviour: every customer has PRODUCT PREFERENCES,
-        # 80% of purchases from 2 favourite products, plus a personal cadence,
+        # Realistic shopping behaviour: every customer has PRODUCT PREFERENCES
+        # (80% of purchases from 2 favourite products) and a personal cadence,
         # so segments/recommendations/churn all have genuine per-customer
-        # signal. A customer who buys on a 3-day rhythm for 9 months and then
-        # stops for the last 3 months is a churn label; a customer who has
-        # a steady purchase every ~4 days is a healthy label.
+        # signal -- a fixture where everyone buys everything equally makes
+        # identical model outputs the CORRECT answer and the tests meaningless.
         import random as _random
         rng = _random.Random(7)
 
@@ -184,156 +169,107 @@ def seeded_business():
                 return prods[favourites[rng.randint(0, 1)]]
             return prods[rng.randrange(len(prods))]
 
-        # Customer cadences (visit interval in days) and routes:
-        #   idx 0-6 : healthy regular cadence, tiny 20-day lapse near the end
-        #           -> churn label if it persists, otherwise High activity
-        #   idx 7-9 : normal cadence, then a mid-window AND end-of-window
-        #           lapse -> definite churn (High risk) label
-        #   idx 10  : erratic cadence (gaps between 2 and 14 days) with a
-        #           30-day inactive tail -> churn (High risk) label
-        #   idx 11  : clean High activity (long cadence), no lapse -> Low risk
-        cadences = {
-            0: (3, 'healthy_regular', 0),
-            1: (4, 'healthy_regular', 0),
-            2: (5, 'healthy_regular', 0),
-            3: (3, 'healthy_regular', 0),
-            4: (4, 'healthy_regular', 0),
-            5: (6, 'healthy_regular', 0),
-            6: (3, 'healthy_regular', 0),
-            7: (4, 'lapse_mid', 21),
-            8: (6, 'lapse_mid', 21),
-            9: (8, 'lapse_mid', 21),
-            10: (1, 'erratic', 30),
-            11: (9, 'healthy_high_activity', 0),
-        }
+        start = _dt.datetime.utcnow() - _dt.timedelta(days=HISTORY_DAYS)
 
-        def _is_lapsed(idx, day):
-            _, route, tail_days = cadences[idx]
-            # tail_days = how many days AFTER the window end the customer is
-            # already inactive (their lapse sticks out of the window).
-            if route == 'healthy_high_activity':
-                return False
-            if route == 'erratic':
-                # erratic customers are `tail_days` inactive at the end
-                return day >= end.day - tail_days
-            # lapse_mid: inactive for the last `tail_days` days of the window
-            return day >= end.day - tail_days
-
-        def _quantity(idx, day):
-            return 1 + (idx + day) % 4
-
-        def _churn_label(idx, day):
-            """Return True when the customer's behaviour in the FINAL 90 days
-            (the 'observe window' the model trains on) is a churn signal.
-            The model looks at the last 90 days of the window.
-            """
-            if cadences[idx][1] == 'erratic':
-                # erratic = sporadic + long tail = churn
-                return True
-            if cadences[idx][1] == 'healthy_high_activity':
-                return False
-            # lapse_mid: the customer must have an ORDER within the last 90
-            # days of the observe window, not later than end-21.
-            observe_until = end - _dt.timedelta(days=90)
-            return day <= observe_until.day
-
-        # Build the sales history.
-        _ordered = {}
-        # Products + customers + a deterministic sales history long enough
-        # for EVERY ML page to train on (12 months, not 90 days). The churn
-        # model needs ~200+ visits per customer plus a healthy churn signal
-        # (active customers + customers who lapse mid-window) to push accuracy
-        # past the 20-sample ceiling. We keep the SAME cadence/recommendation
-        # logic as before; only the time window changes.
-        import datetime as _dt
-        prods = []
-        for i in range(6):
-            p = models.Product(
-                name=f"Product {i}", category="Grocery", price=100.0 + i,
-                stock_quantity=50, reorder_threshold=10, business_id=biz.id,
-            )
-            db.add(p)
-            prods.append(p)
-        custs = []
-        for i in range(12):
-            c = models.Customer(
-                name=f"Customer {i}", email=f"c{i}@test.com", business_id=biz.id,
-            )
-            db.add(c)
-            custs.append(c)
-        db.flush()
-
-        # 12-month window: 365 days. The 'now' anchor sits roughly 21 days
-        # before the window end so the model has a full trailing month of
-        # history (12 months - 21 days) to train on.
-        start = _dt.datetime.utcnow() - _dt.timedelta(days=365)
-        end = _dt.datetime.utcnow() - _dt.timedelta(days=21)
-
-        # Realistic shopping behaviour: every customer has PRODUCT PREFERENCES,
-        # 80% of purchases from 2 favourite products, plus a personal cadence,
-        # so segments/recommendations/churn all have genuine per-customer
-        # signal. A customer who buys on a 3-day rhythm for 9 months and then
-        # stops for the last 3 months is a churn label; a customer who has
-        # a steady purchase every ~4 days is a healthy label.
-        import random as _random
-        rng = _random.Random(7)
-
-        def _pick_product(idx):
-            favourites = (idx % len(prods), (idx + 2) % len(prods))
-            if rng.random() < 0.8:
-                return prods[favourites[rng.randint(0, 1)]]
-            return prods[rng.randrange(len(prods))]
-
-        # Customer cadences (visit interval in days) and lapse tails (how many
-        # days of inactivity a customer has at the end of the window):
-        #   idx 0-6  : healthy regular cadence, tiny 20-day lapse near the end
-        #              -> churn label if it persists, otherwise High activity
-        #   idx 7-9  : normal cadence, then a mid-window AND end-of-window
-        #              lapse -> definite churn (High risk) label
-        #   idx 10   : erratic cadence (gaps between 2 and 14 days) with a
-        #              30-day inactive tail -> churn (High risk) label
-        #   idx 11   : clean High activity (long cadence), no lapse -> Low risk
-        cadences = {
-            0: (3, 'healthy_regular', 0),
-            1: (4, 'healthy_regular', 0),
-            2: (5, 'healthy_regular', 0),
-            3: (3, 'healthy_regular', 0),
-            4: (4, 'healthy_regular', 0),
-            5: (6, 'healthy_regular', 0),
-            6: (3, 'healthy_regular', 0),
-            7: (4, 'lapse_mid', 21),
-            8: (6, 'lapse_mid', 21),
-            9: (8, 'lapse_mid', 21),
-            10: (1, 'erratic', 30),
-            11: (9, 'healthy_high_activity', 0),
-        }
-
-        # Build the sales history.
-        _ordered = {}
-        sales = []
+        # Quantities ramp over the year (roughly 1x -> 3x) so aggregate daily
+        # revenue trends upward, which is what the forecast-direction test
+        # asserts: the model must agree with the data's actual direction.
+        rows = []
         for idx, c in enumerate(custs):
-            cid = c.id
-            interval = cadences[idx][0]
-            tail = cadences[idx][2]
-            # Active window runs `start` -> `end`; a customer with a `tail`
-            # (lapse) is inactive for `tail` days at the end.
-            max_day = 365 - tail
-            start_day = (idx * 7) % interval
-            for day in range(start_day, max_day, interval):
-                p = _pick_product(idx)
-                qty = 1 + (idx + day) % 4
-                sales.append(models.Sale(
-                    customer_id=cid, product_id=p.id,
-                    quantity=qty, unit_price=p.price,
-                    total_amount=qty * p.price,
-                    sale_date=start + _dt.timedelta(days=day),
-                    source="seed", business_id=biz.id,
-                ))
-                _ordered[cid] = day
+            interval, last_day = CUSTOMER_ROUTES[idx]
+            # Stagger the first visit so customers don't all land on day 0.
+            first_day = (idx * 5) % interval
+            day = first_day
+            while day <= last_day:
+                current = start + _dt.timedelta(days=day)
+                base_qty = 1 + day // 120
+                # 1-2 line items per visit; the churn module collapses
+                # same-day line items into a single "visit" before any
+                # cadence math, so this stays one visit per `day`.
+                for k in range(1 + (idx + day) % 2):
+                    p = _pick_product(idx)
+                    qty = base_qty + rng.randint(0, 1)
+                    rows.append(models.Sale(
+                        customer_id=c.id, product_id=p.id,
+                        quantity=qty, unit_price=p.price,
+                        total_amount=qty * p.price,
+                        sale_date=current.replace(hour=10, minute=idx),
+                        source="seed", business_id=biz.id,
+                    ))
+                day += interval
 
-        db.add_all(sales)
+        db.add_all(rows)
         db.commit()
+        return {"business_id": biz.id, "owner_id": owner.id, "sales_id": sales_exec.id}
+    finally:
+        db.close()
 
+
+def _login(client, email, password):
+    res = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert res.status_code == 200, f"login failed for {email}: {res.text}"
+    return res.json()["access_token"]
+
+
+@pytest.fixture(scope="session")
+def owner_token(client, seeded_business):
+    return _login(client, "owner@test.com", "Owner@123")
+
+
+@pytest.fixture(scope="session")
+def sales_token(client, seeded_business):
+    return _login(client, "sales@test.com", "Sales@123")
+
+
+@pytest.fixture(autouse=True)
+def _clear_ttl_cache():
+    """The AI endpoints memoise results in a module-global TTL cache keyed by
+    business id. Fresh test DBs recycle small business ids, so without clearing
+    between tests, one test can be served another test's cached AI result
+    (order-dependent failures under test-order randomisers)."""
+    from app import cache
+    cache._cache.clear()
+    yield
+    cache._cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_store():
+    """The auth limiter is process-global; brute-force tests would otherwise
+    burn login/OTP budget for every later test (order-dependent 429s)."""
+    from app.routers.auth import _rate_store
+    _rate_store.clear()
+    yield
+    _rate_store.clear()
+
+
+@pytest.fixture()
+def owner_headers(owner_token):
+    return {"Authorization": f"Bearer {owner_token}"}
+
+
+@pytest.fixture()
+def sales_headers(sales_token):
+    return {"Authorization": f"Bearer {sales_token}"}
+
+
+@pytest.fixture()
+def fresh_business():
+    """A brand-new business with only its owner: proves new tenants see NO data."""
+    db = SessionLocal()
+    try:
+        biz = models.Business(company_name="Empty Co")
+        db.add(biz)
+        db.flush()
+        owner = models.User(
+            full_name="Empty Owner",
+            email=f"empty{biz.id}@test.com",
+            hashed_password=hash_password("Empty@123"),
+            role=models.RoleEnum.business_owner,
+            business_id=biz.id,
+        )
+        db.add(owner)
+        db.commit()
         return {"business_id": biz.id, "email": owner.email, "password": "Empty@123"}
     finally:
         db.close()
