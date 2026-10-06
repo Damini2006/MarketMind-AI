@@ -3,4 +3,4 @@ __pycache__/
 *.db
 .env
 venv/
-.venv/
+.venv/*.env.neon

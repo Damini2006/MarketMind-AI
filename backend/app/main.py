@@ -278,5 +278,19 @@ def shutdown_event():
 
 
 if __name__ == "__main__":
+    # Windows file-watcher reloader.
+    # uvicorn's --reload defaults to inotify on Unix and falls back to
+    # per-directory stat() polling on Windows, which is why the hot-reload
+    # loop feels flaky here. The solution is the watchfiles backend
+    # (installed alongside uvicorn), which uvicorn drives through --reload.
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=["backend", "frontend"],
+        reload_includes=["*.py", "*.js", "*.css", "*.tsx", "*.jsx"],
+        reload_excludes=[".env", ".env.*", "uploads", "*.db", "__pycache__",
+                         "*.pyc", "*.pyo", ".git", ".venv", "*.log"],
+    )
