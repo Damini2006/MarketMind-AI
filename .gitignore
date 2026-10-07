@@ -40,3 +40,18 @@ frontend/dist/
 
 # Freebuff agent runtime state
 .freebuff/
+
+# Large media files - use Git LFS or external storage
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.zip
+*.tar.gz
+*.exe
+*.dll
+*.pdf
+
+# Work reports - documentation, not code
+WORK_REPORT*
+*_WORK_REPORT*

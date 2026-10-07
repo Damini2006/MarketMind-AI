@@ -114,6 +114,7 @@ def get_cache_stats() -> dict:
             "uptime_seconds": int(time.time() - _STARTED),
             "hits": _STATS["hits"],
             "misses": _STATS["misses"],
+            "computes": _STATS["computes"],
             "hit_rate": round(_STATS["hits"] / total, 3) if total else 0,
             "avg_compute_ms": round(_STATS["compute_ms"] / _STATS["computes"], 1)
             if _STATS["computes"]

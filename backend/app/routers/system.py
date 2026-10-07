@@ -143,6 +143,8 @@ def _probe_neon() -> dict:
             db.execute(text("SELECT 1 AS ok"))
         return {"ok": True, "host": engine.url.host if engine.url else None}
     except Exception as exc:
+        import logging
+        logging.error("database probe failed: %s: %s", type(exc).__name__, exc)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
