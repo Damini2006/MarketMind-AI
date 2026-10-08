@@ -7,6 +7,7 @@ alerts to all connected clients over WebSocket.
 
 import asyncio
 import json
+import logging
 import time
 from typing import Dict, Set
 
@@ -15,6 +16,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, SessionLocal
 from .. import models
+from ..resilience import log_throttled
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["websocket"])
 
@@ -90,7 +94,14 @@ broadcaster = AlertBroadcaster()
 
 
 async def _monitor_alerts():
-    """Background loop that checks for new alerts every 10 seconds."""
+    """Background loop that checks for new alerts every 10 seconds.
+
+    A failed pass backs off, and its log line is throttled: this loop ticks
+    every 10 seconds, so during a Neon outage it used to write the same warning
+    six times a minute. The loop IS the retry mechanism for this task — a
+    transient resolver/socket failure clears within a few seconds.
+    """
+    failures = 0
     while True:
         await asyncio.sleep(10)
         db = SessionLocal()
@@ -214,10 +225,27 @@ async def _monitor_alerts():
                 broadcaster._last_snapshot[biz_id] = new_snapshot
 
         except Exception as exc:
-            import logging
-            logging.warning(f"Alert monitor loop failed for biz {biz_id}: {exc}")
+            # `biz_id` is NOT necessarily bound here — the failure can happen
+            # while loading the business list, before the per-business loop
+            # assigns it. Referencing it made this handler raise
+            # UnboundLocalError inside itself, killing the monitor task instead
+            # of logging the problem. Report the pass instead.
+            failures += 1
+            log_throttled(
+                log,
+                "alert-monitor",
+                f"Alert monitor pass failed: {type(exc).__name__}: {exc}",
+                min_interval=300.0,
+            )
+        else:
+            failures = 0
         finally:
             db.close()
+
+        if failures:
+            # Back off on a sustained outage instead of re-hammering the
+            # database every 10 seconds.
+            await asyncio.sleep(min(10 * failures, 120))
 
 
 @router.on_event("startup")
@@ -258,7 +286,7 @@ async def websocket_alerts(websocket: WebSocket, business_id: str):
         try:
             products = (
                 db.query(models.Product)
-                .filter(models.Product.business_id == int(biz_id))
+                .filter(models.Product.business_id == int(business_id))
                 .all()
             )
             low_count = sum(1 for p in products if 0 < p.stock_quantity <= (p.reorder_threshold or 10))

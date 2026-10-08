@@ -12,6 +12,7 @@ handful of queries at ~1s each), so reads never wait for it: it is armed at
 most once per SYNC_TTL per business and executed on a background thread.
 """
 import datetime as dt
+import logging
 import threading
 import time
 from fastapi import APIRouter, Depends, HTTPException
@@ -21,7 +22,10 @@ from .. import models, schemas
 from ..cache import get_or_set, invalidate
 from ..database import SessionLocal, get_db
 from ..deps import get_current_user
+from ..resilience import call_with_retry, log_throttled
 from .ai import _detect_outlier_sales, _is_material_outlier
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -105,15 +109,37 @@ def _sync_notifications(db: Session, business_id: int) -> None:
 
 
 def _run_sync_in_background(business_id: int) -> None:
-    """Execute the sync in a dedicated session; failures must never surface."""
-    db = SessionLocal()
+    """Execute the sync in a dedicated session; failures must never surface.
+
+    Runs inside call_with_retry. The sync de-duplicates by source_type +
+    source_id, so re-running a pass that died on a transient resolver/socket
+    error is safe and simply finishes the work. The final failure is logged
+    throttled per business, since this runs on the notification path for every
+    tenant and used to log on each cold start.
+    """
+
+    def _once() -> None:
+        db = SessionLocal()
+        try:
+            _do_sync_notifications(db, business_id)
+        finally:
+            db.close()
+
     try:
-        _do_sync_notifications(db, business_id)
+        call_with_retry(
+            _once,
+            attempts=3,
+            base_delay=1.0,
+            max_delay=15.0,
+            label=f"notification sync biz {business_id}",
+        )
     except Exception as exc:
-        import logging
-        logging.warning(f"Notification sync failed for business {business_id}: {exc}")
-    finally:
-        db.close()
+        log_throttled(
+            log,
+            f"notification-sync-{business_id}",
+            f"Notification sync failed for business {business_id}: {type(exc).__name__}: {exc}",
+            min_interval=300.0,
+        )
 
 
 def _do_sync_notifications(db: Session, business_id: int) -> None:

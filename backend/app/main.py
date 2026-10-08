@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -42,6 +43,9 @@ from .routers.audit import router as audit_router
 from .routers.user_data import router as user_data_router
 from .routers.activity import router as activity_router
 from .routers.system import router as system_router
+from .resilience import call_with_retry, log_throttled
+
+log = logging.getLogger(__name__)
 
 # Initialize database tables
 Base.metadata.create_all(bind=engine)
@@ -80,26 +84,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Neon PostgreSQL: pre-warm connection pool and keep the serverless
+# Neon PostgreSQL: pre-warm the connection pool and keep the serverless
 # compute alive with periodic pings so connections don't go cold.
-def _ping() -> None:
+#
+# Every DB touch here goes through call_with_retry. Over this link the container
+# resolver intermittently fails ("Name or service not known") and Neon drops
+# idle sockets ("SSL SYSCALL error: EOF detected"); both clear on a retry, so a
+# retry is what turns them from errors into a brief pause. Failures that survive
+# the retries are logged via log_throttled so an outage cannot write the same
+# line every two minutes.
+_KEEPALIVE_INTERVAL = 120
+
+
+def _ping_once() -> None:
     with engine.connect() as conn:
         conn.execute(text("SELECT 1"))
 
+
+def _ping() -> None:
+    call_with_retry(
+        _ping_once,
+        attempts=3,
+        base_delay=0.5,
+        max_delay=5.0,
+        label="keepalive ping",
+    )
+
+
 def _keepalive() -> None:
     while True:
-        time.sleep(120)
+        time.sleep(_KEEPALIVE_INTERVAL)
         try:
             _ping()
         except Exception as exc:
-            import logging
-            logging.warning(f"Keepalive ping failed: {exc}")
+            log_throttled(
+                log,
+                "keepalive",
+                f"Keepalive ping failed after retries: {type(exc).__name__}: {exc}",
+                min_interval=600.0,
+            )
+
 
 try:
     _ping()
 except Exception as exc:
-    import logging
-    logging.warning(f"Initial Neon keepalive ping failed: {exc}")
+    log_throttled(
+        log,
+        "keepalive-init",
+        f"Initial Neon keepalive ping failed: {type(exc).__name__}: {exc}",
+        min_interval=600.0,
+    )
 threading.Thread(target=_keepalive, daemon=True).start()
 
 # Serve uploaded files (avatars) — must be mounted before routers that
@@ -136,21 +170,37 @@ def startup_seed():
     round-trips, so doing it inline would block the API for minutes after
     every --reload restart. The cache warm-up already follows this pattern.
     """
+    def _seed_once():
+        db = SessionLocal()
+        try:
+            # Quick check: skip if data already exists
+            from sqlalchemy import text as _text
+            count = db.execute(_text("SELECT COUNT(*) FROM users")).scalar()
+            if count and count > 0:
+                return  # Already seeded, skip entirely
+            seed_if_empty(db)
+        finally:
+            db.close()
+
     def _seed():
         try:
-            db = SessionLocal()
-            try:
-                # Quick check: skip if data already exists
-                from sqlalchemy import text as _text
-                count = db.execute(_text("SELECT COUNT(*) FROM users")).scalar()
-                if count and count > 0:
-                    return  # Already seeded, skip entirely
-                seed_if_empty(db)
-            finally:
-                db.close()
+            # Retried as a whole. The count check makes a second attempt a
+            # no-op once the first has written users, so a transient failure
+            # part-way through seeding cannot duplicate data.
+            call_with_retry(
+                _seed_once,
+                attempts=4,
+                base_delay=1.0,
+                max_delay=20.0,
+                label="startup seed",
+            )
         except Exception as exc:
-            import logging
-            logging.warning(f"Startup seed skipped: {exc}")
+            log_throttled(
+                log,
+                "startup-seed",
+                f"Startup seed skipped after retries: {type(exc).__name__}: {exc}",
+                min_interval=600.0,
+            )
 
     threading.Thread(target=_seed, daemon=True).start()
     # Warm caches at startup (not just on first request); _ensure_warmup
@@ -178,11 +228,21 @@ def start_report_scheduler():
                 try:
                     ran = run_due_scheduled_reports(db)
                     if ran:
-                        logging.info(f"Report scheduler executed {ran} due report(s)")
+                        log.info("Report scheduler executed %s due report(s)", ran)
                 finally:
                     db.close()
             except Exception as exc:
-                logging.warning(f"Report scheduler tick failed: {exc}")
+                # Deliberately NOT retried in place. A schedule stamps last_run
+                # the moment it fires, so the 60s loop below is already the
+                # retry mechanism — and re-running the whole tick could
+                # double-send a report whose delivery succeeded before the
+                # connection died. Throttle the log instead of spamming it.
+                log_throttled(
+                    log,
+                    "report-scheduler",
+                    f"Report scheduler tick failed: {type(exc).__name__}: {exc}",
+                    min_interval=600.0,
+                )
             time.sleep(60)
 
     threading.Thread(target=_tick, daemon=True).start()
@@ -201,46 +261,83 @@ def _start_cache_warmup() -> None:
     from .cache import get_or_set
     from .routers import ai, analytics, notifications as notif_router
 
-    def _warm() -> None:
+    def _business_ids() -> list:
         db = SessionLocal()
         try:
-            bids = [r[0] for r in db.query(models.Business.id).all()]
+            return [r[0] for r in db.query(models.Business.id).all()]
         finally:
             db.close()
 
+    def _warm_business(bid) -> None:
+        """Pre-compute one business's caches on its own session.
+
+        Safe to retry as a whole: every step is either a pure read/compute or
+        the notification sync, which de-duplicates by source id.
+        """
+        wdb = SessionLocal()
+        try:
+            fake = SimpleNamespace(business_id=bid)
+            get_or_set(
+                f"analytics:{bid}:kpis",
+                300,
+                lambda: analytics._compute_kpis(wdb, bid),
+            )
+            ai.get_sales_forecast(horizon_days=14, db=wdb, current_user=fake)
+            ai.get_sales_forecast(horizon_days=30, db=wdb, current_user=fake)
+            ai.get_customer_segmentation(db=wdb, current_user=fake)
+            ai.get_churn_predictions(db=wdb, current_user=fake)
+            # page/page_size must be passed EXPLICITLY: this is a direct call,
+            # so FastAPI never resolves the Query defaults and the handler would
+            # receive Query objects instead of ints. It also builds the shared
+            # recommendation context, which the dashboard's own page size then
+            # reuses.
+            ai.get_all_recommendations(page=1, page_size=10, db=wdb, current_user=fake)
+            # min_confidence must match what FastAPI passes for the default so
+            # the warm cache key equals the request key.
+            ai.get_anomaly_alerts(min_confidence=0.0, db=wdb, current_user=fake)
+            ai.get_customer_lifetime_value(db=wdb, current_user=fake)
+            notif_router._sync_notifications(wdb, bid)
+            notif_router.unread_count(db=wdb, current_user=fake)
+        finally:
+            wdb.close()
+
+    def _warm() -> None:
+        try:
+            bids = call_with_retry(
+                _business_ids,
+                attempts=4,
+                base_delay=1.0,
+                max_delay=20.0,
+                label="warm-up business list",
+            )
+        except Exception as exc:
+            log_throttled(
+                log,
+                "warmup-list",
+                f"Warm-up could not load businesses after retries: {type(exc).__name__}: {exc}",
+                min_interval=600.0,
+            )
+            return
+
         for bid in bids:
             try:
-                wdb = SessionLocal()
-                try:
-                    fake = SimpleNamespace(business_id=bid)
-                    get_or_set(
-                        f"analytics:{bid}:kpis",
-                        300,
-                        lambda: analytics._compute_kpis(wdb, bid),
-                    )
-                    ai.get_sales_forecast(horizon_days=14, db=wdb, current_user=fake)
-                    ai.get_sales_forecast(horizon_days=30, db=wdb, current_user=fake)
-                    ai.get_customer_segmentation(db=wdb, current_user=fake)
-                    ai.get_churn_predictions(db=wdb, current_user=fake)
-                    # page/page_size must be passed EXPLICITLY: this is a direct
-                    # call, so FastAPI never resolves the Query defaults and the
-                    # handler would receive Query objects instead of ints. It
-                    # also builds the shared recommendation context, which the
-                    # dashboard's own page size then reuses.
-                    ai.get_all_recommendations(
-                        page=1, page_size=10, db=wdb, current_user=fake
-                    )
-                    # min_confidence must match what FastAPI passes for the
-                    # default so the warm cache key equals the request key.
-                    ai.get_anomaly_alerts(min_confidence=0.0, db=wdb, current_user=fake)
-                    ai.get_customer_lifetime_value(db=wdb, current_user=fake)
-                    notif_router._sync_notifications(wdb, bid)
-                    notif_router.unread_count(db=wdb, current_user=fake)
-                finally:
-                    wdb.close()
+                call_with_retry(
+                    lambda b=bid: _warm_business(b),
+                    attempts=4,
+                    base_delay=1.0,
+                    max_delay=20.0,
+                    label=f"warm-up biz {bid}",
+                )
             except Exception as exc:
-                import logging
-                logging.warning(f"Warm-up background task failed: {exc}")
+                # Per-business failures are throttled by business id: with a
+                # cold/absent database every one of them used to log a warning
+                # on each restart.
+                log_throttled(
+                    log,
+                    f"warmup-biz-{bid}",
+                    f"Warm-up failed for business {bid} after retries: {type(exc).__name__}: {exc}",
+                    min_interval=600.0,
+                )
 
     threading.Thread(target=_warm, daemon=True).start()
 
