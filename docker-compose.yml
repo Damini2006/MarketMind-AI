@@ -1,12 +1,61 @@
+# MarketMind AI — container stack.
+#
+# ── Three kinds of thing, deliberately kept apart ────────────────────────────
+#   committed artifacts  baked into the image at build time: application code,
+#                        alembic/ + alembic.ini (migrations run at startup), and
+#                        app/trained_models/*.pkl (tracked in git, read at
+#                        runtime). A fresh clone builds the same image.
+#   runtime config       injected at start, never baked in: backend/.env via
+#                        `env_file:` below (parameterised as BACKEND_ENV_FILE so
+#                        CI can point at backend/ci.env). backend/.dockerignore
+#                        excludes .env and .env.*, so a rebuild is not a
+#                        rotation and the image holds no credential.
+#   runtime state        the backend_uploads named volume (avatar files). Never
+#                        in the image, so it survives rebuilds.
+#
+# ── Logging ──────────────────────────────────────────────────────────────────
+# The default json-file driver grows without limit, and this stack logs on every
+# database hiccup. Bound it so a long-lived host cannot fill its disk with logs.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Reap zombies and forward signals properly (the app runs background
+    # threads and a connection pool with a shutdown hook).
+    init: true
     ports:
-      - "8000:8000"
+      # Host port is parameterised so a second stack can be brought up beside an
+      # already-running one (CI, or a local rehearsal) without editing this
+      # file. Defaults are unchanged: 8000 on the host.
+      - "${BACKEND_PORT:-8000}:8000"
+    # Parameterised because compose MERGES env_file lists rather than replacing
+    # them, so an overlay cannot substitute this file — it can only add another
+    # one, and the base file would still have to exist. CI points this at
+    # backend/ci.env (a checked-in, secret-free config) instead:
+    #
+    #     BACKEND_ENV_FILE=./backend/ci.env docker compose -f docker-compose.yml \
+    #       -f docker-compose.ci.yml up -d --build
+    #
+    # The default is unchanged: the real, gitignored backend/.env.
     env_file:
-      - ./backend/.env
+      - "${BACKEND_ENV_FILE:-./backend/.env}"
+    # Docker Desktop's embedded resolver (127.0.0.11 -> the host resolver) is
+    # the weak link behind the intermittent "could not translate host name ...
+    # Name or service not known" errors seen when reaching Neon from this
+    # container. Pin well-known public resolvers so the container resolves the
+    # Neon host directly instead of depending on that forwarder. This is a
+    # mitigation, not the only defence: the backend also retries DNS failures
+    # with backoff (see backend/app/resilience.py).
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - backend_uploads:/app/uploads
     healthcheck:
@@ -16,17 +65,68 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      # The container runs as the unprivileged `appuser`; this blocks any
+      # setuid binary inside it from regaining root.
+      - no-new-privileges:true
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+
+  # One-shot deploy gate. Runs real HTTP calls against the running stack and
+  # exits non-zero if any of them fail. Gated behind a profile so a normal
+  # `docker compose up -d` never starts it:
+  #
+  #     docker compose --profile smoke run --rm smoke
+  #
+  # Deliberately NOT the healthcheck. Login is rate limited to 10 attempts per
+  # IP per 300s (app/routers/auth.py), so a check that logs in on a 10s
+  # healthcheck interval would issue ~30 logins per window and be answered with
+  # 429. The cheap `curl /health` above stays the healthcheck; this verifies the
+  # things /health cannot (the SPA is served, nginx proxies /api, the seeded
+  # account can authenticate, and the app reaches its database).
+  smoke:
+    image: python:3.11-slim
+    profiles: ["smoke"]
+    volumes:
+      - ./scripts:/smoke:ro
+    environment:
+      SMOKE_BACKEND_URL: http://backend:8000
+      SMOKE_FRONTEND_URL: http://frontend:80
+      # Override SMOKE_EMAIL / SMOKE_PASSWORD for a real environment; the
+      # defaults are the demo account in app/seed_data.py.
+      SMOKE_EMAIL: ${SMOKE_EMAIL:-owner@marketmind.ai}
+      SMOKE_PASSWORD: ${SMOKE_PASSWORD:-Owner@123}
+    command: ["python", "/smoke/smoke_test.py"]
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: "no"
+    logging: *default-logging
 
 volumes:
+  # Uploaded avatars — runtime state, never part of the image.
+  #
+  # A FRESH volume inherits the ownership of the image's /app/uploads
+  # (appuser:appuser), so a new deployment needs no extra step. A volume created
+  # by an earlier root-running container is still root-owned, and the non-root
+  # backend cannot write to it. Migrate such a volume in place, once, without
+  # losing data:
+  #
+  #   docker run --rm -v team_2_small_biz_ai_backend_uploads:/v \
+  #     alpine chown -R 1000:1000 /v
   backend_uploads:

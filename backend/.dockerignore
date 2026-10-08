@@ -17,6 +17,15 @@ __pycache__/
 uploads/
 .freebuff/
 
+# Unused at runtime AND not tracked in git. No code path reads this directory
+# (the /api/datasets endpoints serve database rows, not files) and it is
+# gitignored, so a CI or fresh-clone build would not have it. Excluding it stops
+# the image depending on untracked local files and drops ~7.6 MB.
+#
+# Deliberately NOT excluding app/trained_models/*.pkl: those ARE tracked in git
+# and ARE read at runtime by app/ml/inference.py.
+app/datasets/
+
 # Dev/test-only tooling
 venv*/
 tests/
