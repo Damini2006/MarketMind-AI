@@ -1,0 +1,43 @@
+# CI-only overlay. NOT part of a real deployment — never run this file against
+# production, because it replaces the backend's environment with a throwaway
+# local database.
+#
+# Purpose: let a CI runner (or a developer with no Neon account) stand the whole
+# stack up and smoke-test it end to end, with no external services and no
+# secrets. The base docker-compose.yml expects an external managed database via
+# backend/.env; this overlay swaps that for a container.
+#
+#   BACKEND_ENV_FILE=./backend/ci.env \
+#     docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+#   BACKEND_ENV_FILE=./backend/ci.env \
+#     docker compose -f docker-compose.yml -f docker-compose.ci.yml \
+#       --profile smoke run --rm smoke
+#
+# Two compose behaviours force the shape of this file, both verified with
+# `docker compose config`: `ports` and `env_file` are MERGED across files, not
+# replaced. So an overlay cannot drop the base host ports nor swap the base env
+# file — the base would still require backend/.env, which no CI runner has. Both
+# are therefore parameterised in docker-compose.yml and set from the environment
+# (BACKEND_ENV_FILE, BACKEND_PORT, FRONTEND_PORT). This file adds only what an
+# overlay can add: a service, and a dependency on it.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: marketmind
+      POSTGRES_PASSWORD: marketmind
+      POSTGRES_DB: marketmind
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketmind -d marketmind"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+  backend:
+    # The app creates its tables at import time, so ordering matters here in a
+    # way it does not for an always-on managed database. The base file gives the
+    # backend no depends_on precisely so a Neon deployment needs no local db.
+    depends_on:
+      db:
+        condition: service_healthy

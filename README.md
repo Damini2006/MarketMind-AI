@@ -121,7 +121,7 @@ MarketMind AI is a full-stack SaaS application built to give small retail busine
 |-----------|---------|
 | Neon PostgreSQL | Serverless cloud database |
 | 28 tables | Full relational schema with FK indexes |
-| Connection pooling | Optimized via Neon pooler endpoint |
+| Connection pooling | SQLAlchemy pool against Neon's direct endpoint |
 
 ---
 
@@ -410,7 +410,7 @@ Full interactive API documentation at `http://localhost:8000/docs`
 | API caching | TTL-based cache for KPIs, sales, analytics |
 | DB indexes | All 31 foreign key columns indexed |
 | GZip compression | Enabled for responses >1KB |
-| Connection pooling | Neon serverless with pooler endpoint |
+| Connection pooling | Neon serverless, direct endpoint + SQLAlchemy pool |
 
 ---
 
@@ -420,9 +420,9 @@ The app is two deployables: a FastAPI backend (any Python host or the provided `
 
 ### Backend (Render / Railway / Fly.io / Docker)
 
-1. Provision a **Neon PostgreSQL** database and copy its pooled connection string.
+1. Provision a **Neon PostgreSQL** database and copy its connection string. Use the **direct** endpoint — drop the `-pooler` label from the host (e.g. `ep-xxx-pooler.c-4.us-east-2.aws.neon.tech` -> `ep-xxx.c-4.us-east-2.aws.neon.tech`), or remove it from the host if Neon only shows you the pooled one. This backend is a single long-lived server with its own SQLAlchemy connection pool, which is the case Neon's pooler is not for; going direct also avoids PgBouncer's transaction-mode caveats. See the comment above `create_engine` in `backend/app/database.py`.
 2. Set environment variables on the host:
-   - `DATABASE_URL` — Neon pooled URL, `?sslmode=require` (required)
+   - `DATABASE_URL` — Neon direct URL, `?sslmode=require` (required)
    - `JWT_SECRET_KEY` — strong random secret ≥ 32 chars (required)
    - `CORS_ORIGINS` — **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only)
    - `SENDER_EMAIL` / `SMTP_SERVER` / `SMTP_PORT` / `SENDER_PASSWORD` — optional, enables OTP password-reset emails
@@ -435,6 +435,30 @@ The app is two deployables: a FastAPI backend (any Python host or the provided `
 3. Split-origin option: set `VITE_API_BASE_URL=https://your-api-host` at build time, and add the frontend origin to the backend's `CORS_ORIGINS`. WebSocket alerts follow `VITE_API_BASE_URL` automatically.
 4. SPA routing: add a rewrite of all paths to `/index.html` (Vercel/Netlify do this via framework presets).
 
+### Deploy smoke test
+
+`scripts/smoke_test.py` answers "is the deployed stack actually usable?" rather than "are the containers up?". It makes real HTTP calls and exits non-zero on any failure, so it can gate a deploy:
+
+```bash
+# against a local/dev stack
+python scripts/smoke_test.py
+
+# against a stack started with docker compose (runs inside its network)
+docker compose --profile smoke run --rm smoke
+
+# against a real environment
+SMOKE_BACKEND_URL=https://api.example.com \
+SMOKE_FRONTEND_URL=https://app.example.com \
+SMOKE_EMAIL=you@example.com SMOKE_PASSWORD=... \
+python scripts/smoke_test.py
+```
+
+It verifies the backend `/health`, the `/openapi.json` schema, that the frontend serves the SPA shell (not merely that it returns a 200), that nginx proxies `/api` to the backend, that an account can authenticate, that the token works on an authenticated endpoint, that the app reaches its database, and that anonymous callers are rejected with 401.
+
+It is deliberately **not** the container healthcheck: login is rate limited to 10 attempts per IP per 300s, so a check that logged in on a 10s healthcheck interval would be answered with 429. The cheap `curl /health` healthcheck stays as it is.
+
+CI runs the same gate on every push — the `deploy-smoke` job in `.github/workflows/ci.yml` stands the whole stack up against a throwaway PostgreSQL using `docker-compose.ci.yml` (no secrets required) and tears it down afterwards.
+
 ### Production checklist
 
 - [ ] `DATABASE_URL` points at Neon with `sslmode=require`
@@ -442,7 +466,7 @@ The app is two deployables: a FastAPI backend (any Python host or the provided `
 - [ ] `CORS_ORIGINS` lists the real frontend origin(s)
 - [ ] `VITE_API_BASE_URL` set at frontend build time (split deployments)
 - [ ] SMTP credentials present if password-reset emails are wanted
-- [ ] Smoke-test after deploy: `GET /api/health`, then log in and load the Dashboard
+- [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) — it covers `/health`, the SPA, an authenticated call and the database round-trip
 
 ---
 

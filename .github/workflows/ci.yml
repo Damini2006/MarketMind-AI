@@ -78,3 +78,53 @@ jobs:
           tags: marketmind-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-smoke:
+    name: Deploy smoke test (compose stack)
+    runs-on: ubuntu-latest
+    # The last gate: bring the whole stack up and exercise it over HTTP the way
+    # a client would, instead of trusting that the images built.
+    needs: [backend-tests, frontend-build]
+    timeout-minutes: 20
+    env:
+      # compose MERGES env_file lists rather than replacing them, so an overlay
+      # cannot swap backend/.env for a CI config — the base file would still
+      # require backend/.env, which no runner has. The path is parameterised in
+      # docker-compose.yml and selected here. backend/ci.env is checked in and
+      # contains no real credentials, so this job needs no secrets at all.
+      BACKEND_ENV_FILE: ./backend/ci.env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the stack against a throwaway PostgreSQL
+        # docker-compose.ci.yml adds a disposable postgres and makes the backend
+        # wait for it, so this exercises the real Dockerfiles, the real compose
+        # wiring and the real nginx proxy without touching the managed database.
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+
+      - name: Wait for the backend to become healthy
+        run: |
+          for attempt in $(seq 1 60); do
+            container=$(docker compose -f docker-compose.yml -f docker-compose.ci.yml ps -q backend)
+            status=$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null || echo starting)
+            echo "attempt $attempt: $status"
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::backend never became healthy"
+          exit 1
+
+      - name: Run the deploy smoke test
+        # Exits non-zero if /health, /openapi.json, the frontend shell, the
+        # nginx /api proxy, an authenticated login, an authenticated API call,
+        # or the database round-trip is broken.
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile smoke run --rm smoke
+
+      - name: Dump stack logs
+        if: failure()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --no-color --tail 200
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml --profile smoke down -v
