@@ -55,3 +55,5 @@ frontend/dist/
 # Work reports - documentation, not code
 WORK_REPORT*
 *_WORK_REPORT*
+ML/sales_forecasting/results/
+ML/datasets/

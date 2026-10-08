@@ -214,8 +214,8 @@ print("\n" + "=" * 50)
 print("MODEL PERFORMANCE")
 print("=" * 50)
 
-print(f"MAE: ₹{mae:,.2f}")
-print(f"RMSE: ₹{rmse:,.2f}")
+print(f"MAE: INR{mae:,.2f}")
+print(f"RMSE: INR{rmse:,.2f}")
 print(f"R² Score: {r2:.4f}")
 
 
@@ -342,7 +342,7 @@ print(new_data)
 
 print(
     f"\nPREDICTED REVENUE: "
-    f"₹{predicted_revenue[0]:,.2f}"
+    f"INR{predicted_revenue[0]:,.2f}"
 )
 
 
