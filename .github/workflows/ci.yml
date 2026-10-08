@@ -75,9 +75,52 @@ jobs:
         with:
           context: ./backend
           push: false
+          # Export the result into the local daemon so the guard steps
+          # below can inspect and run it; without load, buildx keeps the
+          # image in its cache only and 'docker image inspect' fails.
+          load: true
           tags: marketmind-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: "Guard: backend image must not run as root"
+        # Fails the build unless the image declares a non-root USER *and* an
+        # effective uid check agrees - Config.User is what docker run honours,
+        # but a root entrypoint or an explicit --user could still override it.
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=marketmind-backend:ci
+          user="$(docker image inspect --format '{{.Config.User}}' "$image")"
+          if [ -z "$user" ] || [ "$user" = "root" ] || [ "$user" = "0" ]; then
+            echo "::error::image declares USER='${user:-<empty>}' - backend must run as a non-root user"
+            exit 1
+          fi
+          uid="$(docker run --rm --entrypoint id "$image" -u)"
+          if [ "$uid" = "0" ]; then
+            echo "::error::container starts as uid=0 even though USER='$user'"
+            exit 1
+          fi
+          echo "ok: USER='$user', effective uid=$uid"
+
+      - name: "Guard: backend image must not contain .env files"
+        # Lists the whole image filesystem without executing any of it.
+        # Anything whose basename is .env or .env.<suffix> fails, except the
+        # committed, placeholder-only .env.example.
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=marketmind-backend:ci
+          cid="$(docker create "$image")"
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          listing="$(docker export "$cid" | tar -t)"
+          hits="$(echo "$listing" | grep -E '(^|/)\.env($|\.)' | grep -v -E '\.env\.example$' || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::image contains forbidden env files:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "ok: no .env files in image (.env.example exempt)"
 
   deploy-smoke:
     name: Deploy smoke test (compose stack)
