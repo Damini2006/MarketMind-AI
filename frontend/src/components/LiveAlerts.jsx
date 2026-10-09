@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAuth, getToken } from '../context/AuthContext.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { STATIC_BASE_URL } from '../services/api.js'
 
 import {
@@ -211,10 +211,10 @@ function useLiveAlerts(prefs) {
         const apiOrigin = new URL(STATIC_BASE_URL, window.location.origin)
         const wsProtocol = apiOrigin.protocol === 'https:' ? 'wss:' : 'ws:'
         const wsHost = isDev ? `${window.location.hostname}:8000` : apiOrigin.host
-        // Browsers cannot set headers on WebSocket handshakes, so the JWT
-        // rides as a query param and is verified server-side before accept.
-        const token = getToken()
-        const wsUrl = `${wsProtocol}//${wsHost}/ws/alerts/${businessId}${token ? `?token=${encodeURIComponent(token)}` : ''}`
+// The browser sends the httpOnly session cookie automatically on the
+        // WebSocket handshake (same-site), so the server authenticates the
+        // connection from the cookie rather than a JS-readable query param.
+        const wsUrl = `${wsProtocol}//${wsHost}/ws/alerts/${businessId}`
         const ws = new WebSocket(wsUrl)
         wsRef.current = ws
 

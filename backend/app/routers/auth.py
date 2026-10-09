@@ -2,7 +2,6 @@ import os
 import hmac
 import secrets
 import time
-import random
 import smtplib
 import datetime as dt
 from collections import defaultdict
@@ -54,8 +53,12 @@ from ..core.security import (
     hash_password,
     verify_password,
     create_access_token,
+    ACCESS_TOKEN_EXPIRE_MINUTES,
 )
+from ..core.env import is_production
 from ..deps import get_current_user
+from fastapi.responses import JSONResponse
+from fastapi import Response
 
 # --- Correct Prefix with /api/auth ---
 router = APIRouter(
@@ -130,6 +133,16 @@ class ResetPasswordOTPRequest(BaseModel):
     new_password: str
 
 
+def _new_otp() -> str:
+    """A 6-digit password-reset code drawn from a cryptographic RNG.
+
+    `random` is a Mersenne Twister: its output stream is not unpredictable,
+    which is the wrong property for the secret that guards account takeover.
+    Range matches the original (100000-999999, no leading-zero codes).
+    """
+    return str(secrets.randbelow(900_000) + 100_000)
+
+
 def _generate_invite_code(db: Session) -> str:
     """8-char unambiguous join code, retried until unique."""
     alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no I/L/O/0/1 (look-alikes)
@@ -167,7 +180,7 @@ def register(
     if existing:
         raise HTTPException(
             status_code=400,
-            detail="Email address is already registered",
+            detail="If this email is registered, use Login. If you forgot your password, use Reset Password.",
         )
 
     # Join-by-code: teammates register into an EXISTING business so roles are
@@ -222,7 +235,15 @@ def register(
     db.commit()
 
     db.refresh(user)
-    return user
+    response = JSONResponse(
+        schemas.UserOut.model_validate(user).model_dump(),
+        status_code=status.HTTP_201_CREATED,
+    )
+    _set_session_cookie(response, create_access_token({
+        "sub": str(user.id),
+        "role": payload.role.value if hasattr(payload.role, "value") else str(payload.role),
+    }))
+    return response
 
 
 def _login_suspicion(db, user, device, location):
@@ -294,9 +315,10 @@ def login(
         acct_key = f"login:acct:{payload.email.lower()}"
         _rate_store[acct_key] = [t for t in _rate_store[acct_key] if now - t < 300]
         _rate_store[acct_key].append(now)
+        # Generic message — never reveal whether the mailbox exists.
         raise HTTPException(
             status_code=401,
-            detail="Incorrect email or password",
+            detail="If this email is registered, check your password. If you forgot your password, use Reset Password.",
         )
 
     role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
@@ -341,11 +363,15 @@ def login(
         import logging
         logging.warning(f"Audit log failed during login: {exc}")  # Don't block login if audit fails
 
-    return {
-        "access_token": token,
-        "token_type": "bearer",
-        "user": user,
-    }
+    response = JSONResponse(
+        {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": schemas.UserOut.model_validate(user).model_dump(),
+        }
+    )
+    _set_session_cookie(response, token)
+    return response
 
 
 @router.get("/me", response_model=schemas.UserOut)
@@ -436,11 +462,11 @@ def send_otp(
     if not user:
         # Identical response and timing for unknown emails so the endpoint
         # cannot be used to enumerate registered addresses.
-        random.randint(100000, 999999)  # burn comparable RNG work
+        _new_otp()  # burn comparable RNG work
         return {"message": "If an account with that email exists, an OTP code has been sent."}
 
-    # Generate 6-digit OTP
-    otp = str(random.randint(100000, 999999))
+    # Generate 6-digit OTP from a CSPRNG
+    otp = _new_otp()
 
     # Save OTP & set 10-minute expiry
     user.reset_otp = otp
@@ -500,5 +526,40 @@ def reset_password_otp(
     user.reset_otp = None
     user.reset_otp_expiry = None
     db.commit()
-
     return {"message": "Password reset successfully."}
+
+
+
+def _set_session_cookie(response: Response, token: str) -> None:
+    """Attach the httpOnly session cookie to a login/register response.
+
+    The browser stores this cookie and sends it automatically on every
+    subsequent same-site request (including the WebSocket handshake), so the
+    JWT never needs to live in JavaScript-accessible storage. The cookie is
+
+    * httponly  — not readable by page JS, so XSS cannot exfiltrate it;
+    * secure     — only over HTTPS, and only when the environment is production
+                  (dev runs on plain HTTP and would reject a Secure cookie);
+    * samesite=lax — blocks the cookie on cross-site sub-requests/WS handshakes,
+                  which is the primary CSRF defence for the in-process rate limiter.
+    """
+    response.set_cookie(
+        key="marketmind_session",
+        value=token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        httponly=True,
+        secure=is_production(),
+        samesite="lax",
+    )
+
+
+@router.post("/logout")
+def logout(response: Response):
+    """Clear the session cookie. No auth required — anyone may end their own
+
+    session. Because the JWT is stateless there is no server-side session to
+    destroy; the only effect is that the browser stops sending the cookie.
+    """
+    response.delete_cookie(key="marketmind_session", path="/")
+    return {"message": "logged out"}

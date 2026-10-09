@@ -69,5 +69,8 @@ class TestChurnFeaturesContract:
             assert key in body, f"missing {key} in {body!r}"
 
     def test_feature_endpoint_requires_auth(self, client):
+        # No credentials -> 401. Clear any session cookie a prior login in the
+        # same TestClient may have left behind.
+        client.cookies.clear()
         res = client.get("/api/ai/churn/features")
         assert res.status_code == 401

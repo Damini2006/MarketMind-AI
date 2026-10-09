@@ -27,8 +27,9 @@ export function AuthProvider({ children }) {
     return raw ? JSON.parse(raw) : null;
   });
 
-  // Wrap setUser so any update (e.g. from Settings after a profile edit)
-  // also persists to localStorage, keeping state and storage in sync.
+  // Keep the cached user profile in sync with storage so a page refresh
+  // restores the display identity. The real session (JWT) lives in an
+  // httpOnly cookie that JS cannot read, so this is NOT the auth token.
   const setUser = useCallback((updater) => {
     setUserState((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -41,13 +42,15 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  // On boot with a stored token (page refresh), prefetch the core data so the
-  // dashboard is already warm when the app renders.
+  // On boot with a cached user profile, prefetch the core data so the
+  // dashboard is already warm when the app renders. The real session (JWT)
+  // lives in an httpOnly cookie; if it has expired the first API call will
+  // 401 and the axios interceptor bounces the user back to /login.
   useEffect(() => {
-    if (localStorage.getItem("marketmind_token")) {
-      const raw = localStorage.getItem("marketmind_user");
-      const bootUser = raw ? JSON.parse(raw) : null;
-      prefetchCore(bootUser?.role);
+    const raw = localStorage.getItem("marketmind_user");
+    if (raw) {
+      const bootUser = JSON.parse(raw);
+      prefetchCore(bootUser.role);
     }
   }, []);
 
@@ -64,7 +67,10 @@ export function AuthProvider({ children }) {
         password,
       });
 
-      localStorage.setItem("marketmind_token", res.data.access_token);
+      // The server sets the httpOnly marketmind_session cookie on the response;
+      // the browser stores it automatically and sends it on every subsequent
+      // same-site request. We keep only the non-secret user profile in storage
+      // for display/re-render purposes.
       localStorage.setItem(
         "marketmind_user",
         JSON.stringify(res.data.user)
@@ -100,10 +106,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
-    // Clear tokens and stored user data
-    localStorage.removeItem("marketmind_token");
+    // Ask the server to clear the httpOnly session cookie. The request is
+    // fire-and-forget with keepalive so it can finish even though we navigate
+    // away immediately after; without it the cookie would remain valid until
+    // expiry and a back-button revisit would silently re-authenticate.
+    fetch("/api/auth/logout", {
+      method: "POST",
+      keepalive: true,
+      credentials: "include",
+    }).catch(() => {});
+
     localStorage.removeItem("marketmind_user");
-    sessionStorage.removeItem("marketmind_token");
     sessionStorage.removeItem("marketmind_user");
     setUser(null);
 
@@ -137,15 +150,4 @@ export function AuthProvider({ children }) {
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   return useContext(AuthContext);
-}
-
-// The JWT itself is NOT in context (state churn would needlessly re-render
-// consumers); components that need it outside axios (e.g. the WebSocket
-// handshake, where browsers cannot set Authorization headers) read it here.
-export function getToken() {
-  try {
-    return localStorage.getItem("marketmind_token") || "";
-  } catch {
-    return "";
-  }
 }

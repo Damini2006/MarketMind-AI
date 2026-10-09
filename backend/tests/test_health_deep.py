@@ -12,6 +12,11 @@ The status rules under test (see `health_deep` in `app/routers/system.py`):
   * probe failed                                           -> "degraded"
 `summary.healthy` is strictly the first case, so it stays False for a merely
 alive-but-cold process.
+
+Beware: TestClient persists cookies across requests within a single client
+instance, so a login in one test can silently authenticate a later
+"requires_auth" test. Any test that asserts a 401 for an unauthenticated
+call must either use a fresh client or clear cookies first.
 """
 
 import pytest
@@ -105,6 +110,16 @@ def test_probe_neon_actually_queries_the_database():
     assert _probe_neon()["ok"] is True
 
 
+@pytest.fixture(autouse=True)
+def _clear_auth_cookies(client):
+    """Start every test with no session cookie so unauthenticated tests stay
+
+    unauthenticated even if an earlier test in the same file logged in.
+    """
+    client.cookies.clear()
+    yield
+
+
 def test_probe_neon_error_shape_on_failure(monkeypatch):
     from app.database import SessionLocal
 
@@ -129,7 +144,9 @@ def test_probe_neon_error_shape_on_failure(monkeypatch):
 
 
 def test_health_deep_requires_auth(client):
-    assert client.get(DEEP_URL).status_code == 401
+    # No credentials at all -> 401. Pass an empty cookie jar so a leftover
+    # login cookie from the same TestClient cannot silently authenticate.
+    assert client.get(DEEP_URL, cookies={}).status_code == 401
 
 
 def test_health_deep_forbidden_for_sales_exec(client, sales_headers):

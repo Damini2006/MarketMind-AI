@@ -2,13 +2,34 @@
 
 Mirrors the frontend ROLE_PAGES map in components/Layout.jsx -- if the
 backend and frontend ever drift apart, these tests catch it.
+
+Beware: TestClient persists cookies across requests within a single client
+instance, so a login in one test can silently authenticate a later
+"requires_auth" test. Any test that asserts a 401 for an unauthenticated
+call must either use a fresh client or clear cookies first.
 """
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _clear_auth_cookies(client):
+    """Start every test with no session cookie so unauthenticated tests stay
+
+    unauthenticated even if an earlier test in the same file logged in.
+
+    The auth fixtures (owner_headers/sales_headers) log in via the same
+    TestClient and set the marketmind_session cookie; those tests are not
+    affected because they pass explicit Authorization headers.
+    """
+    client.cookies.clear()
+    yield
+
+
 class TestAuthentication:
     def test_me_requires_token(self, client):
-        assert client.get("/api/auth/me").status_code == 401
+        # No credentials at all -> 401. Pass an empty cookie jar so a leftover
+        # login cookie from the same TestClient cannot silently authenticate.
+        assert client.get("/api/auth/me", cookies={}).status_code == 401
 
     def test_me_with_bad_token(self, client):
         res = client.get("/api/auth/me", headers={"Authorization": "Bearer not-a-token"})
@@ -68,18 +89,30 @@ class TestRbacUsers:
         assert client.get("/api/users/", headers=owner_headers).status_code == 200
 
     def test_revenue_predict_requires_auth(self, client):
-        res = client.post("/api/revenue/predict", json={
-            "category": "Groceries", "region": "South", "seasonality": "Summer",
-            "demand": 100, "price": 50, "promotion": "No",
-        })
-        assert res.status_code == 401
+        # No credentials at all (no Authorization header, no session cookie)
+        # -> 401. We explicitly pass an empty cookie jar so a leftover cookie
+        # from a prior login in the same TestClient does not silently auth the
+        # call (TestClient persists cookies across requests).
+        assert client.post(
+            "/api/revenue/predict",
+            json={
+                "category": "Groceries", "region": "South",
+                "seasonality": "Summer", "demand": 100, "price": 50,
+                "promotion": "No",
+            },
+            cookies={},
+        ).status_code == 401
 
     def test_revenue_explain_requires_auth(self, client):
-        res = client.post("/api/revenue/explain", json={
-            "category": "Groceries", "region": "South", "seasonality": "Summer",
-            "demand": 100, "price": 50, "promotion": "No",
-        })
-        assert res.status_code == 401
+        assert client.post(
+            "/api/revenue/explain",
+            json={
+                "category": "Groceries", "region": "South",
+                "seasonality": "Summer", "demand": 100, "price": 50,
+                "promotion": "No",
+            },
+            cookies={},
+        ).status_code == 401
 
     def test_revenue_predict_authenticated(self, client, sales_headers):
         res = client.post("/api/revenue/predict", json={
