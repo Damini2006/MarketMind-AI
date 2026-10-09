@@ -3,11 +3,14 @@ import os
 import threading
 import time
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+import hmac
+import secrets
 
 # Load environment variables from .env file before anything else runs
 load_dotenv()
@@ -43,6 +46,7 @@ from .routers.audit import router as audit_router
 from .routers.user_data import router as user_data_router
 from .routers.activity import router as activity_router
 from .routers.system import router as system_router
+from .core.env import DEFAULT_CORS_ORIGINS, parse_cors_origins
 from .resilience import call_with_retry, log_throttled
 
 log = logging.getLogger(__name__)
@@ -63,6 +67,39 @@ app = FastAPI(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
+# ── CSRF double-submit check for browser sessions ─────────────────────────
+# Browser sessions authenticate via the httpOnly marketmind_session cookie,
+# which a cross-site page cannot read — so a cross-site attacker cannot forge a
+# request that carries both the cookie and a matching X-CSRF-Token header (which
+# our own page JS reads from the non-httpOnly marketmind_csrf cookie). We
+# verify the two match on every state-changing request, but only for browser
+# sessions: API clients authenticating with a Bearer header cannot set cookies
+# cross-site and need no CSRF protection, and auth endpoints have their own
+# rate-limiting. Old sessions minted before this middleware was deployed have no
+# marketmind_csrf cookie yet, so the check is skipped for them (they keep
+# working until the user re-logs-in and gets a fresh cookie) rather than
+# breaking them.
+@app.middleware("http")
+async def csrf_middleware(request: Request, call_next):
+    method = request.method
+    if method in ("POST", "PUT", "PATCH", "DELETE") and not request.url.path.startswith("/api/auth/"):
+        session_cookie = request.cookies.get("marketmind_session", "")
+        # API clients (Bearer auth) carry a session cookie only by accident and
+        # cannot be CSRF'd via cookie — skip them.
+        if session_cookie and not request.headers.get("Authorization"):
+            csrf_cookie = request.cookies.get("marketmind_csrf", "")
+            if csrf_cookie:
+                token = request.headers.get("X-CSRF-Token", "")
+                if not token or not hmac.compare_digest(token, csrf_cookie):
+                    return JSONResponse(
+                        {"detail": "CSRF check failed"},
+                        status_code=403,
+                    )
+
+    response = await call_next(request)
+    return response
+
+
 # ── request latency telemetry for the system stats endpoint ──
 @app.middleware("http")
 async def record_request_latency(request, call_next):
@@ -76,11 +113,27 @@ async def record_request_latency(request, call_next):
     return response
 
 # Enable CORS for frontend integration
+#
+# allow_credentials=True means the browser will attach the Authorization header
+# (and any cookie) to cross-origin calls, so the origin allow-list IS the
+# security boundary: an entry of "*" would let ANY site a logged-in user visits
+# read their data. A wildcard is therefore stripped rather than honoured — the
+# misconfiguration is loudly reported instead of quietly defeating CORS.
+_cors_origins, _cors_had_wildcard = parse_cors_origins(
+    os.getenv("CORS_ORIGINS", DEFAULT_CORS_ORIGINS)
+)
+if _cors_had_wildcard:
+    log.warning(
+        "CORS_ORIGINS contains '*' — ignored, because allow_credentials=True "
+        "would let any website read an authenticated user's data. List the "
+        "real frontend origin(s) instead."
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:5174").split(","),
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

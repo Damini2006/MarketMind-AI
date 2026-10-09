@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Local build environment (VITE_* overrides). Never commit: a Vite variable is
+# compiled into the public bundle, so a secret here would ship to every visitor.
+.env
+.env.*
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

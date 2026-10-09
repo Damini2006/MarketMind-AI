@@ -1,12 +1,36 @@
+"""Demo/demo-tenant seeding.
+
+IMPORTANT — production safety: this module creates ACCOUNTS whose passwords
+are published in this repository (README, sample-data/README.md, the compose
+smoke service). Seeding them into a real deployment would hand anyone who can
+read the repo a working admin login, so seeding is OFF in production unless
+SEED_DEMO_DATA is explicitly set to true (see `_demo_seeding_enabled`).
+"""
 import json
+import os
 import random
 import datetime as dt
 from sqlalchemy.orm import Session
 
 from . import models
+from .core.env import is_production
 from .core.security import hash_password
 
 random.seed(42)
+
+
+def _demo_seeding_enabled() -> bool:
+    """Whether the demo tenant/accounts may be created.
+
+    Defaults to ON for local development and CI (unchanged behaviour) and OFF
+    when ENVIRONMENT=production. An explicit SEED_DEMO_DATA always wins, so a
+    staging environment can still opt in.
+    """
+    raw = os.getenv("SEED_DEMO_DATA")
+    if raw is None:
+        return not is_production()
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
 
 DEMO_USERS = [
     ("Asha Rao", "owner@marketmind.ai", "Owner@123", models.RoleEnum.business_owner),
@@ -66,7 +90,14 @@ def seed_business_demo_data(db: Session, business: models.Business):
 
     Safe to call repeatedly: only seeds what the business is still missing, so a
     business that already has records is left untouched.
+
+    No-op outside development: a real tenant must never receive invented
+    products, customers, sales -- nor the demo team members, whose password is
+    a published constant.
     """
+    if not _demo_seeding_enabled():
+        return
+
     # 0. Categories
     if db.query(models.Category).filter(models.Category.business_id == business.id).count() == 0:
         for cat in DEMO_CATEGORIES:
@@ -711,6 +742,14 @@ def seed_user_data(db: Session, business: models.Business):
 
 
 def seed_if_empty(db: Session):
+    """Populate a fresh database with the demo tenant -- development only.
+
+    Returns immediately in production: the first real user registers and owns
+    their own business, and no account with a publicly-known password exists.
+    """
+    if not _demo_seeding_enabled():
+        return
+
     # 0. Ensure a demo business exists (multi-tenant). All seeded data belongs to it.
     business = db.query(models.Business).first()
     if business is None:

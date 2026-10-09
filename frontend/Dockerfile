@@ -26,6 +26,11 @@ FROM nginx:alpine
 # whole node toolchain, node_modules and the build context stay behind.
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Security headers live in their own file because nginx does not merge
+# `add_header` across levels: the server block and the cached-asset location
+# both `include` it. Copied to /etc/nginx/ (not conf.d/) so it is a snippet,
+# not a server config nginx would load globally.
+COPY security-headers.conf /etc/nginx/security-headers.conf
 
 # NOTE: this stage intentionally keeps nginx's default master-as-root so it can
 # bind :80 and write its pid/cache. Worker processes still run as the
