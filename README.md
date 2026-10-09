@@ -422,10 +422,24 @@ The app is two deployables: a FastAPI backend (any Python host or the provided `
 
 1. Provision a **Neon PostgreSQL** database and copy its connection string. Use the **direct** endpoint — drop the `-pooler` label from the host (e.g. `ep-xxx-pooler.c-4.us-east-2.aws.neon.tech` -> `ep-xxx.c-4.us-east-2.aws.neon.tech`), or remove it from the host if Neon only shows you the pooled one. This backend is a single long-lived server with its own SQLAlchemy connection pool, which is the case Neon's pooler is not for; going direct also avoids PgBouncer's transaction-mode caveats. See the comment above `create_engine` in `backend/app/database.py`.
 2. Set environment variables on the host:
+   - `ENVIRONMENT` — set to `production`. This is the switch that makes the
+     backend take itself seriously: it **refuses to start** without a real
+     `JWT_SECRET_KEY` and stops seeding the demo accounts (whose passwords are
+     published in this repo). Anything other than `production`/`prod` behaves
+     like a development machine.
    - `DATABASE_URL` — Neon direct URL, `?sslmode=require` (required)
-   - `JWT_SECRET_KEY` — strong random secret ≥ 32 chars (required)
-   - `CORS_ORIGINS` — **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only)
+   - `JWT_SECRET_KEY` — strong random secret ≥ 32 chars (required; a placeholder
+     is rejected, not silently accepted). Generate with
+     `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+   - `ACCESS_TOKEN_EXPIRE_MINUTES` — optional, access-token lifetime (default 180 = 3h; deliberately short — the browser silently renews via `POST /api/auth/refresh`)
+   - `REFRESH_TOKEN_EXPIRE_DAYS` — optional, refresh-cookie lifetime (default 30). Refresh tokens rotate on every use and are revoked on logout/password change; replaying a rotated token revokes the whole session family.
+   - `CORS_ORIGINS` — **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only). `*` is refused, because credentials are allowed.
    - `SENDER_EMAIL` / `SMTP_SERVER` / `SMTP_PORT` / `SENDER_PASSWORD` — optional, enables OTP password-reset emails
+
+   Variables that are read but need no production value: `SEED_DEMO_DATA`
+   (defaults on outside production, off in it — set `true` only for a staging
+   environment that may hold the published demo passwords) and
+   `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_ENV_FILE` for the compose stack.
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (tables auto-create; startup warm-up precomputes AI caches).
 
 ### Frontend (Vercel / Netlify / static hosting)
@@ -461,12 +475,19 @@ CI runs the same gate on every push — the `deploy-smoke` job in `.github/workf
 
 ### Production checklist
 
+- [ ] `ENVIRONMENT=production` (otherwise the dev conveniences stay on)
 - [ ] `DATABASE_URL` points at Neon with `sslmode=require`
-- [ ] `JWT_SECRET_KEY` is a fresh ≥ 32-char secret (not the dev value)
-- [ ] `CORS_ORIGINS` lists the real frontend origin(s)
+- [ ] `JWT_SECRET_KEY` is a fresh ≥ 32-char secret (not the dev value, not a placeholder — startup rejects both)
+- [ ] `CORS_ORIGINS` lists the real frontend origin(s) and contains no `*`
+- [ ] TLS terminates in front of the stack (the backend speaks plain HTTP)
 - [ ] `VITE_API_BASE_URL` set at frontend build time (split deployments)
 - [ ] SMTP credentials present if password-reset emails are wanted
-- [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) — it covers `/health`, the SPA, an authenticated call and the database round-trip
+- [ ] No demo accounts on the database: with `ENVIRONMENT=production` a fresh
+      database starts empty and the first user registers as its owner. If the
+      demo tenant was ever seeded, delete `owner@marketmind.ai`,
+      `manager@marketmind.ai`, `sales@marketmind.ai` and `admin@marketmind.ai`
+- [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) — it covers `/health`, the SPA, an authenticated call and the database round-trip. Pass real `SMOKE_EMAIL` / `SMOKE_PASSWORD`, since the defaults are the demo account
+- [ ] Read `SECURITY_AND_DEPLOYMENT_REVIEW.md` and work through its P1/P2 list
 
 ---
 

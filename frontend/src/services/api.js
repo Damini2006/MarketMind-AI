@@ -20,28 +20,90 @@ const api = axios.create({
 // the server on login/register. The browser attaches it to every same-site
 // request (including the WebSocket handshake) without JavaScript ever seeing
 // the raw token, so an XSS payload cannot steal a session.
+
+// Double-submit CSRF: the server also sets a NON-httpOnly `marketmind_csrf`
+// cookie (same value the server generated). Our page JS reads it here and
+// sends it back in the X-CSRF-Token header. A cross-site page cannot read the
+// cookie (same-origin rule) and therefore cannot set the header, so its
+// requests fail the server-side match. SameSite=Lax stops the cookie from even
+// being sent on cross-site sub-requests in the first place.
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : '';
+}
+
 api.interceptors.request.use(
   (config) => {
+    const csrf = getCookie('marketmind_csrf');
+    if (csrf) config.headers['X-CSRF-Token'] = csrf;
     return config;
   },
   (error) => Promise.reject(error)
 );
 
+// --- Silent session refresh ---
+// Access tokens are short-lived (3h by default); the long-lived refresh token
+// lives in an httpOnly cookie scoped to /api/auth, so when a request 401s we
+// ask the server to rotate it and retry once. All concurrent 401s share a
+// single in-flight refresh (otherwise N parallel requests would rotate N times
+// and trip the server's reuse detection).
+let refreshInFlight = null;
+
+const isAuthUrl = (url = "") =>
+  url.includes("/auth/login") ||
+  url.includes("/auth/register") ||
+  url.includes("/auth/refresh");
+
+function refreshSession() {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(
+        `${API_BASE_URL}/auth/refresh`,
+        {},
+        { withCredentials: true } // plain axios: no api interceptors, no GET cache
+      )
+      .then((res) => res.data)
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
+
+function bounceToLogin() {
+  // The session cookie is httpOnly so JS cannot delete it, but a failed
+  // refresh means the server already considers it dead; a fresh login
+  // re-issues it. Clear the (non-secret) cached profile either way.
+  localStorage.removeItem("marketmind_user");
+  sessionStorage.removeItem("marketmind_user");
+  if (window.location.pathname !== "/login") window.location.href = "/login";
+}
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Session expired or invalid. The cookie cannot be cleared from JS
-      // (it is httpOnly), so bounce to login; a fresh login re-issues the
-      // cookie. Do not redirect when the failing call is the login request
-      // itself — the AuthContext handler owns that error path.
-      const path = error.config?.url || "";
-      if (path !== "/auth/login" && !path.startsWith("/api/auth/login")) {
-        localStorage.removeItem("marketmind_user");
-        sessionStorage.removeItem("marketmind_user");
-        window.location.href = "/login";
+  async (error) => {
+    const config = error.config;
+    const status = error.response?.status;
+
+    if (status === 401 && config && !config._retried) {
+      // Login/register failures belong to the AuthContext handler (it shows
+      // the message); everything else gets one silent refresh attempt.
+      if (isAuthUrl(config.url)) {
+        if (config.url.includes("/auth/login")) return Promise.reject(error);
+      } else {
+        config._retried = true;
+        try {
+          await refreshSession();
+          return api(config); // re-runs interceptors → fresh CSRF header/cookie
+        } catch (refreshError) {
+          bounceToLogin();
+          return Promise.reject(error);
+        }
       }
     }
+
+    if (status === 401 && config && !isAuthUrl(config.url)) bounceToLogin();
+
     if (import.meta.env.DEV) {
       console.error(
         `[API] ${error.config?.method?.toUpperCase()} ${error.config?.url} → `,

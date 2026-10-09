@@ -1,7 +1,9 @@
 import os
+import hashlib
 import hmac
 import secrets
 import time
+import uuid
 import smtplib
 import datetime as dt
 from collections import defaultdict
@@ -54,6 +56,7 @@ from ..core.security import (
     verify_password,
     create_access_token,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from ..core.env import is_production
 from ..deps import get_current_user
@@ -65,6 +68,18 @@ router = APIRouter(
     prefix="/api/auth",
     tags=["Authentication"],
 )
+
+SESSION_COOKIE = "marketmind_session"
+CSRF_COOKIE = "marketmind_csrf"
+# The refresh token is PATH-SCOPED to the auth endpoints: this long-lived
+# credential is only ever sent to /api/auth/*, never on ordinary API calls or
+# the WebSocket handshake, so its exposure surface is a handful of routes.
+REFRESH_COOKIE = "marketmind_refresh"
+REFRESH_COOKIE_PATH = "/api/auth"
+# A rotation presented within this window after the previous one is treated as
+# a multi-tab race (two tabs refreshing on the same 401), not as theft. Beyond
+# it, re-presenting a rotated token is the standard reuse signal.
+REFRESH_REUSE_GRACE_SECONDS = 30
 
 
 def send_email_otp(target_email: str, otp_code: str):
@@ -243,6 +258,8 @@ def register(
         "sub": str(user.id),
         "role": payload.role.value if hasattr(payload.role, "value") else str(payload.role),
     }))
+    _set_csrf_cookie(response)
+    _set_refresh_cookie(response, _issue_refresh_token(db, user, request))
     return response
 
 
@@ -371,6 +388,8 @@ def login(
         }
     )
     _set_session_cookie(response, token)
+    _set_csrf_cookie(response)
+    _set_refresh_cookie(response, _issue_refresh_token(db, user, request))
     return response
 
 
@@ -422,6 +441,8 @@ def update_profile(
 @router.put("/change-password")
 def change_password(
     payload: ChangePasswordRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
@@ -438,6 +459,19 @@ def change_password(
         )
 
     current_user.hashed_password = hash_password(payload.new_password)
+    # A credential rotation must also end every session minted before it, or a
+    # stolen refresh token survives the password change. This browser is then
+    # immediately re-issued a fresh pair so the user is not logged out by
+    # securing their own account.
+    _revoke_all_refresh_tokens(db, current_user.id)
+    new_refresh = _issue_refresh_token(db, current_user, request)
+    access = create_access_token({
+        "sub": str(current_user.id),
+        "role": current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+    })
+    _set_session_cookie(response, access)
+    _set_csrf_cookie(response)
+    _set_refresh_cookie(response, new_refresh)
     db.commit()
 
     return {"message": "Password updated successfully"}
@@ -525,6 +559,9 @@ def reset_password_otp(
     user.hashed_password = hash_password(payload.new_password)
     user.reset_otp = None
     user.reset_otp_expiry = None
+    # Same rule as change-password: rotating the credential revokes every
+    # outstanding refresh session (the reset flow starts from a login anyway).
+    _revoke_all_refresh_tokens(db, user.id)
     db.commit()
     return {"message": "Password reset successfully."}
 
@@ -554,12 +591,207 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
-@router.post("/logout")
-def logout(response: Response):
-    """Clear the session cookie. No auth required — anyone may end their own
+def _set_csrf_cookie(response: Response) -> None:
+    """Deliver a CSRF token to the browser via a non-httpOnly cookie.
 
-    session. Because the JWT is stateless there is no server-side session to
-    destroy; the only effect is that the browser stops sending the cookie.
+    Page JS reads this cookie (it is NOT httpOnly) and sends the value back in
+    the X-CSRF-Token request header. The server verifies the header matches the
+    cookie before honouring any state-changing request, which blocks a malicious
+    cross-site page from submitting forms/XHR as the victim (it cannot read the
+    cookie to populate the header, and SameSite=Lax stops the cookie being sent
+    on the cross-site sub-request in the first place).
+
+    The cookie uses the same lifetime, path and SameSite as the session cookie
+    so the two stay in sync; it is deliberately NOT httponly (JS must read it)
+    and NOT Secure-only in dev (plain HTTP would otherwise reject it).
     """
-    response.delete_cookie(key="marketmind_session", path="/")
+    response.set_cookie(
+        key="marketmind_csrf",
+        value=secrets.token_hex(32),
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+        httponly=False,
+        secure=is_production(),
+        samesite="lax",
+    )
+
+
+def _hash_refresh_token(raw: str) -> str:
+    """SHA-256 digest of a raw refresh token.
+
+    Only this digest is ever persisted: a database leak (or a backup landing
+    in the wrong hands) yields nothing replayable, the same reasoning that
+    applies to storing password hashes instead of passwords.
+    """
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _issue_refresh_token(
+    db: Session,
+    user: models.User,
+    request: Optional[Request] = None,
+    family_id: Optional[str] = None,
+) -> str:
+    """Persist a refresh token and return its RAW value.
+
+    The raw value goes straight into the httpOnly cookie and is never stored
+    server-side; ``family_id`` groups every token descended from one login so
+    a detected reuse can revoke the whole session lineage at once.
+    """
+    raw = secrets.token_urlsafe(48)  # 384 bits of CSPRNG output
+    row = models.RefreshToken(
+        user_id=user.id,
+        token_hash=_hash_refresh_token(raw),
+        family_id=family_id or str(uuid.uuid4()),
+        expires_at=dt.datetime.utcnow() + dt.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+        ip_address=request.client.host if request and request.client else None,
+        user_agent=request.headers.get("user-agent") if request else None,
+    )
+    db.add(row)
+    db.commit()
+    return raw
+
+
+def _set_refresh_cookie(response: Response, raw: str) -> None:
+    """Deliver the refresh token in an httpOnly cookie scoped to /api/auth.
+
+    Same flags as the session cookie (httponly, Secure in production,
+    SameSite=Lax) but path-restricted: the long-lived credential only travels
+    to the auth endpoints, not to every API call.
+    """
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=raw,
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=is_production(),
+        samesite="lax",
+    )
+
+
+def _revoke_refresh_family(db: Session, family_id: str) -> None:
+    db.query(models.RefreshToken).filter(
+        models.RefreshToken.family_id == family_id,
+        models.RefreshToken.revoked.is_(False),
+    ).update({"revoked": True}, synchronize_session=False)
+    db.commit()
+
+
+def _revoke_all_refresh_tokens(db: Session, user_id: int) -> None:
+    """Kill every outstanding refresh session for a user.
+
+    Used when the credential itself changes: a password rotation must also
+    end any session an attacker obtained before the change.
+    """
+    db.query(models.RefreshToken).filter(
+        models.RefreshToken.user_id == user_id,
+        models.RefreshToken.revoked.is_(False),
+    ).update({"revoked": True}, synchronize_session=False)
+    db.commit()
+
+
+@router.post("/refresh")
+def refresh_session(request: Request, db: Session = Depends(get_db)):
+    """Exchange the refresh cookie for a fresh access token (with rotation).
+
+    Every successful call rotates the refresh token: the presented one is
+    burned and a replacement is issued in the same family. Presenting a token
+    that was already rotated is the classic theft signal — outside a short
+    grace window for concurrent tabs, the whole family is revoked, ending the
+    session for attacker and victim alike (the only safe assumption: you
+    cannot tell which holder is the thief).
+    """
+    ip = request.client.host if request.client else "unknown"
+    # The token itself is 48 bytes of CSPRNG output, so guessing is hopeless;
+    # this bound only limits how fast a replayed token can be probed and keeps
+    # a misbehaving client from hammering the endpoint.
+    _check_rate_limit(f"refresh:{ip}", max_attempts=30, window=300)
+
+    raw = request.cookies.get(REFRESH_COOKIE)
+    if not raw:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
+    row = (
+        db.query(models.RefreshToken)
+        .filter(models.RefreshToken.token_hash == _hash_refresh_token(raw))
+        .first()
+    )
+    if row is None:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
+    if row.revoked or row.used_at is not None:
+        within_grace = (
+            row.used_at is not None
+            and (dt.datetime.utcnow() - row.used_at).total_seconds()
+            <= REFRESH_REUSE_GRACE_SECONDS
+        )
+        if not within_grace:
+            _revoke_refresh_family(db, row.family_id)
+            import logging
+            logging.warning(
+                "Refresh token reuse detected (user %s, family %s) — "
+                "revoking the whole token family.",
+                row.user_id,
+                row.family_id,
+            )
+            raise HTTPException(
+                status_code=401,
+                detail="Session revoked. Please log in again.",
+            )
+        # Inside the grace window: two tabs raced the same rotation. Fall
+        # through and rotate again rather than logging the user out.
+    elif row.expires_at < dt.datetime.utcnow():
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
+    user = db.query(models.User).filter(models.User.id == row.user_id).first()
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Session expired. Please log in again.")
+
+    # Rotate: the presented token is burned whether it was fresh or riding
+    # out the multi-tab grace window.
+    row.used_at = dt.datetime.utcnow()
+    row.revoked = True
+    new_raw = _issue_refresh_token(db, user, request, family_id=row.family_id)
+
+    role_str = user.role.value if hasattr(user.role, "value") else str(user.role)
+    access = create_access_token({"sub": str(user.id), "role": role_str})
+    response = JSONResponse(
+        {
+            "access_token": access,
+            "token_type": "bearer",
+            "user": schemas.UserOut.model_validate(user).model_dump(),
+        }
+    )
+    _set_session_cookie(response, access)
+    _set_csrf_cookie(response)
+    _set_refresh_cookie(response, new_raw)
+    return response
+
+
+@router.post("/logout")
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    """Clear the session cookie and revoke the refresh token. No auth required
+    — anyone may end their own session. The JWT itself stays stateless (there
+    is no server-side session to destroy); burning the refresh token matters
+    because that credential would otherwise outlive the access token for up to
+    REFRESH_TOKEN_EXPIRE_DAYS.
+    """
+    raw = request.cookies.get(REFRESH_COOKIE)
+    if raw:
+        row = (
+            db.query(models.RefreshToken)
+            .filter(models.RefreshToken.token_hash == _hash_refresh_token(raw))
+            .first()
+        )
+        if row is not None and not row.revoked:
+            # Only `revoked` is set: `used_at` records ROTATION, and the
+            # refresh endpoint's multi-tab grace window keys off it — marking
+            # a logout as a rotation would let a replay slip through for
+            # REFRESH_REUSE_GRACE_SECONDS.
+            row.revoked = True
+            db.commit()
+    response.delete_cookie(key=SESSION_COOKIE, path="/")
+    response.delete_cookie(key=CSRF_COOKIE, path="/")
+    response.delete_cookie(key=REFRESH_COOKIE, path=REFRESH_COOKIE_PATH)
     return {"message": "logged out"}
