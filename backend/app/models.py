@@ -70,6 +70,33 @@ class User(Base):
     inventory_transactions = relationship("InventoryTransaction", back_populates="user")
 
 
+class RefreshToken(Base):
+    """Server-side record of an issued refresh token (rotation + reuse detection).
+
+    Only the SHA-256 hash of the token is stored, so the database never holds a
+    replayable secret. Tokens are grouped by ``family_id``: one family per
+    login session. Using a token rotates it (``used_at``/``revoked`` set, a new
+    row issued in the same family), and presenting an already-rotated token
+    *outside* the short multi-tab grace window signals theft — the whole family
+    is revoked so neither the thief nor the legitimate holder can continue.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, index=True, nullable=False)
+    family_id = Column(String(36), nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=dt.datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)
+    revoked = Column(Boolean, default=False)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+
+    user = relationship("User")
+
+
 class Customer(Base):
     __tablename__ = "customers"
 
