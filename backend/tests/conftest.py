@@ -18,6 +18,10 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP_DB}"
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-for-pytest-only")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
+import hmac
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -56,6 +60,29 @@ def _build_app() -> FastAPI:
     app.include_router(user_data_router)
     app.include_router(activity_router)
     app.include_router(system_router)
+    # -- CSRF double-submit check for browser sessions ----------------------
+    # Wired into the test app so the double-submit enforcement is covered by
+    # pytest. Mirrors the middleware in app/main.py: state-changing requests
+    # that carry a session cookie but no Bearer auth must also carry a matching
+    # X-CSRF-Token header. API clients (Bearer auth) and auth endpoints are
+    # skipped.
+    @app.middleware("http")
+    async def csrf_middleware(request: Request, call_next):
+        method = request.method
+        if method in ("POST", "PUT", "PATCH", "DELETE") and not request.url.path.startswith("/api/auth/"):
+            session_cookie = request.cookies.get("marketmind_session", "")
+            if session_cookie and not request.headers.get("Authorization"):
+                csrf_cookie = request.cookies.get("marketmind_csrf", "")
+                if csrf_cookie:
+                    token = request.headers.get("X-CSRF-Token", "")
+                    if not token or not hmac.compare_digest(token, csrf_cookie):
+                        return JSONResponse(
+                            {"detail": "CSRF check failed"},
+                            status_code=403,
+                        )
+
+        response = await call_next(request)
+        return response
     return app
 
 
