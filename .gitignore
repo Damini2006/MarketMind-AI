@@ -30,6 +30,11 @@ backend/marketmind-preview.db
 # Local runtime logs
 *.log
 
+# Session refresh watchdog credential store (contains a live refresh token)
+# This is a credential for a specific account, not a deployment secret —
+# it lives on the machine that runs the cron job, never in the repo.
+.marketmind/
+
 # Python virtual environments
 venv/
 .venv/

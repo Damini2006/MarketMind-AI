@@ -1,0 +1,52 @@
+name: Session keep-alive / refresh token watchdog
+
+# Hits POST /api/auth/refresh every REFRESH_TOKEN_EXPIRE_DAYS/2 so sessions
+# stay alive without the user revisiting the app, and so a stale/revoked
+# refresh token is detected early (a 401 here means the stored token was
+# already rotated by a thief).
+#
+# Schedule: every 6 hours. The actual refresh-token lifetime is
+# REFRESH_TOKEN_EXPIRE_DAYS (default 30), so this runs ~120 times per token
+# lifetime — well inside the halfway mark and enough to catch a rotated token
+# before the user's next real visit.
+#
+# Secrets required (add via Settings -> Secrets and variables -> Actions):
+#   MARKETMIND_BACKEND_URL  — the deployed backend base URL (e.g. https://app.example.com)
+#   MARKETMIND_EMAIL        — a real account to authenticate as
+#   MARKETMIND_PASSWORD     — that account's password
+#
+# The password is stored as a secret so it never appears in logs or the
+# workflow file. The step masks it automatically; if the runner is compromised
+# the secret is still accessible to code running on it, so use a dedicated
+# monitoring account (not a human admin) and rotate it periodically.
+
+on:
+  schedule:
+    # Run every 6 hours. Pick a UTC time outside your peak usage window.
+    - cron: "0 6,12,18,23 * * *"
+  workflow_dispatch:  # allow manual runs for testing
+
+jobs:
+  refresh:
+    name: Refresh session token
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repo (for the watchdog script)
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run refresh watchdog
+        env:
+          MARKETMIND_BACKEND_URL: ${{ secrets.MARKETMIND_BACKEND_URL }}
+          MARKETMIND_EMAIL: ${{ secrets.MARKETMIND_EMAIL }}
+          MARKETMIND_PASSWORD: ${{ secrets.MARKETMIND_PASSWORD }}
+          MARKETMIND_REFRESH_HALF_DAYS: 15
+        run: |
+          set -euo pipefail
+          python scripts/refresh_session.py
