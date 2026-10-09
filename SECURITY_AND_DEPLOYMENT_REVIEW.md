@@ -20,7 +20,7 @@ below with the reasoning for each.
 
 | Area | Before | After this change |
 | :--- | :---: | :---: |
-| Secrets in git / git history | ✅ clean | ✅ clean |
+| Secrets in git / git history | ✅ clean | ✅ clean (post-rotation: live `.env` rotated, `.env.example` placeholders rewritten across all branches; 3 GitHub-only commits `ae3c490`/`e0a27f9`/`b74583c` still need remote rewrite — see §6) |
 | Container hardening (non-root, no-new-privileges, caps, log rotation) | ✅ good | ✅ good |
 | CI (tests, frontend build, image guards, deploy smoke) | ✅ present | ✅ present |
 | Schema migration on deploy | ✅ Alembic at startup, non-fatal | ✅ same |
@@ -305,3 +305,50 @@ REFRESH_TOKEN_EXPIRE_DAYS=30      # optional, default 30
    checklist item).
 7. `SMOKE_EMAIL` / `SMOKE_PASSWORD` set to a **real** account, then
    `python scripts/smoke_test.py` — the defaults are the demo login.
+
+## 6. Secret rotation playbook (operational)
+
+### 6.1 What leaked and what was done about it
+
+GitGuardian reported 5 incidents on 9 Oct 2026. Here is the disposition of each:
+
+| # | Incident | Commit | Date (UTC) | Disposition |
+|---|----------|--------|-----------|-------------|
+| 1 | PostgreSQL Credentials | `d322f1d` | 2026-08-10 | **Rotated.** `backend/.env.example` in that commit carried a real Neon connection string (`neondb_owner:npg_5wSmzKsOpak9@...`) and a real `SECRET_KEY` hex (`a665871f...`). The live `backend/.env` has been rotated (new DB password + new `JWT_SECRET_KEY`). The `.env.example` template was rewritten to safe placeholders across every branch (main, pre-dev, Rishika-Damini-Neelam, Susanna-Dontha, Namala-kavya, Pallavi-D-R, recommendation-system, review, backup/pre-pkl-strip). |
+| 2 | Generic Password | `ae3c490` | 2026-10-04 | **Pending remote rewrite.** Object absent from this checkout's object store (`git cat-file -t ae3c490` → not a valid object). Present on GitHub per GitGuardian. Must be located on the remote and rewritten/removed there; cannot be cleaned locally because there is nothing to clean. |
+| 3 | Generic High Entropy Secret | `e0a27f9` | 2026-08-10 | **Pending remote rewrite.** Same as #2 — absent locally, present on GitHub. Needs remote-side handling. |
+| 4 | Company Email Password | `b74583c` | 2026-10-08 | **Pending remote rewrite.** Same as #2 — absent locally, present on GitHub. Needs remote-side handling; also rotate the Gmail app password regardless (see 6.2). |
+| 5 | Generic Password | `b74583c` | 2026-10-08 | Same commit as #4. Same disposition. |
+
+### 6.2 Live secret rotation (do this now for #1, #4, #5)
+
+The credentials themselves are considered exposed regardless of git history, so rotate them at the source even though `.env` is gitignored and not in commit history:
+
+1. **Neon database password** — in the Neon Console go to the project → branch → role (`neondb_owner`) → Reset password, or run `ALTER ROLE neondb_owner PASSWORD '<new>';` while connected. Then update `DATABASE_URL` in `backend/.env` (git-ignored, never commit) and restart the backend. The old `npg_5wSmzKsOpak9` value in commit `d322f1d` is now dead. |
+| 2. **JWT signing key** — regenerate: `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set `JWT_SECRET_KEY` in `backend/.env` and restart. Because the old key (`2102d138...`) was in a gitignored `.env` on disk, treat it as leaked — all existing sessions will be invalidated by the rotation, which is the correct failure mode. |
+| 3. **Gmail app password** — in Google Account → Security → App passwords, revoke the old one (`mpdmlexyofsp`) and mint a new one. Update `SENDER_PASSWORD` in `backend/.env`. |
+
+Rotation is not a one-time event: if any of these ever appear in a commit again, follow the same steps immediately and also rewrite the offending commit (see 6.3). |
+
+### 6.3 Rewriting a secret out of git history (for #2, #3, #4, #5 and any future leak)
+
+If a secret reaches a reachable commit, file a.gitignore is necessary but not sufficient — the secret is already in history. The options, in order of practicality:
+
+- **If the commit is only on a throwaway branch:** delete the branch (`git push origin --delete <branch>`) or force-push a cleaned rewrite.
+- **If the commit is on a shared branch others have pulled:** do NOT force-push the shared branch. Instead, add the secret to a blocklist and open a GitHub secret-scanning alert ticket to have GitHub purge it from their copies; meanwhile rotate the credential so the leaked value is useless.
+- **If you own the commit and it has not been pulled:** `git rebase -i` or `git filter-repo --replace-text` to remove the secret from the file, then force-push. Coordinate with anyone who fetched the old history.
+
+For commits `ae3c490`, `e0a27f9`, `b74583c` specifically: these are not present in this checkout's object store, so the next step is to fetch the remote history (`git fetch --unshallow` / `git fetch origin`) and locate them, then apply the appropriate rewrite above. Until that is done, rotate the underlying credentials so the exposed values are dead.
+
+### 6.4 Prevention: `.gitignore` + `.dockerignore` coverage
+
+`.env` and `.env.*` are now blocked by both `.gitignore` and `.dockerignore` in `backend/` and `frontend/`. Specifically:
+
+| Location | `.gitignore` | `.dockerignore` |
+|----------|-------------|----------------|
+| `backend/` | `.env`, `.env.*` | `.env`, `.env.*` |
+| `frontend/` | `.env`, `.env.*` | `.env`, `.env.*` |
+
+The `.env.*` rule was added in this hardening pass — previously `backend/.gitignore` only blocked `.env`, so a file like `backend/.env.production` could be committed by accident. Verified with `git check-ignore backend/.env.production` and `git check-ignore backend/.env.staging` (both now return the ignored path).
+
+CI is deliberately safe: `backend/ci.env` is checked in and contains only throwaway values (`marketmind:marketmind` for a container that lives for the duration of a smoke test, `ci-smoke-test-only-signing-key-not-used-in-production` for JWTs). The CI compose overlay (`docker-compose.ci.yml`) points `BACKEND_ENV_FILE` at `backend/ci.env`, never at a real `.env`.
