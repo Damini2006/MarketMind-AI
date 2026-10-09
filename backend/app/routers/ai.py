@@ -19,7 +19,7 @@ from functools import wraps
 from typing import Dict, Any, List
 
 import numpy as np
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..cache import get_or_set
@@ -1295,12 +1295,17 @@ async def ai_chat(question: str = "", db: Session = Depends(get_db), current_use
     """Smart NL answers from DB data — works like a simple RAG chatbot."""
     q = question.lower().strip()
     biz_id = getattr(current_user, "business_id", None)
+    if not biz_id:
+        # No tenant => no safe scope for an all-business aggregate. Answering
+        # from "every business" is exactly the cross-tenant leak this endpoint
+        # used to have, so refuse instead.
+        raise HTTPException(status_code=403, detail="This account is not attached to a business.")
 
-    # Gather all data
-    sales = db.query(models.Sale).filter(models.Sale.business_id == biz_id).all() if biz_id else db.query(models.Sale).all()
-    products = db.query(models.Product).filter(models.Product.business_id == biz_id).all() if biz_id else db.query(models.Product).all()
-    customers = db.query(models.Customer).filter(models.Customer.business_id == biz_id).all() if biz_id else db.query(models.Customer).all()
-    invoices = db.query(models.Invoice).filter(models.Invoice.business_id == biz_id).all() if biz_id else db.query(models.Invoice).all()
+    # Gather all data -- ALWAYS scoped to the caller's own business.
+    sales = db.query(models.Sale).filter(models.Sale.business_id == biz_id).all()
+    products = db.query(models.Product).filter(models.Product.business_id == biz_id).all()
+    customers = db.query(models.Customer).filter(models.Customer.business_id == biz_id).all()
+    invoices = db.query(models.Invoice).filter(models.Invoice.business_id == biz_id).all()
 
     total_rev = sum(s.total_amount or 0 for s in sales)
     avg_order = total_rev / len(sales) if sales else 0
@@ -1368,14 +1373,17 @@ async def ai_chat(question: str = "", db: Session = Depends(get_db), current_use
                           {"label": "Pending", "value": str(len(pending)), "color": "#f59e0b"},
                           {"label": "Overdue", "value": str(len(overdue)), "color": "#ef4444"}]}
     elif any(w in q for w in ["anomal", "suspicious", "unusual", "fraud"]):
-        alerts = db.query(models.AnomalyAlert).filter(models.AnomalyAlert.business_id == biz_id).all() if biz_id else db.query(models.AnomalyAlert).all()
+        alerts = db.query(models.AnomalyAlert).filter(models.AnomalyAlert.business_id == biz_id).all()
         high = [a for a in alerts if getattr(a, "severity", "") == "high"]
         answer = f"{len(alerts)} anomalies detected ({len(high)} high severity)."
         card = {"title": "Anomaly Detection", "color": "#ef4444", "highlight": f"{len(alerts)} anomalies",
                 "stats": [{"label": "High", "value": str(len(high)), "color": "#ef4444"},
                           {"label": "Total", "value": str(len(alerts)), "color": "#f59e0b"}]}
     elif any(w in q for w in ["team", "employee", "staff", "user"]):
-        users = db.query(models.User).all()
+        # Scoped to the caller's business. This query used to be
+        # `db.query(models.User).all()`: asking "show team" returned the names
+        # and count of users belonging to EVERY other tenant.
+        users = db.query(models.User).filter(models.User.business_id == biz_id).all()
         answer = f"Team has {len(users)} members: {', '.join(u.full_name for u in users[:5])}."
         card = {"title": "Team Overview", "color": "#8b5cf6", "highlight": f"{len(users)} members",
                 "stats": [{"label": "Active", "value": str(sum(1 for u in users if u.is_active)), "color": "#22c55e"}]}

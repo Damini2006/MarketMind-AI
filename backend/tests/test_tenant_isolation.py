@@ -66,6 +66,31 @@ class TestNewUserEmptyState:
         my_names = {c["name"] for c in mine}
         assert my_names.isdisjoint(other_names), "cross-tenant data leak!"
 
+    def test_ai_chat_team_answer_is_tenant_scoped(self, client, fresh_business, owner_headers):
+        """The assistant's "team" branch must never name another tenant's users.
+
+        Regression test: this branch queried `models.User` with no business_id
+        filter, so asking "show team" returned the count and names of users
+        belonging to every business in the database.
+        """
+        headers = self._auth(client, fresh_business)
+        res = client.get("/api/ai/chat", params={"question": "show team"}, headers=headers)
+        assert res.status_code == 200, res.text
+        answer = res.json()["answer"]
+
+        # The seeded business owns a "Sales Exec"; this tenant has one user.
+        assert "Sales Exec" not in answer, "cross-tenant user leak in AI chat!"
+        assert "1 members" in answer, answer
+
+    def test_ai_chat_never_aggregates_other_tenants(self, client, fresh_business, owner_headers):
+        """A revenue question from an empty tenant must not see demo revenue."""
+        headers = self._auth(client, fresh_business)
+        res = client.get("/api/ai/chat", params={"question": "what is my revenue"}, headers=headers)
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert "0 sales" in body["answer"], body["answer"]
+        assert body["card"]["highlight"] == "\u20b90"
+
     def test_ai_pages_graceful_on_empty_business(self, client, fresh_business):
         headers = self._auth(client, fresh_business)
         seg = client.get("/api/ai/segmentation", headers=headers)
