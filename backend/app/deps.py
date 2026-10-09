@@ -1,5 +1,5 @@
 from typing import List
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from .core.security import decode_access_token
 from .cache import get_or_set
 from . import models
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 # The user lookup runs on EVERY authenticated request; on a remote database
 # (Neon) that single query costs ~0.6s. Cache it — mutations
@@ -44,7 +44,13 @@ def _fresh_user(db: Session, user: models.User) -> models.User:
     return db.query(models.User).filter(models.User.id == user.id).first()
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+def get_current_user(request: Request, token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> models.User:
+    # Primary auth path for browser clients: the httpOnly marketmind_session
+    # cookie set by login/register. API clients that still send an Authorization
+    # bearer header keep working because oauth2_scheme reads that header first.
+    if not token or not token.strip():
+        token = request.cookies.get("marketmind_session", "")
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",

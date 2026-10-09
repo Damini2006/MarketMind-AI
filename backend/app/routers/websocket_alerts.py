@@ -34,7 +34,10 @@ async def _authenticate_ws(websocket: WebSocket) -> int:
     """
     from ..core.security import decode_access_token
 
-    token = websocket.query_params.get("token", "")
+    token = (
+        websocket.cookies.get("marketmind_session")
+        or websocket.query_params.get("token", "")
+    )
     payload = decode_access_token(token) if token else None
     user_id = payload.get("sub") if payload else None
     if not user_id:

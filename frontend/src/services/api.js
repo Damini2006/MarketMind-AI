@@ -13,17 +13,15 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // browser sends the httpOnly session cookie automatically
 });
 
+// Auth is now transported by the httpOnly `marketmind_session` cookie set by
+// the server on login/register. The browser attaches it to every same-site
+// request (including the WebSocket handshake) without JavaScript ever seeing
+// the raw token, so an XSS payload cannot steal a session.
 api.interceptors.request.use(
   (config) => {
-    const token =
-      localStorage.getItem("marketmind_token") ||
-      sessionStorage.getItem("marketmind_token");
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -33,10 +31,16 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem("marketmind_token");
-      localStorage.removeItem("marketmind_user");
-      sessionStorage.removeItem("marketmind_token");
-      sessionStorage.removeItem("marketmind_user");
+      // Session expired or invalid. The cookie cannot be cleared from JS
+      // (it is httpOnly), so bounce to login; a fresh login re-issues the
+      // cookie. Do not redirect when the failing call is the login request
+      // itself — the AuthContext handler owns that error path.
+      const path = error.config?.url || "";
+      if (path !== "/auth/login" && !path.startsWith("/api/auth/login")) {
+        localStorage.removeItem("marketmind_user");
+        sessionStorage.removeItem("marketmind_user");
+        window.location.href = "/login";
+      }
     }
     if (import.meta.env.DEV) {
       console.error(
