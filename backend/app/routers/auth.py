@@ -579,15 +579,21 @@ def _set_session_cookie(response: Response, token: str) -> None:
                   (dev runs on plain HTTP and would reject a Secure cookie);
     * samesite=lax — blocks the cookie on cross-site sub-requests/WS handshakes,
                   which is the primary CSRF defence for the in-process rate limiter.
+
+    In production, when the frontend is on a different subdomain, the session
+    cookie must also be SameSite=None; Secure so the browser sends it on the
+    cross-subdomain API requests (the CSRF cookie follows the same rule — see
+    _set_csrf_cookie).
     """
+    in_production = is_production()
     response.set_cookie(
         key="marketmind_session",
         value=token,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
         httponly=True,
-        secure=is_production(),
-        samesite="lax",
+        secure=in_production,
+        samesite="none" if in_production else "lax",
     )
 
 
@@ -601,18 +607,28 @@ def _set_csrf_cookie(response: Response) -> None:
     cookie to populate the header, and SameSite=Lax stops the cookie being sent
     on the cross-site sub-request in the first place).
 
-    The cookie uses the same lifetime, path and SameSite as the session cookie
-    so the two stay in sync; it is deliberately NOT httponly (JS must read it)
-    and NOT Secure-only in dev (plain HTTP would otherwise reject it).
+    SameSite mapping:
+    * ``lax`` (dev / same-site) — the default. Blocks the cookie on cross-site
+      sub-requests, which is the primary CSRF defence for same-origin deployments.
+    * ``none`` + ``secure`` (production, cross-subdomain) — when the frontend
+      lives on a different subdomain (e.g. ``app.example.com`` + ``api.example.com``),
+      ``Lax`` would block the CSRF cookie from being sent at all, breaking the
+      double-submit check. ``SameSite=None`` overrides that, but browsers require
+      ``Secure`` alongside ``None``, so the two are set together only in production
+      (HTTPS).
+
+    The cookie is deliberately NOT httponly (JS must read it) and NOT Secure-only
+    in dev (plain HTTP would otherwise reject it).
     """
+    in_production = is_production()
     response.set_cookie(
         key="marketmind_csrf",
         value=secrets.token_hex(32),
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
         httponly=False,
-        secure=is_production(),
-        samesite="lax",
+        secure=in_production,
+        samesite="none" if in_production else "lax",
     )
 
 
@@ -658,15 +674,19 @@ def _set_refresh_cookie(response: Response, raw: str) -> None:
     Same flags as the session cookie (httponly, Secure in production,
     SameSite=Lax) but path-restricted: the long-lived credential only travels
     to the auth endpoints, not to every API call.
+
+    In production the cookie is SameSite=None; Secure so a cross-subdomain
+    frontend can still present it to /api/auth/refresh.
     """
+    in_production = is_production()
     response.set_cookie(
         key=REFRESH_COOKIE,
         value=raw,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600,
         path=REFRESH_COOKIE_PATH,
         httponly=True,
-        secure=is_production(),
-        samesite="lax",
+        secure=in_production,
+        samesite="none" if in_production else "lax",
     )
 
 
