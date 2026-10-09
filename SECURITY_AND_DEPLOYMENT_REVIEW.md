@@ -30,7 +30,7 @@ below with the reasoning for each.
 | Cross-tenant data isolation | ⚠️ AI chat leaked every tenant's users | ✅ scoped + regression test |
 | Reset-OTP randomness | ⚠️ Mersenne Twister | ✅ CSPRNG |
 | Browser security headers | ❌ none | ✅ nosniff, frame-deny, HSTS, minimal CSP |
-| Session storage / XSS exposure | ❌ JWT in `localStorage` | ❌ unchanged (see P1-1) |
+| Session storage / XSS exposure | ❌ JWT in `localStorage` | ✅ httpOnly cookie + double-submit CSRF (11 tests) (see P1-1) |
 | Full CSP | ❌ | ⚠️ partial by design (see P2-1) |
 
 ---
@@ -282,7 +282,7 @@ REFRESH_TOKEN_EXPIRE_DAYS=30      # optional, default 30
 | Secrets in tracked files (`git grep` for connection strings, API keys, private keys, AWS/GitHub/OpenAI tokens) | none; only `.env.example` placeholders and the `ci.env` throwaway values |
 | Secrets in git history | none reachable (an earlier Neon credential was already purged in a prior cleanup) |
 | Image contains no `.env` / effective uid non-root | already enforced by the `docker-build` CI job (`image-guard` steps) |
-| Backend suite | `python -m pytest tests/ -q` → 114 passed |
+| Backend suite | `python -m pytest tests/ -q` → 139 passed (incl. 11 CSRF double-submit tests) |
 | nginx config + include resolution | `nginx -t` inside `nginx:alpine` with the real files → syntax ok, test successful |
 | `ENVIRONMENT=production` with no / short / placeholder secret | process exits 1 with a clear `[config]` message (4 subprocess tests) |
 | `ENVIRONMENT=production` demo seeding | off by default, `SEED_DEMO_DATA=true` overrides (3 unit tests) |
@@ -305,6 +305,53 @@ REFRESH_TOKEN_EXPIRE_DAYS=30      # optional, default 30
    checklist item).
 7. `SMOKE_EMAIL` / `SMOKE_PASSWORD` set to a **real** account, then
    `python scripts/smoke_test.py` — the defaults are the demo login.
+
+## 7. CSRF double-submit enforcement
+
+Browser sessions authenticate via the httpOnly `marketmind_session` cookie, which
+page JS cannot read. But `SameSite=Lax` alone is not enough: a same-site cross-
+request (e.g. a malicious image tag on a page the user visits) can still trigger
+a state-changing GET, and older browsers send cookies on cross-site POSTs with
+`SameSite=Lax` when the user navigated from that site. The defence-in-depth
+layer is a double-submit CSRF token:
+
+- On login/register the backend sets a **non-httpOnly** `marketmind_csrf` cookie
+  containing a random 32-byte hex token. Page JS reads this cookie (it is NOT
+  httpOnly) and sends it back in the `X-CSRF-Token` request header on every
+  state-changing call.
+- The `csrf_middleware` in `app/main.py` intercepts every POST/PUT/PATCH/DELETE
+  that is NOT an auth endpoint. If the request carries a `marketmind_session`
+  cookie but no `Authorization: Bearer` header (i.e. it is a browser session,
+  not an API client), the middleware compares the `X-CSRF-Token` header to the
+  `marketmind_csrf` cookie using `hmac.compare_digest` (constant-time). A mismatch
+  or missing header returns 403 `{"detail": "CSRF check failed"}`.
+- API clients authenticating with `Authorization: Bearer ...` skip the check
+  entirely — they cannot set cookies cross-site and have no CSRF surface.
+- Auth endpoints (`/api/auth/*`) are never CSRF-checked: they must remain usable
+  before a session exists (login/register) and their own rate limiting is the
+  relevant defence.
+
+**Test coverage:** `backend/tests/test_csrf.py` (11 cases) covers:
+
+| Test | What it proves |
+|------|----------------|
+| `test_login_sets_csrf_cookie` | login sets `marketmind_csrf` cookie |
+| `test_register_sets_csrf_cookie` | register sets `marketmind_csrf` cookie |
+| `test_stateful_post_with_valid_csrf_header_succeeds` | session + valid header → 201 |
+| `test_stateful_post_without_csrf_header_rejected` | session + no header → 403 |
+| `test_stateful_post_with_wrong_csrf_header_rejected` | session + wrong header → 403 |
+| `test_bearer_auth_skips_csrf_check` | Bearer + session → CSRF skipped, 201 |
+| `test_auth_endpoints_never_csrf_checked` | POST/PUT to `/api/auth/*` never CSRF-checked |
+| `test_get_requests_are_never_csrf_checked` | GET with session → never CSRF-checked |
+| `test_patch_without_csrf_rejected` | PATCH + session + no header → 403 |
+| `test_delete_without_csrf_rejected` | DELETE + session + no header → 403 |
+| `test_delete_with_valid_csrf_allowed` | DELETE + session + valid header → 204 |
+
+The test app in `tests/conftest.py` wires the same `csrf_middleware` into the
+pytest `TestClient` app so the enforcement is covered without needing a running
+server. The middleware is a verbatim copy of the one in `app/main.py` (same
+import, same logic), so the tests exercise what actually ships.
+
 
 ## 6. Secret rotation playbook (operational)
 
