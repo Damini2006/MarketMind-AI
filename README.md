@@ -416,9 +416,9 @@ Full interactive API documentation at `http://localhost:8000/docs`
 
 ## Deployment
 
-The app is two deployables: a FastAPI backend (any Python host or the provided `backend/Dockerfile`) and a Vite static frontend.
+The app is two deployables: a FastAPI backend (any Python host or the provided `backend/Dockerfile`) and a Vite static frontend. See [`DEPLOY.md`](DEPLOY.md) for the step-by-step Railway + Vercel + Neon walkthrough.
 
-### Backend (Render / Railway / Fly.io / Docker)
+### Backend (Railway / Render / Fly.io / Docker)
 
 1. Provision a **Neon PostgreSQL** database and copy its connection string. Use the **direct** endpoint — drop the `-pooler` label from the host (e.g. `ep-xxx-pooler.c-4.us-east-2.aws.neon.tech` -> `ep-xxx.c-4.us-east-2.aws.neon.tech`), or remove it from the host if Neon only shows you the pooled one. This backend is a single long-lived server with its own SQLAlchemy connection pool, which is the case Neon's pooler is not for; going direct also avoids PgBouncer's transaction-mode caveats. See the comment above `create_engine` in `backend/app/database.py`.
 2. Set environment variables on the host:
