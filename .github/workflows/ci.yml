@@ -25,13 +25,20 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        # pytest is a dev-only dependency: kept out of requirements.txt so the
-        # Docker image doesn't ship the test runner. Version matches the suite
-        # as verified locally (pytest 9.1.1). No secrets needed — tests/conftest.py
+        # pytest and httpx2 are dev-only dependencies: kept out of
+        # requirements.txt so the Docker image ships neither a test runner nor an
+        # HTTP client it never uses at runtime. pytest matches the suite as
+        # verified locally (pytest 9.1.1). No secrets needed — tests/conftest.py
         # points DATABASE_URL at a throwaway SQLite DB before any app import.
+        #
+        # httpx2 is what starlette's TestClient imports. fastapi 0.141.1 resolves
+        # to starlette 1.7.0, whose testclient.py raises RuntimeError at import
+        # time unless httpx2 is installed — starlette declares it only under its
+        # `full` extra, which a plain `pip install -r requirements.txt` does not
+        # pull in. Without it pytest exits 4 before collecting a single test.
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest==9.1.1
+          pip install -r requirements.txt pytest==9.1.1 httpx2==2.13.1
 
       - name: Run test suite
         run: python -m pytest tests/ -q
