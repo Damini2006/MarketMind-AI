@@ -384,64 +384,92 @@ All foreign key columns are indexed. Connection pooling via Neon pooler endpoint
 
 ---
 
-## Deployment Guide — Render + Vercel
+## Deployment Guide — Railway + Vercel
 
-This section supersedes the older project README. It records the exact
-values the running platform consumes so a fresh deploy reproduces the live
-URLs.
+**Operational runbook: [`DEPLOY.md`](DEPLOY.md)** — step order, secret
+generation, the CORS loop and rollback. This section records the exact values
+the running platform consumes so a fresh deploy reproduces the live URLs.
+
+The topology: the API is **this repository's Docker image on Railway**, the SPA
+is a **static Vite build on Vercel**, and the database is **Neon Postgres**.
+The API and the SPA are therefore on different origins — which is what the CORS
+and cross-site cookie settings below exist for.
 
 ### 1. Live API URLs
 
-| Environment | Backend base | Frontend Vite base |
+| Environment | Backend base | Frontend base |
 |---|---|---|
-| Production Render (backend) | `https://<backend-app>.onrender.com` | `https://<frontend-app>.vercel.app` |
-| Render internal (backend→backend) | `http://localhost:8000` | — |
+| Production (Railway API / Vercel SPA) | `https://<railway-service>.up.railway.app` | `https://<frontend-app>.vercel.app` |
+| Local (docker compose / Vite dev server) | `http://localhost:8000` | `http://localhost:5173` |
 
-All API routes are served under `/api` on the backend, so the frontend's
+Every API route is served under `/api` — each router carries its own prefix
+(`app/routers/system.py` → `APIRouter(prefix="/api/system")`,
+`app/routers/ai.py` → `APIRouter(prefix="/api/ai")`) — so the frontend's
 `VITE_API_BASE_URL` resolves to:
 
-- **Render production:** `https://<backend-app>.onrender.com`
-- **Vercel development / local dev:** `/` (the dev server proxies `/api` to the
-  backend via the `server.proxy` in `frontend/vite.config.js`)
-- **Vercel production:** `https://<backend-app>.onrender.com`
+- **Railway production:** `https://<railway-service>.up.railway.app/api`
+- **Local development:** `/api`, the client's default, proxied to `:8000` by
+  `server.proxy` in `frontend/vite.config.js`
+- **Vercel production:** the same Railway value, set as a Production
+  environment variable
 
-The only Vite env var the app reads is `VITE_API_BASE_URL`.
-There is no `VITE_OPENAPI_URL` anywhere in this repo.
+The trailing `/api` is part of the value: the client appends `/auth/login` and
+every other route to it. `/health` and `/api/health` sit *outside* those
+prefixes — they are root-level aliases in `app/main.py`.
 
-### 2. Backend (Render) — exact values
+`VITE_API_BASE_URL` is the only Vite env var the app reads; there is no
+`VITE_OPENAPI_URL` anywhere in this repo. `frontend/.env` is gitignored, so a
+host that has no variable set falls back to `/api` and 404s against its own
+origin — set it in the Vercel dashboard.
 
-**Procfile (repo root):**
+Live alerts need no proxy either: the socket host is derived from the same base
+with the `/api` suffix stripped, so the browser connects straight to
+`wss://<railway-service>.up.railway.app/ws/alerts/<businessId>`.
+
+### 2. Backend (Railway) — exact values
+
+Deployed as **this repository's own Docker image** (`backend/Dockerfile`), built
+with `./backend` as the build context — the same context `docker-compose.yml`
+and CI use. The Railway service's **Root Directory is `/backend`**, which is
+what makes the platform's build context identical to the local one.
+
+**No `Procfile`, and no `railway.json`.** The image's own `CMD` is the start
+command, so local, CI and production start identically:
 
 ```
-web: uv run gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT app.main:app
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port \"${PORT}\""]
 ```
 
-**`render.yaml` (or the Render dashboard config):**
+An earlier revision of this page documented a root `Procfile` running gunicorn
+with two uvicorn workers under `uv run`; no `Procfile` exists in this repository
+and that is not what ships. The image runs **one** uvicorn process: startup
+performs the migrations and the AI cache warm-up in `app/main.py`, and a
+container platform requires binding `0.0.0.0` on the injected `$PORT`.
+`railway.json` is deliberately absent as well — Railway's Config-as-Code is
+deprecated for new services, so service settings live in the dashboard.
 
-```yaml
-services:
-  - type: web
-    name: marketmind-backend
-    runtime: python
-    plan: free
-    envVars:
-      - key: DATABASE_URL
-        sync: false
-        value: <NEON_DATABASE_URL>
-      - key: CORS_ORIGINS
-        sync: false
-        value: https://<frontend-app>.vercel.app,https://<frontend-app>.onrender.com
-      - key: JWT_SECRET_KEY
-        sync: false
-        value: <256-bit random>
-      - key: ACCESS_TOKEN_EXPIRE_MINUTES
-        sync: false
-        value: "60"
-      - key: PORT
-        value: "8000"
-    buildCommand: uv run pip install -r requirements.txt
-    startCommand: uv run gunicorn -w 2 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT app.main:app
-```
+**Service settings (Railway dashboard):**
+
+| Setting | Value | Why |
+|---|---|---|
+| Root Directory | `/backend` | the build context; also keeps the frontend, the docs and the git history out of the image |
+| Healthcheck Path | `/health` | unauthenticated liveness route — the only safe probe before the app has a database session |
+| Start Command | *(empty — use the image's `CMD`)* | one source of truth for local, CI and production |
+| Volume | mount `/app/uploads` *(optional)* | avatar files survive deploys; the path is derived in code (`app/main.py`) and the container runs as uid 1000, so verify a write after attaching |
+
+**Variables.** Railway injects `PORT` — do not set it by hand: the generated
+domain targets the injected port, so pinning a different one is the usual cause
+of a 502.
+
+| Variable | Required | Value |
+|---|---|---|
+| `ENVIRONMENT` | yes | `production` — enables the startup guards and stops seeding the demo accounts |
+| `DATABASE_URL` | yes | Neon **direct** host (drop the `-pooler` label), `?sslmode=require` |
+| `JWT_SECRET_KEY` | yes | fresh ≥ 32 chars; a missing, short or placeholder value aborts startup |
+| `CORS_ORIGINS` | yes | the exact Vercel origin(s), comma-separated; `*` is refused because credentials are allowed |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | no | default `180` (`app/core/security.py`) |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | no | default `30` |
+| `SENDER_EMAIL` / `SENDER_PASSWORD` / `SMTP_SERVER` / `SMTP_PORT` | no | OTP password-reset email only |
 
 **Neon (serverless) tuning already wired in `backend/app/database.py`:**
 
@@ -452,68 +480,73 @@ pool_size=10, max_overflow=5, pool_timeout=10
 
 ### 3. Frontend (Vercel) — exact values
 
-**Deployment config (`.vercel/project.json` or the Vercel dashboard):**
-
-```json
-{
-  "projectName": "marketmind-frontend",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm ci",
-  "env": [
-    {
-      "key": "VITE_API_BASE_URL",
-      "value": "https://<backend-app>.onrender.com"
-    }
-  ]
-}
-```
-
-**Vercel Build & Output Settings:**
+**Build & Output Settings:**
 
 - **Root Directory:** `frontend`
 - **Build Command:** `npm run build`
 - **Output Directory:** `dist`
-- **Framework Preset:** `vite` (+ `@vitejs/plugin-react` for React 19)
+- **Framework Preset:** `vite` (declared in the committed `frontend/vercel.json`)
 
-**Vite config excerpts:**
+```json
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
+```
+
+That rewrite is what stops a deep link such as `/dashboard` from 404ing.
+
+**Environment variable (Production):**
+
+```
+VITE_API_BASE_URL = https://<railway-service>.up.railway.app/api
+```
+
+**Vite config excerpt** — `frontend/vite.config.js` proxies the three prefixes
+the app actually uses, so local development stays same-origin and needs no CORS:
 
 ```js
 // frontend/vite.config.js
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    // Proxy /api to the Render backend during Vercel development.
-    port: 5173,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-    },
+server: {
+  port: 5173,
+  proxy: {
+    '/api':     { target: 'http://127.0.0.1:8000', changeOrigin: true },
+    '/uploads': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+    '/ws':      { target: 'ws://127.0.0.1:8000', ws: true },
   },
-  define: {
-    // The only Vite env var used anywhere in the app.
-    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
-      process.env.VITE_API_BASE_URL || '/api'
-    ),
-  },
-})
+}
 ```
 
+There is no `define` block: Vite exposes real `VITE_*` environment variables to
+`import.meta.env` natively, and the dashboard value takes priority over any
+`.env` file.
+
+**Base-URL resolution** — `frontend/src/services/api.js`, the only place the
+base URL is read:
+
 ```js
-// frontend/src/services/api.js
-const BASE = import.meta.env.VITE_API_BASE_URL || "/api"
-export const api = axios.create({ baseURL: BASE })
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+// Uploads are served from the API origin, so strip the /api suffix.
+export const STATIC_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
 ```
 
 ### 4. Health / smoke-test endpoints
 
 | Route | Auth | What it probes | Live URL |
 |---|---|---|---|
-| `GET /api/health` | none (works pre-login) | Liveness + Neon probe + cache warmth | `https://<backend-app>.onrender.com/api/health` |
-| `GET /api/system/health/deep` | business_owner / store_manager / admin | `SELECT 1` through the pooled Neon connection; returns `status`, `probe` (ok/error + host), `cache`, `summary.{healthy,degraded,cache_entries,hits,misses,avg_compute_ms,elapsed_ms}` | `https://<backend-app>.onrender.com/api/system/health/deep` |
-| `GET /api/ai/churn/features` | business_owner / store_manager / admin | Reuses `run_churn_prediction`; returns one row per customer with `recency_percentile`, `frequency_percentile`, `spend_trend_percentile`, `monetary_percentile`, `regularity_percentile`, `overdue_percentile` so the Churn page can render a driver card per customer | `https://<backend-app>.onrender.com/api/ai/churn/features` |
+| `GET /health` | none | **Liveness only** — returns `{"status":"healthy"}` and touches nothing else, which is exactly why it is the platform healthcheck. `GET /api/health` is an alias for the same handler | `https://<railway-service>.up.railway.app/health` |
+| `GET /api/system/health/deep` | business_owner / store_manager / admin | `SELECT 1` through the pooled Neon connection; returns `status`, `probe` (ok/error + host), `cache`, `summary.{healthy,degraded,cache_entries,hits,misses,avg_compute_ms,elapsed_ms}` | `https://<railway-service>.up.railway.app/api/system/health/deep` |
+| `GET /api/ai/churn/features` | business_owner / store_manager / admin | Reuses `run_churn_prediction`; returns one row per customer with `recency_percentile`, `frequency_percentile`, `spend_trend_percentile`, `monetary_percentile`, `regularity_percentile`, `overdue_percentile` so the Churn page can render a driver card per customer | `https://<railway-service>.up.railway.app/api/ai/churn/features` |
+
+`scripts/smoke_test.py` is the deploy gate over these: it exits non-zero unless
+`/health`, the OpenAPI schema, the SPA shell, a real login, an authenticated
+call, the database round-trip (`/api/system/health/deep`) and a 401 for an
+anonymous caller all pass. It is deliberately not the container healthcheck —
+login is rate limited to 10 attempts per IP per 300s, so a probe on a 10s
+interval would be answered with 429.
 
 ### 5. Frontend pages that consume the API
 
