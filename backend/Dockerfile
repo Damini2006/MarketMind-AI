@@ -4,7 +4,10 @@
 #
 #   committed artifacts (baked in at build time)
 #       application code, alembic/ + alembic.ini (migrations run at startup),
-#       app/trained_models/*.pkl (tracked in git and required at runtime)
+#       app/trained_models/*.pkl if present — NOT tracked in git (.gitignore
+#       excludes them), so a fresh clone bakes in no model and
+#       /api/revenue/predict answers with engine="heuristic". See DEPLOY.md.
+#       Copying a large model in here is a deliberate, separate deployment step.
 #   runtime config (injected at start, NEVER baked in)
 #       DATABASE_URL, JWT_SECRET_KEY, CORS_ORIGINS ... supplied by compose's
 #       `env_file:` (see BACKEND_ENV_FILE in docker-compose.yml) or by the host

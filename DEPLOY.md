@@ -196,6 +196,34 @@ Neon round-trip.
 * The image contains no `.env` (`backend/.dockerignore` excludes it), and CI's
   `image-guard` job fails a build that ships one.
 
+## AI features on a fresh deploy
+
+Only the revenue forecast depends on a model file, and that file is not in git
+(`.gitignore` excludes `backend/app/trained_models/*.pkl`), so the Railway
+service starts without it and behaves like this:
+
+* `POST /api/revenue/predict` and `POST /api/revenue/explain` answer from a
+  built-in heuristic. Both responses carry `"engine": "heuristic"` instead of
+  `"model"`, the first call logs a warning naming the path it wanted, and the
+  Revenue Prediction page shows an amber **Heuristic — no model file** badge.
+* Every other AI endpoint (`/api/ai/forecast`, `/forecasting`, `/segmentation`,
+  `/churn`, `/churn/features`, `/recommendations`, `/recommendations/cross-sell`,
+  `/anomalies`, `/clv`, `/chat`) fits its scikit-learn model in-process from the
+  database and reads no `.pkl`, so none of them change.
+
+Measured on this input — Electronics / North / Summer, demand 120, price 80,
+promotion Yes — the heuristic returns **11520.00** while the trained model
+returns **8051.89**. The fallback overstates revenue by roughly 43% on that
+row, so never present fallback numbers as model output.
+
+To give the service the model, mount a volume (or bake a layer) holding
+`revenue_prediction_compressed.pkl` at **`/app/app/trained_models/`** — note the
+repeated `app`, because the loader resolves the path relative to
+`backend/app/ml/inference.py`, not to the working directory. The file is about
+112 MB compressed and 551 MB raw, which is why it is not in git.
+`compress_models.py` writes `models/revenue_prediction_compressed.pkl`, not this
+path, so its output has to be moved.
+
 ## Environment variables (backend)
 
 | Variable | Required | Value |
