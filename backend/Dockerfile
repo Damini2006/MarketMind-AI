@@ -55,10 +55,19 @@ USER appuser
 
 EXPOSE 8000
 
-# Overridden by the compose healthcheck (same probe), but keeps the image
-# self-describing when run standalone. Shell form so the exit status is the
-# curl result: the exec form cannot express `|| exit 1`.
-HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
-    CMD curl -f http://localhost:8000/health || exit 1
+# The port to bind. Compose and CI leave this unset and publish 8000, while
+# most PaaS Docker hosts — Railway and Render both do — inject the port they route to as
+# PORT. Defaulting to 8000 keeps compose/CI exactly as they were and lets such
+# a host override it without needing a host-specific start command.
+ENV PORT=8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Overridden by the compose healthcheck (same probe), but keeps the image
+# self-describing when run standalone. Shell form, so ${PORT} expands and the
+# curl exit status is the health result (the exec form cannot express
+# `|| exit 1`).
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
+    CMD curl -f "http://localhost:${PORT}/health" || exit 1
+
+# Shell form so ${PORT} is expanded when the container starts; the exec form
+# would pass the literal string "${PORT}". Falls back to the ENV default above.
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port \"${PORT}\""]
