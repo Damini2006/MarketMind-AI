@@ -6,8 +6,17 @@ warnings.filterwarnings("ignore", message=".*Trying to unpickle estimator.*")
 
 
 # Mock functions for ML Inference
-# When real models are available, load them at app startup (e.g., using lifespan events)
-# and replace these dummy implementations with actual model.predict() calls.
+#
+# NOTE: predict_revenue_forecast() and predict_customer_churn() below are NOT
+# imported anywhere (verified: the only consumer of this module is
+# app/routers/revenue.py, which imports predict_revenue and explain_prediction).
+# They are kept as legacy placeholders only. They return hard-coded sample rows
+# — including invented customer names — so do not wire them into an endpoint
+# without replacing the data source, or a demo would present fiction as
+# analysis.
+#
+# The trained revenue model is optional: see _get_revenue_model() below for the
+# fallback behaviour when backend/app/trained_models/ is absent.
 
 def predict_revenue_forecast() -> Dict[str, Any]:
     """Mock revenue forecast."""
@@ -142,7 +151,12 @@ def _get_revenue_model():
         else:
             import logging
             logging.getLogger(__name__).warning(
-                "Revenue prediction model not found at %s — predict_revenue will return mock data.", MODEL_PATH
+                "Revenue prediction model not found at %s — /api/revenue/predict and "
+                "/api/revenue/explain will answer with engine=\"heuristic\" instead of "
+                "engine=\"model\" (see DEPLOY.md). The model is not in git, so this is the "
+                "normal state of a fresh clone and of any deployment that has not been "
+                "given the file.",
+                MODEL_PATH,
             )
     except Exception as e:
         import logging
@@ -191,13 +205,20 @@ def predict_revenue(category, region, seasonality, demand, price, promotion):
             )
 
     # Fallback: transparent heuristic when the model is unavailable.
+    #
+    # Deliberately ADDITIVE, and arithmetically identical to the heuristic in
+    # explain_prediction(), so /api/revenue/predict and /api/revenue/explain
+    # agree to the paisa. A multiplicative version used to disagree with the
+    # breakdown by ~0.6% (11592.0 vs 11520.0 for the same inputs) while the UI
+    # displayed the breakdown's number.
     base = norm["demand_raw"] * norm["price_raw"]
-    promo_mult = 1.15 if norm["Promotion"] == "Yes" else 1.0
+    promo_boost = base * 0.15 if norm["Promotion"] == "Yes" else 0.0
     season_mult = {"Winter": 1.1, "Summer": 1.05, "Spring": 1.0, "Autumn": 1.08}.get(
         norm["Seasonality"], 1.0
     )
+    season_boost = base * (season_mult - 1.0)
     return {
-        "predicted_revenue": round(base * promo_mult * season_mult, 2),
+        "predicted_revenue": round(base + promo_boost + season_boost, 2),
         "engine": "heuristic",
         "inputs_used": {
             "category": norm["Category"], "region": norm["Region"],

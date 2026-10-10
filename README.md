@@ -473,6 +473,39 @@ It is deliberately **not** the container healthcheck: login is rate limited to 1
 
 CI runs the same gate on every push — the `deploy-smoke` job in `.github/workflows/ci.yml` stands the whole stack up against a throwaway PostgreSQL using `docker-compose.ci.yml` (no secrets required) and tears it down afterwards.
 
+### AI models on a fresh clone
+
+The revenue forecast is the only AI feature that reads a model file, and that
+file is **not in git** — `.gitignore` excludes `backend/app/trained_models/*.pkl`
+and `models/*.pkl`. So on a fresh clone, and on any deployment that was not
+given the file by hand, `POST /api/revenue/predict` and `POST /api/revenue/explain`
+answer from a transparent built-in heuristic instead of the trained model.
+
+Both endpoints report which engine answered, in the `engine` field:
+`"model"` or `"heuristic"`. The first prediction also logs a warning naming the
+path it looked for, and the Revenue Prediction page shows an amber
+**Heuristic — no model file** badge, so a fallback result cannot be mistaken for
+model output.
+
+```
+Revenue prediction model not found at /app/app/trained_models/revenue_prediction_compressed.pkl —
+/api/revenue/predict and /api/revenue/explain will answer with engine="heuristic" instead of engine="model"
+```
+
+Every other AI endpoint (`/api/ai/forecast`, `/forecasting`, `/segmentation`,
+`/churn`, `/churn/features`, `/recommendations`, `/recommendations/cross-sell`,
+`/anomalies`, `/clv`, `/chat`) fits its scikit-learn model in-process from the
+database at request time and reads no `.pkl`, so those behave identically with
+or without the file.
+
+To enable the model, `revenue_prediction_compressed.pkl` has to sit at
+`backend/app/trained_models/` — the loader resolves that path from
+`backend/app/ml/inference.py`, which is `/app/app/trained_models/` inside the
+container. `compress_models.py` writes `models/revenue_prediction_compressed.pkl`
+instead, so its output must be moved into place; nothing does that
+automatically. The file is ~112 MB compressed (~551 MB raw), which is why it
+lives outside git.
+
 ### Production checklist
 
 - [ ] `ENVIRONMENT=production` (otherwise the dev conveniences stay on)
@@ -487,6 +520,7 @@ CI runs the same gate on every push — the `deploy-smoke` job in `.github/workf
       demo tenant was ever seeded, delete `owner@marketmind.ai`,
       `manager@marketmind.ai`, `sales@marketmind.ai` and `admin@marketmind.ai`
 - [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) — it covers `/health`, the SPA, an authenticated call and the database round-trip. Pass real `SMOKE_EMAIL` / `SMOKE_PASSWORD`, since the defaults are the demo account
+- [ ] Know which engine the revenue forecast is using — the `engine` field, the amber badge, or the "model not found" warning in the startup log. The model file is not in git, so a fresh deployment uses the heuristic unless it is given the file
 - [ ] Read `SECURITY_AND_DEPLOYMENT_REVIEW.md` and work through its P1/P2 list
 
 ---

@@ -3,8 +3,10 @@
 # ── Three kinds of thing, deliberately kept apart ────────────────────────────
 #   committed artifacts  baked into the image at build time: application code,
 #                        alembic/ + alembic.ini (migrations run at startup), and
-#                        app/trained_models/*.pkl (tracked in git, read at
-#                        runtime). A fresh clone builds the same image.
+#                        app/trained_models/*.pkl IF PRESENT — NOT tracked in
+#                        git (see DEPLOY.md), so a fresh clone has none and the
+#                        revenue endpoints fall back to a heuristic. A fresh
+#                        clone builds the same image.
 #   runtime config       injected at start, never baked in: backend/.env via
 #                        `env_file:` below (parameterised as BACKEND_ENV_FILE so
 #                        CI can point at backend/ci.env). backend/.dockerignore

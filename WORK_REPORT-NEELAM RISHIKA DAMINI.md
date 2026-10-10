@@ -351,7 +351,7 @@ I set up and managed **28 Neon PostgreSQL tables** across the project:
 - Analytics: anomaly_alerts, inventory_alerts, notifications
 - Platform: audit_logs, dashboard_layouts, custom_report_templates, scheduled_reports, prediction_history, chat_history, uploaded_datasets, alembic_version
 
-All foreign key columns are indexed. Connection pooling via Neon pooler endpoint with SSL.
+All foreign key columns are indexed. Connections are pooled by SQLAlchemy against Neon's **direct** endpoint with SSL (`?sslmode=require`) — not the `-pooler` one, since this is a single long-lived server with its own pool, which is the case the pooler is not for, and going direct avoids PgBouncer's transaction-mode caveats. See `backend/app/database.py`.
 
 ---
 

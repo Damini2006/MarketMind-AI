@@ -104,6 +104,11 @@ export default function RevenuePrediction() {
   const [showHistory, setShowHistory] = useState(false)
   const [scenarioList, setScenarioList] = useState([])
   const [showFactors, setShowFactors] = useState(true)
+  // Which engine answered the last prediction: "model" (trained pkl loaded) or
+  // "heuristic" (the file is absent — the normal state of a fresh clone and of
+  // deployments that were never given it). The API has always reported this;
+  // the UI used to ignore it and label every number "ML Model".
+  const [engine, setEngine] = useState(null)
 
   // Load history from Neon
   useEffect(() => {
@@ -136,6 +141,7 @@ export default function RevenuePrediction() {
     setError("")
     setPredictedRevenue(null)
     setFactors(null)
+    setEngine(null)
 
     try {
       const response = await api.post("/revenue/predict", {
@@ -149,6 +155,7 @@ export default function RevenuePrediction() {
 
       const rev = response.data.predicted_revenue
       setPredictedRevenue(rev)
+      setEngine(response.data.engine || null)
 
       // Real model-faithful breakdown from /revenue/explain: each factor is a
       // counterfactual re-run of the SAME trained model, and the factors sum
@@ -168,6 +175,7 @@ export default function RevenuePrediction() {
         if (factorData?.predicted_revenue != null) {
           setPredictedRevenue(factorData.predicted_revenue)
         }
+        if (factorData?.engine) setEngine(factorData.engine)
       } catch {
         factorData = null // breakdown stays hidden rather than showing fake bars
       }
@@ -227,6 +235,9 @@ export default function RevenuePrediction() {
       ['Price', formData.price], ['Promotion', formData.promotion],
       ['---', '---'],
       ['Predicted Revenue', `₹${predictedRevenue.toLocaleString('en-IN')}`],
+      ['Computed by', engine === 'heuristic'
+        ? 'Heuristic (trained model file not present on this deployment)'
+        : engine === 'model' ? 'Trained ML model' : 'Unknown'],
       ...(factors || []).map(f => [f.label, `₹${Math.round(f.value).toLocaleString('en-IN')}`]),
     ]
     exportToPDF({ title: 'Revenue Prediction', subtitle: `Predicted: ₹${predictedRevenue.toLocaleString('en-IN')}`, headers, rows, filename: 'revenue-prediction' })
@@ -241,6 +252,9 @@ export default function RevenuePrediction() {
       ['Price', formData.price], ['Promotion', formData.promotion],
       ['---', '---'],
       ['Predicted Revenue', `₹${predictedRevenue.toLocaleString('en-IN')}`],
+      ['Computed by', engine === 'heuristic'
+        ? 'Heuristic (trained model file not present on this deployment)'
+        : engine === 'model' ? 'Trained ML model' : 'Unknown'],
       ...(factors || []).map(f => [f.label, `₹${Math.round(f.value).toLocaleString('en-IN')}`]),
     ]
     exportToExcel({ title: 'Revenue Prediction', headers, rows, filename: 'revenue-prediction' })
@@ -260,7 +274,7 @@ export default function RevenuePrediction() {
             </div>
           </div>
           <p className="text-sm text-indigo-100 max-w-xl mt-4">
-            Analyze your business inputs and get instant revenue predictions using our trained ML model. Compare scenarios and track prediction history.
+            Analyze your business inputs and get instant revenue predictions, with the factor breakdown behind the number. Compare scenarios and track prediction history.
           </p>
         </div>
         <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10" />
@@ -367,7 +381,9 @@ export default function RevenuePrediction() {
                     <FactorBar key={i} label={f.label} value={f.value} description={f.description} max={Math.max(...factors.map(x => Math.abs(x.value)))} color={f.color} />
                   ))}
                   <p className="text-[10px] text-slate-400 pt-1">
-                    These factors are re-runs of the same ML model and always add up to the predicted revenue.
+                    {engine === 'heuristic'
+                    ? "These are the heuristic's own terms, and they add up to exactly the predicted revenue."
+                    : 'These factors are re-runs of the same ML model and always add up to the predicted revenue.'}
                   </p>
                 </div>
               )}
@@ -383,7 +399,16 @@ export default function RevenuePrediction() {
             <div className="relative z-10">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-indigo-200">AI REVENUE FORECAST</p>
-                <span className="px-3 py-1 rounded-full bg-white/10 text-xs text-indigo-100">ML Model</span>
+                {engine === 'heuristic' ? (
+                  <span
+                    title="The trained model file (backend/app/trained_models/revenue_prediction_compressed.pkl) is not present on this deployment, so this number comes from the built-in heuristic, not the ML model."
+                    className="px-3 py-1 rounded-full bg-amber-400/20 text-xs font-semibold text-amber-200"
+                  >
+                    Heuristic — no model file
+                  </span>
+                ) : engine === 'model' ? (
+                  <span className="px-3 py-1 rounded-full bg-white/10 text-xs text-indigo-100">ML Model</span>
+                ) : null}
               </div>
 
               {predictedRevenue !== null ? (
@@ -430,7 +455,7 @@ export default function RevenuePrediction() {
                   <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-2xl">✦</div>
                   <h2 className="text-2xl font-bold mt-5">Ready to analyze</h2>
                   <p className="text-sm text-indigo-200 mt-3 leading-relaxed">
-                    Enter your business details and let our AI model estimate your expected revenue.
+                    Enter your business details and the forecast engine will estimate your expected revenue.
                   </p>
                 </div>
               )}
