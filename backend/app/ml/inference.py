@@ -280,11 +280,14 @@ def explain_prediction(category, region, seasonality, demand, price, promotion):
             price_only["Demand"] = base_inputs["Demand"]
             price_contrib = _run(price_only) - base
 
-            # Residual = everything not captured above (category/region mix
-            # and interaction effects). Keeps the sum exact.
-            context_contrib = actual - base - promo_contrib - season_contrib \
-                - demand_contrib - price_contrib
+            headline = round(actual, 2)
 
+            # Round every factor for display, then let the residual absorb the
+            # rounding. Rounding six values independently is NOT the same as
+            # rounding their sum, so a breakdown built from the exact residual
+            # alone could sit a cent away from the headline it is printed under.
+            # The residual is the bucket that already exists to keep the sum
+            # exact — now it keeps it exact in the displayed values too.
             factors = [
                 {"label": "Base Revenue", "value": round(base, 2),
                  "description": "Model output for an average sale (typical Demand × Price)"},
@@ -296,11 +299,14 @@ def explain_prediction(category, region, seasonality, demand, price, promotion):
                  "description": "Difference the active promotion makes"},
                 {"label": "Season Effect", "value": round(season_contrib, 2),
                  "description": "Seasonality impact vs. a neutral season"},
-                {"label": "Category & Region", "value": round(context_contrib, 2),
-                 "description": "Category/region mix and interaction effects"},
             ]
+            factors.append({
+                "label": "Category & Region",
+                "value": round(headline - sum(f["value"] for f in factors), 2),
+                "description": "Category/region mix and interaction effects",
+            })
             return {
-                "predicted_revenue": round(actual, 2),
+                "predicted_revenue": headline,
                 "engine": "model",
                 "factors": factors,
                 "sum_check": round(sum(f["value"] for f in factors), 2),
@@ -323,14 +329,22 @@ def explain_prediction(category, region, seasonality, demand, price, promotion):
         norm["Seasonality"], 1.0
     )
     season_boost = base * (season_mult - 1.0)
-    total = base + promo_boost + season_boost
+    # Same rounding discipline as the model branch: the last bar is the
+    # residual of the rounded headline, so the breakdown always sums exactly.
+    # demand_raw/price_raw are free floats, so the cent of drift is reachable
+    # here too.
+    headline = round(base + promo_boost + season_boost, 2)
+    base_rounded = round(base, 2)
+    promo_rounded = round(promo_boost, 2)
     factors = [
-        {"label": "Base Revenue", "value": round(base, 2), "description": "Demand × Price"},
-        {"label": "Promotion Boost", "value": round(promo_boost, 2), "description": "+15% when a promotion is active"},
-        {"label": "Season Effect", "value": round(season_boost, 2), "description": "Seasonal uplift"},
+        {"label": "Base Revenue", "value": base_rounded, "description": "Demand × Price"},
+        {"label": "Promotion Boost", "value": promo_rounded, "description": "+15% when a promotion is active"},
+        {"label": "Season Effect",
+         "value": round(headline - base_rounded - promo_rounded, 2),
+         "description": "Seasonal uplift"},
     ]
     return {
-        "predicted_revenue": round(total, 2),
+        "predicted_revenue": headline,
         "engine": "heuristic",
         "factors": factors,
         "sum_check": round(sum(f["value"] for f in factors), 2),
