@@ -5,12 +5,12 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://api-production-14d9b.up.railway.app/api/:path*"
+      "source": "^/api/(.*)$",
+      "destination": "https://api-production-14d9b.up.railway.app/api/$1"
     },
     {
-      "source": "/uploads/:path*",
-      "destination": "https://api-production-14d9b.up.railway.app/uploads/:path*"
+      "source": "^/uploads/(.*)$",
+      "destination": "https://api-production-14d9b.up.railway.app/uploads/$1"
     },
     {
       "source": "/(.*)",
