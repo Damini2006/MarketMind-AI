@@ -223,7 +223,10 @@ def check_api(url: str, api_path: str, report: Report) -> None:
             f"{res.describe()} from the backend: {json.dumps(payload)[:160]}",
         )
         return
-    report.ok(name, f"{res.describe()} (401 = reachable and auth-gated)")
+    # Say what the status means, and only when it means something: 401 is the
+    # healthy answer to an anonymous call, 2xx means the route is public.
+    note = " (401 = reachable and auth-gated)" if res.status == 401 else ""
+    report.ok(name, f"{res.describe()}{note}")
 
 
 def run(url: str, expected: str, api_paths: list[str], timeout: float, interval: float,
