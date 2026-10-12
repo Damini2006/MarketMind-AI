@@ -19,16 +19,16 @@
 
 ## Overview
 
-MarketMind AI is a full-stack SaaS application built to give small retail businesses access to enterprise-grade analytics. A React frontend communicates with a FastAPI backend, backed by Neon PostgreSQL, delivering real-time insights across sales, inventory, customers, and finances â€” with ML models for forecasting, anomaly detection, and recommendations.
+MarketMind AI is a full-stack SaaS application built to give small retail businesses access to enterprise-grade analytics. A React frontend communicates with a FastAPI backend, backed by Neon PostgreSQL, delivering real-time insights across sales, inventory, customers, and finances — with ML models for forecasting, anomaly detection, and recommendations.
 
 ### Highlights
 
 - 28+ pages covering sales, inventory, customers, invoices, analytics, and AI
-- 5-language support â€” English, Hindi, Telugu, Tamil, Kannada
-- Role-based access â€” Business Owner, Store Manager, Sales Executive, Admin
-- Neon PostgreSQL â€” serverless database with connection pooling
-- PWA â€” installable on mobile and desktop with offline caching
-- Real-time alerts â€” WebSocket-powered live notifications
+- 5-language support — English, Hindi, Telugu, Tamil, Kannada
+- Role-based access — Business Owner, Store Manager, Sales Executive, Admin
+- Neon PostgreSQL — serverless database with connection pooling
+- PWA — installable on mobile and desktop with offline caching
+- Real-time alerts — WebSocket-powered live notifications
 
 ---
 
@@ -72,7 +72,7 @@ MarketMind AI is a full-stack SaaS application built to give small retail busine
 
 | Feature | Description |
 |---------|-------------|
-| Multi-Language (i18n) | English, Hindi, Telugu, Tamil, Kannada â€” full app translation |
+| Multi-Language (i18n) | English, Hindi, Telugu, Tamil, Kannada — full app translation |
 | Dark/Light Mode | System-aware theme with manual toggle |
 | PWA | Installable on mobile/desktop with offline caching |
 | Real-Time Alerts | WebSocket live notifications with browser push support |
@@ -227,66 +227,66 @@ Frontend runs at `http://localhost:5173`
 
 ```
 Team_2_Small_Biz_AI/
-â”œâ”€â”€ backend/
-â”‚   â”œâ”€â”€ app/
-â”‚   â”‚   â”œâ”€â”€ core/
-â”‚   â”‚   â”‚   â””â”€â”€ security.py              # JWT, password hashing
-â”‚   â”‚   â”œâ”€â”€ ml/
-â”‚   â”‚   â”‚   â”œâ”€â”€ anomaly_detection.py      # Statistical anomaly detection
-â”‚   â”‚   â”‚   â”œâ”€â”€ business_rule_anomalies.py
-â”‚   â”‚   â”‚   â”œâ”€â”€ inference.py              # ML model inference
-â”‚   â”‚   â”‚   â”œâ”€â”€ recommendations.py        # Collaborative filtering
-â”‚   â”‚   â”‚   â””â”€â”€ forecasting.py            # XGBoost sales forecasting
-â”‚   â”‚   â”œâ”€â”€ routers/
-â”‚   â”‚   â”‚   â”œâ”€â”€ auth.py                   # Login, register, OTP, password reset
-â”‚   â”‚   â”‚   â”œâ”€â”€ sales.py                  # Sales CRUD + CSV upload
-â”‚   â”‚   â”‚   â”œâ”€â”€ inventory.py              # Products, stock management
-â”‚   â”‚   â”‚   â”œâ”€â”€ customers.py              # Customer CRUD + segmentation
-â”‚   â”‚   â”‚   â”œâ”€â”€ invoices.py               # Invoice generation
-â”‚   â”‚   â”‚   â”œâ”€â”€ analytics.py              # KPIs, charts, aggregation
-â”‚   â”‚   â”‚   â”œâ”€â”€ ai.py                     # AI endpoints (forecast, churn, etc.)
-â”‚   â”‚   â”‚   â”œâ”€â”€ audit.py                  # Audit trail logging
-â”‚   â”‚   â”‚   â”œâ”€â”€ websocket_alerts.py       # Real-time alert broadcasting
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 19 router files total
-â”‚   â”‚   â”œâ”€â”€ models.py                     # SQLAlchemy models (28 tables)
-â”‚   â”‚   â”œâ”€â”€ schemas.py                    # Pydantic validation schemas
-â”‚   â”‚   â”œâ”€â”€ database.py                   # Neon PostgreSQL engine
-â”‚   â”‚   â””â”€â”€ main.py                       # FastAPI app, middleware, startup
-â”‚   â”œâ”€â”€ .env.example                      # Environment variable template
-â”‚   â””â”€â”€ requirements.txt                  # Python dependencies
-â”‚
-â”œâ”€â”€ frontend/
-â”‚   â”œâ”€â”€ public/
-â”‚   â”‚   â”œâ”€â”€ manifest.json                 # PWA manifest
-â”‚   â”‚   â”œâ”€â”€ sw.js                         # Service worker
-â”‚   â”‚   â””â”€â”€ icon-*.png                    # App icons (72-512px)
-â”‚   â”œâ”€â”€ src/
-â”‚   â”‚   â”œâ”€â”€ components/
-â”‚   â”‚   â”‚   â”œâ”€â”€ Layout.jsx                # Sidebar + header layout
-â”‚   â”‚   â”‚   â”œâ”€â”€ ChatBot.jsx               # AI chatbot overlay
-â”‚   â”‚   â”‚   â”œâ”€â”€ LiveAlerts.jsx            # WebSocket alert notifications
-â”‚   â”‚   â”‚   â”œâ”€â”€ LanguageSwitcher.jsx      # 5-language selector
-â”‚   â”‚   â”‚   â”œâ”€â”€ OnboardingWizard.jsx      # 5-step setup wizard
-â”‚   â”‚   â”‚   â”œâ”€â”€ CommandPalette.jsx        # Ctrl+K search
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 15+ reusable components
-â”‚   â”‚   â”œâ”€â”€ pages/
-â”‚   â”‚   â”‚   â”œâ”€â”€ Dashboard.jsx             # Main dashboard
-â”‚   â”‚   â”‚   â”œâ”€â”€ Sales.jsx                 # Sales management
-â”‚   â”‚   â”‚   â”œâ”€â”€ Inventory.jsx             # Product & stock management
-â”‚   â”‚   â”‚   â”œâ”€â”€ Anomalies.jsx             # Anomaly detection dashboard
-â”‚   â”‚   â”‚   â”œâ”€â”€ DashboardBuilder.jsx      # Drag-and-drop dashboard builder
-â”‚   â”‚   â”‚   â”œâ”€â”€ ReportTemplates.jsx       # Report templates + export
-â”‚   â”‚   â”‚   â””â”€â”€ ...                       # 27 page files total
-â”‚   â”‚   â”œâ”€â”€ context/
-â”‚   â”‚   â”‚   â”œâ”€â”€ AuthContext.jsx           # Authentication state
-â”‚   â”‚   â”‚   â””â”€â”€ ThemeContext.jsx          # Dark/light mode
-â”‚   â”‚   â”œâ”€â”€ i18n.js                       # 5-language translations
-â”‚   â”‚   â”œâ”€â”€ App.jsx                       # Router + lazy loading
-â”‚   â”‚   â””â”€â”€ main.jsx                      # App entry point
-â”‚   â”œâ”€â”€ package.json                      # Node dependencies
-â”‚   â””â”€â”€ vite.config.js                    # Vite build config
-â”‚
-â””â”€â”€ README.md
+├── backend/
+│   ├── app/
+│   │   ├── core/
+│   │   │   └── security.py              # JWT, password hashing
+│   │   ├── ml/
+│   │   │   ├── anomaly_detection.py      # Statistical anomaly detection
+│   │   │   ├── business_rule_anomalies.py
+│   │   │   ├── inference.py              # ML model inference
+│   │   │   ├── recommendations.py        # Collaborative filtering
+│   │   │   └── forecasting.py            # XGBoost sales forecasting
+│   │   ├── routers/
+│   │   │   ├── auth.py                   # Login, register, OTP, password reset
+│   │   │   ├── sales.py                  # Sales CRUD + CSV upload
+│   │   │   ├── inventory.py              # Products, stock management
+│   │   │   ├── customers.py              # Customer CRUD + segmentation
+│   │   │   ├── invoices.py               # Invoice generation
+│   │   │   ├── analytics.py              # KPIs, charts, aggregation
+│   │   │   ├── ai.py                     # AI endpoints (forecast, churn, etc.)
+│   │   │   ├── audit.py                  # Audit trail logging
+│   │   │   ├── websocket_alerts.py       # Real-time alert broadcasting
+│   │   │   └── ...                       # 19 router files total
+│   │   ├── models.py                     # SQLAlchemy models (28 tables)
+│   │   ├── schemas.py                    # Pydantic validation schemas
+│   │   ├── database.py                   # Neon PostgreSQL engine
+│   │   └── main.py                       # FastAPI app, middleware, startup
+│   ├── .env.example                      # Environment variable template
+│   └── requirements.txt                  # Python dependencies
+│
+├── frontend/
+│   ├── public/
+│   │   ├── manifest.json                 # PWA manifest
+│   │   ├── sw.js                         # Service worker
+│   │   └── icon-*.png                    # App icons (72-512px)
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Layout.jsx                # Sidebar + header layout
+│   │   │   ├── ChatBot.jsx               # AI chatbot overlay
+│   │   │   ├── LiveAlerts.jsx            # WebSocket alert notifications
+│   │   │   ├── LanguageSwitcher.jsx      # 5-language selector
+│   │   │   ├── OnboardingWizard.jsx      # 5-step setup wizard
+│   │   │   ├── CommandPalette.jsx        # Ctrl+K search
+│   │   │   └── ...                       # 15+ reusable components
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx             # Main dashboard
+│   │   │   ├── Sales.jsx                 # Sales management
+│   │   │   ├── Inventory.jsx             # Product & stock management
+│   │   │   ├── Anomalies.jsx             # Anomaly detection dashboard
+│   │   │   ├── DashboardBuilder.jsx      # Drag-and-drop dashboard builder
+│   │   │   ├── ReportTemplates.jsx       # Report templates + export
+│   │   │   └── ...                       # 27 page files total
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx           # Authentication state
+│   │   │   └── ThemeContext.jsx          # Dark/light mode
+│   │   ├── i18n.js                       # 5-language translations
+│   │   ├── App.jsx                       # Router + lazy loading
+│   │   └── main.jsx                      # App entry point
+│   ├── package.json                      # Node dependencies
+│   └── vite.config.js                    # Vite build config
+│
+└── README.md
 ```
 
 ---
@@ -391,13 +391,13 @@ Full interactive API documentation at `http://localhost:8000/docs`
 
 - JWT authentication with 12-hour token expiry
 - bcrypt password hashing with salt
-- Rate limiting â€” Login: 10 attempts/5min, Register: 5 attempts/5min per IP
+- Rate limiting — Login: 10 attempts/5min, Register: 5 attempts/5min per IP
 - Role-based access control (RBAC) on all endpoints
-- CORS protection â€” configurable allowed origins
+- CORS protection — configurable allowed origins
 - OTP email verification for password resets
 - TOTP 2FA with QR code setup and backup codes
-- Audit trail â€” all actions logged with IP address
-- No secrets in code â€” all sensitive values via environment variables
+- Audit trail — all actions logged with IP address
+- No secrets in code — all sensitive values via environment variables
 
 ---
 
@@ -420,31 +420,31 @@ The app is two deployables: a FastAPI backend (any Python host or the provided `
 
 ### Backend (Railway / Render / Fly.io / Docker)
 
-1. Provision a **Neon PostgreSQL** database and copy its connection string. Use the **direct** endpoint â€” drop the `-pooler` label from the host (e.g. `ep-xxx-pooler.c-4.us-east-2.aws.neon.tech` -> `ep-xxx.c-4.us-east-2.aws.neon.tech`), or remove it from the host if Neon only shows you the pooled one. This backend is a single long-lived server with its own SQLAlchemy connection pool, which is the case Neon's pooler is not for; going direct also avoids PgBouncer's transaction-mode caveats. See the comment above `create_engine` in `backend/app/database.py`.
+1. Provision a **Neon PostgreSQL** database and copy its connection string. Use the **direct** endpoint — drop the `-pooler` label from the host (e.g. `ep-xxx-pooler.c-4.us-east-2.aws.neon.tech` -> `ep-xxx.c-4.us-east-2.aws.neon.tech`), or remove it from the host if Neon only shows you the pooled one. This backend is a single long-lived server with its own SQLAlchemy connection pool, which is the case Neon's pooler is not for; going direct also avoids PgBouncer's transaction-mode caveats. See the comment above `create_engine` in `backend/app/database.py`.
 2. Set environment variables on the host:
-   - `ENVIRONMENT` â€” set to `production`. This is the switch that makes the
+   - `ENVIRONMENT` — set to `production`. This is the switch that makes the
      backend take itself seriously: it **refuses to start** without a real
      `JWT_SECRET_KEY` and stops seeding the demo accounts (whose passwords are
      published in this repo). Anything other than `production`/`prod` behaves
      like a development machine.
-   - `DATABASE_URL` â€” Neon direct URL, `?sslmode=require` (required)
-   - `JWT_SECRET_KEY` â€” strong random secret â‰¥ 32 chars (required; a placeholder
+   - `DATABASE_URL` — Neon direct URL, `?sslmode=require` (required)
+   - `JWT_SECRET_KEY` — strong random secret ≥ 32 chars (required; a placeholder
      is rejected, not silently accepted). Generate with
      `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
-   - `ACCESS_TOKEN_EXPIRE_MINUTES` â€” optional, access-token lifetime (default 180 = 3h; deliberately short â€” the browser silently renews via `POST /api/auth/refresh`)
-   - `REFRESH_TOKEN_EXPIRE_DAYS` â€” optional, refresh-cookie lifetime (default 30). Refresh tokens rotate on every use and are revoked on logout/password change; replaying a rotated token revokes the whole session family.
-   - `CORS_ORIGINS` â€” **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only). `*` is refused, because credentials are allowed.
-   - `SENDER_EMAIL` / `SMTP_SERVER` / `SMTP_PORT` / `SENDER_PASSWORD` â€” optional, enables OTP password-reset emails
+   - `ACCESS_TOKEN_EXPIRE_MINUTES` — optional, access-token lifetime (default 180 = 3h; deliberately short — the browser silently renews via `POST /api/auth/refresh`)
+   - `REFRESH_TOKEN_EXPIRE_DAYS` — optional, refresh-cookie lifetime (default 30). Refresh tokens rotate on every use and are revoked on logout/password change; replaying a rotated token revokes the whole session family.
+   - `CORS_ORIGINS` — **must include your deployed frontend origin**, e.g. `https://your-app.vercel.app` (defaults to localhost only). `*` is refused, because credentials are allowed.
+   - `SENDER_EMAIL` / `SMTP_SERVER` / `SMTP_PORT` / `SENDER_PASSWORD` — optional, enables OTP password-reset emails
 
    Variables that are read but need no production value: `SEED_DEMO_DATA`
-   (defaults on outside production, off in it â€” set `true` only for a staging
+   (defaults on outside production, off in it — set `true` only for a staging
    environment that may hold the published demo passwords) and
    `BACKEND_PORT` / `FRONTEND_PORT` / `BACKEND_ENV_FILE` for the compose stack.
 3. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (tables auto-create; startup warm-up precomputes AI caches).
 
 ### Frontend (Vercel / Netlify / static hosting)
 
-1. Build: `npm run build` â†’ publish `dist/`.
+1. Build: `npm run build` → publish `dist/`.
 2. Same-origin option (no CORS needed): reverse-proxy `/api`, `/uploads` and `/ws` to the backend (see `vite.config.js`'s proxy block for the three prefixes to forward).
 3. Split-origin option: set `VITE_API_BASE_URL=https://your-api-host` at build time, and add the frontend origin to the backend's `CORS_ORIGINS`. WebSocket alerts follow `VITE_API_BASE_URL` automatically.
 4. SPA routing: add a rewrite of all paths to `/index.html` (Vercel/Netlify do this via framework presets).
@@ -471,12 +471,12 @@ It verifies the backend `/health`, the `/openapi.json` schema, that the frontend
 
 It is deliberately **not** the container healthcheck: login is rate limited to 10 attempts per IP per 300s, so a check that logged in on a 10s healthcheck interval would be answered with 429. The cheap `curl /health` healthcheck stays as it is.
 
-CI runs the same gate on every push â€” the `deploy-smoke` job in `.github/workflows/ci.yml` stands the whole stack up against a throwaway PostgreSQL using `docker-compose.ci.yml` (no secrets required) and tears it down afterwards.
+CI runs the same gate on every push — the `deploy-smoke` job in `.github/workflows/ci.yml` stands the whole stack up against a throwaway PostgreSQL using `docker-compose.ci.yml` (no secrets required) and tears it down afterwards.
 
 ### AI models on a fresh clone
 
 The revenue forecast is the only AI feature that reads a model file, and that
-file is **not in git** â€” `.gitignore` excludes `backend/app/trained_models/*.pkl`
+file is **not in git** — `.gitignore` excludes `backend/app/trained_models/*.pkl`
 and `models/*.pkl`. So on a fresh clone, and on any deployment that was not
 given the file by hand, `POST /api/revenue/predict` and `POST /api/revenue/explain`
 answer from a transparent built-in heuristic instead of the trained model.
@@ -484,11 +484,11 @@ answer from a transparent built-in heuristic instead of the trained model.
 Both endpoints report which engine answered, in the `engine` field:
 `"model"` or `"heuristic"`. The first prediction also logs a warning naming the
 path it looked for, and the Revenue Prediction page shows an amber
-**Heuristic â€” no model file** badge, so a fallback result cannot be mistaken for
+**Heuristic — no model file** badge, so a fallback result cannot be mistaken for
 model output.
 
 ```
-Revenue prediction model not found at /app/app/trained_models/revenue_prediction_compressed.pkl â€”
+Revenue prediction model not found at /app/app/trained_models/revenue_prediction_compressed.pkl —
 /api/revenue/predict and /api/revenue/explain will answer with engine="heuristic" instead of engine="model"
 ```
 
@@ -499,7 +499,7 @@ database at request time and reads no `.pkl`, so those behave identically with
 or without the file.
 
 To enable the model, `revenue_prediction_compressed.pkl` has to sit at
-`backend/app/trained_models/` â€” the loader resolves that path from
+`backend/app/trained_models/` — the loader resolves that path from
 `backend/app/ml/inference.py`, which is `/app/app/trained_models/` inside the
 container. `compress_models.py` writes `models/revenue_prediction_compressed.pkl`
 instead, so its output must be moved into place; nothing does that
@@ -510,7 +510,7 @@ lives outside git.
 
 - [ ] `ENVIRONMENT=production` (otherwise the dev conveniences stay on)
 - [ ] `DATABASE_URL` points at Neon with `sslmode=require`
-- [ ] `JWT_SECRET_KEY` is a fresh â‰¥ 32-char secret (not the dev value, not a placeholder â€” startup rejects both)
+- [ ] `JWT_SECRET_KEY` is a fresh ≥ 32-char secret (not the dev value, not a placeholder — startup rejects both)
 - [ ] `CORS_ORIGINS` lists the real frontend origin(s) and contains no `*`
 - [ ] TLS terminates in front of the stack (the backend speaks plain HTTP)
 - [ ] `VITE_API_BASE_URL` set at frontend build time (split deployments)
@@ -519,8 +519,8 @@ lives outside git.
       database starts empty and the first user registers as its owner. If the
       demo tenant was ever seeded, delete `owner@marketmind.ai`,
       `manager@marketmind.ai`, `sales@marketmind.ai` and `admin@marketmind.ai`
-- [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) â€” it covers `/health`, the SPA, an authenticated call and the database round-trip. Pass real `SMOKE_EMAIL` / `SMOKE_PASSWORD`, since the defaults are the demo account
-- [ ] Know which engine the revenue forecast is using â€” the `engine` field, the amber badge, or the "model not found" warning in the startup log. The model file is not in git, so a fresh deployment uses the heuristic unless it is given the file
+- [ ] Smoke-test after deploy: `python scripts/smoke_test.py` (see Deploy smoke test above) — it covers `/health`, the SPA, an authenticated call and the database round-trip. Pass real `SMOKE_EMAIL` / `SMOKE_PASSWORD`, since the defaults are the demo account
+- [ ] Know which engine the revenue forecast is using — the `engine` field, the amber badge, or the "model not found" warning in the startup log. The model file is not in git, so a fresh deployment uses the heuristic unless it is given the file
 - [ ] Read `SECURITY_AND_DEPLOYMENT_REVIEW.md` and work through its P1/P2 list
 
 ---
@@ -538,7 +538,7 @@ lives outside git.
 - Python: Follow PEP 8, use type hints
 - JavaScript: Use functional components with hooks
 - Commits: Use conventional commits (`feat:`, `fix:`, `chore:`)
-- No hardcoded secrets â€” always use environment variables
+- No hardcoded secrets — always use environment variables
 
 ---
 
@@ -554,6 +554,6 @@ This project is for educational purposes as part of the Infosys Springboard prog
 
 **Built for Indian Small Businesses**
 
-*MarketMind AI â€” Making enterprise-grade analytics accessible to every shop owner*
+*MarketMind AI — Making enterprise-grade analytics accessible to every shop owner*
 
 </div>
