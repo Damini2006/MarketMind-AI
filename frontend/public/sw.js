@@ -81,6 +81,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Documents: network-first.
+  //
+  // Everything used to be cache-first, including the shell. `install` caches '/'
+  // and '/index.html' once and nothing ever revalidated them, so a returning
+  // visitor kept being served the index.html from whenever they first visited
+  // - and therefore kept loading the bundle hash that *that* file referenced.
+  // Deployments landed for first-time visitors only: everyone else stayed on old
+  // code however often they reloaded, and a fix that shipped was invisible to
+  // the people who had already used the app. The CDN serving the new build while
+  // the browser ran the old one is exactly how that looks from the outside.
+  //
+  // Hashed assets stay cache-first below: each build gives them a new filename,
+  // so a cached copy can only ever be the right bytes. The document cannot, which
+  // is why it is the one request that has to revalidate.
+  if (request.mode === 'navigate' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            // Stored under a fixed key so the offline fallback always finds a
+            // shell, whichever path was navigated to.
+            const clone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put('/index.html', clone));
+          }
+          return response;
+        })
+        .catch(async () =>
+          (await caches.match('/index.html')) ||
+          new Response('Offline', { status: 408, headers: { 'Content-Type': 'text/plain' } })
+        )
+    );
+    return;
+  }
+
   // Static assets: cache-first (only for production-built files in /assets/)
   event.respondWith(
     caches.match(request).then((cached) => {
