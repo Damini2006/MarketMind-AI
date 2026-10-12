@@ -1,0 +1,95 @@
+name: Publish container images
+
+# Builds both Dockerfiles and pushes them to GitHub Container Registry:
+#
+#   ghcr.io/<owner>/<repo>/backend
+#   ghcr.io/<owner>/<repo>/frontend
+#
+# Triggers: a version tag (`v1.2.3`) or a manual run from the Actions tab.
+#
+# Why a workflow rather than pushing from a laptop: it authenticates with the
+# run's own GITHUB_TOKEN, so no personal access token or `docker login` is
+# needed, and packages published this way are linked to this repository
+# automatically (a PAT-published package is not).
+#
+# The repository name is lowercased at run time because GHCR rejects uppercase
+# paths, while GitHub owner names keep their case.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and push ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One image failing must not cancel the other: they are independent, and
+      # seeing both results in a single run makes the fix obvious.
+      fail-fast: false
+      matrix:
+        include:
+          - image: backend
+            context: ./backend
+          - image: frontend
+            context: ./frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute the lowercase GHCR prefix
+        id: registry
+        # ${GITHUB_REPOSITORY,,} is bash's lowercase expansion: "Damini2006/
+        # MarketMind-AI" becomes "damini2006/marketmind-ai".
+        run: echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.registry.outputs.prefix }}/${{ matrix.image }}
+          tags: |
+            type=ref,event=tag
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          # Each image gets its own cache scope; sharing one would let the two
+          # builds evict each other's layers.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Summarise
+        run: |
+          {
+            echo "### ${{ matrix.image }}"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
