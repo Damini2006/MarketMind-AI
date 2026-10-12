@@ -11,6 +11,19 @@ import {
   BarChart, Bar, AreaChart, Area, Legend,
 } from 'recharts'
 
+// Same guard as Comparison.jsx: a paginated envelope, an error body or an
+// HTML page from a misconfigured proxy is not an array, and .filter/.length
+// on those crashed this page into the error boundary. Normalize instead.
+const toList = (data) => {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    for (const key of ['items', 'data', 'results', 'rows']) {
+      if (Array.isArray(data[key])) return data[key]
+    }
+  }
+  return []
+}
+
 // ─── Time Range Options ───────────────────────────────────────────────
 const TIME_RANGES = [
   { key: 'all', label: 'All Time' },
@@ -107,9 +120,9 @@ export default function FunnelAnalysis() {
       api.get('/sales/').catch(() => ({ data: [] })),
       api.get('/inventory/products').catch(() => ({ data: [] })),
     ]).then(([c, s, p]) => {
-      setCustomers(c.data)
-      setSales(Array.isArray(s.data) ? s.data : s.data.items || [])
-      setProducts(p.data)
+      setCustomers(toList(c.data))
+      setSales(toList(s.data))
+      setProducts(toList(p.data))
     }).catch(() => {})
       .finally(() => setLoading(false))
   }, [])

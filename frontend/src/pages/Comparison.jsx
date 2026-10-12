@@ -7,6 +7,20 @@ import {
   ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
 
+// Axios returns `.data` as-is, so a non-2xx JSON body, a paginated envelope
+// ({items: [...]}) or — worse — an HTML page from a misconfigured proxy
+// all arrive here as something that is NOT an array. Calling .filter/.reduce
+// on those threw "x.filter is not a function" and took the whole page down to
+// the error boundary. Normalize every list we consume instead.
+const toList = (data) => {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object') {
+    for (const key of ['items', 'data', 'results', 'rows']) {
+      if (Array.isArray(data[key])) return data[key]
+    }
+  }
+  return []}
+
 function MetricCard({ label, period1, period2, icon: Icon, color, prefix = '' }) {
   const diff = period2 - period1
   const pct = period1 !== 0 ? ((diff / period1) * 100).toFixed(1) : period2 > 0 ? 100 : 0
@@ -98,9 +112,9 @@ export default function Comparison() {
     ])
       .then(([s, inv, p]) => {
         if (!cancelled) {
-          setSales(Array.isArray(s.data) ? s.data : s.data.items || [])
-          setInvoices(inv.data)
-          setProducts(p.data)
+          setSales(toList(s.data))
+          setInvoices(toList(inv.data))
+          setProducts(toList(p.data))
         }
       })
       .catch(() => {})

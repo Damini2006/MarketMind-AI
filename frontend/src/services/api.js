@@ -79,8 +79,32 @@ function bounceToLogin() {
   if (window.location.pathname !== "/login") window.location.href = "/login";
 }
 
+// A 200 does not mean the body is JSON. If a proxy rewrite misses a path, the
+// host's SPA fallback answers with its own index.html and a 200, so the caller
+// receives an HTML string where it expected an array — which surfaced as
+// "x.filter is not a function" and took whole pages down to the error
+// boundary. Fail such requests explicitly instead, so a misrouted API is a
+// normal rejected promise (handled by the caller's catch) and never data.
+const isHtmlResponse = (response) => {
+  const type = response?.headers?.["content-type"];
+  return typeof type === "string" && type.includes("text/html");
+};
+
+const nonJsonError = (response) =>
+  Object.assign(
+    new Error(
+      `Expected JSON from ${response.config?.method?.toUpperCase()} ${response.config?.url} ` +
+        "but received HTML — the API is not reachable through this origin " +
+        "(proxy/rewrite misconfiguration)."
+    ),
+    { code: "ERR_NON_JSON_RESPONSE", config: response.config, response }
+  );
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (isHtmlResponse(response)) return Promise.reject(nonJsonError(response));
+    return response;
+  },
   async (error) => {
     const config = error.config;
     const status = error.response?.status;
@@ -160,7 +184,14 @@ api.defaults.adapter = async (config) => {
 
   const promise = networkAdapter(config)
     .then((response) => {
-      if (isCacheable(config) && response.status >= 200 && response.status < 300) {
+      // Never cache an HTML error page: the interceptor rejects it, so caching
+      // it would only keep re-rejecting it (and hide the next real attempt).
+      if (
+        isCacheable(config) &&
+        response.status >= 200 &&
+        response.status < 300 &&
+        !isHtmlResponse(response)
+      ) {
         getCache.set(key, { ts: Date.now(), data: response.data });
       }
       return response;
