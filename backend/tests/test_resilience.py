@@ -7,6 +7,7 @@ socket ("SSL SYSCALL error: EOF detected") — survive a retry, while a real bug
 BOTH halves of that contract: retry the transient, never retry the real error.
 """
 import socket
+import threading
 
 import pytest
 import sqlalchemy.exc as sa_exc
@@ -278,3 +279,153 @@ def test_notification_sync_gives_up_quietly_on_a_real_error(monkeypatch):
     # Must not raise, and must not retry a non-transient error.
     notifications._run_sync_in_background(998)
     assert calls["n"] == 1
+
+
+# ── resolve_host: cache, retry, stale fallback, single-flight ────────────
+
+_FAKE_INFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("18.226.241.3", 5432))]
+_EAI_AGAIN = getattr(socket, "EAI_AGAIN", -3)
+
+
+class _FakeResolver:
+    """Stands in for socket.getaddrinfo and counts every real attempt."""
+
+    def __init__(self, *, fail_times=0, code=_EAI_AGAIN):
+        self.calls = 0
+        self.fail_times = fail_times
+        self.code = code
+
+    def __call__(self, host, port=None, *args, **kwargs):
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise socket.gaierror(self.code, "simulated resolver failure")
+        return list(_FAKE_INFO)
+
+
+@pytest.fixture(autouse=True)
+def _clean_resolver():
+    resilience.reset_resolver(clear_stats=True)
+    yield
+    resilience.reset_resolver(clear_stats=True)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Drive resilience's clock by hand so TTL/stale windows are testable."""
+    now = [1000.0]
+    monkeypatch.setattr(resilience.time, "monotonic", lambda: now[0])
+    return now
+
+
+def test_resolve_host_caches_the_lookup(monkeypatch):
+    fake = _FakeResolver()
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+
+    first = resilience.resolve_host("db.example", 5432, ttl=60.0)
+    second = resilience.resolve_host("db.example", 5432, ttl=60.0)
+
+    assert fake.calls == 1  # the second call never touched the resolver
+    assert first == second == _FAKE_INFO
+    assert resilience.resolver_stats()["hits"] == 1
+
+
+def test_resolve_host_retries_a_temporary_resolver_failure(monkeypatch, _no_real_sleep):
+    fake = _FakeResolver(fail_times=2)
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+
+    assert resilience.resolve_host("db.example", 5432, attempts=4, base_delay=0.01)
+    assert fake.calls == 3
+    assert resilience.resolver_stats()["retries"] == 2
+    assert len(_no_real_sleep) == 2  # backed off between attempts
+
+
+def test_resolve_host_does_not_retry_a_missing_hostname(monkeypatch, _no_real_sleep):
+    """EAI_NONAME means the name is wrong; retrying only delays the answer."""
+    fake = _FakeResolver(fail_times=99, code=socket.EAI_NONAME)
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+
+    with pytest.raises(socket.gaierror):
+        resilience.resolve_host("nope.invalid", 5432, attempts=4, base_delay=0.01)
+
+    assert fake.calls == 1
+    assert _no_real_sleep == []
+
+
+def test_resolve_host_serves_a_stale_address_when_the_resolver_is_down(monkeypatch, clock):
+    fake = _FakeResolver()
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+    assert resilience.resolve_host("db.example", 5432, ttl=10.0)
+
+    clock[0] += 30.0  # TTL expired, but inside the stale window
+    fake.calls = 0
+    fake.fail_times = 10_000
+
+    assert (
+        resilience.resolve_host("db.example", 5432, ttl=10.0, attempts=2, base_delay=0.0)
+        == _FAKE_INFO
+    )
+    assert resilience.resolver_stats()["stale_served"] == 1
+
+
+def test_resolve_host_stops_serving_stale_beyond_the_limit(monkeypatch, clock):
+    """A stale address is a stopgap, not a licence to keep using a dead one."""
+    fake = _FakeResolver()
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+    resilience.resolve_host("db.example", 5432, ttl=10.0)
+
+    clock[0] += resilience._RESOLVER_STALE_MAX + 1
+    fake.calls = 0
+    fake.fail_times = 10_000
+
+    with pytest.raises(socket.gaierror):
+        resilience.resolve_host("db.example", 5432, ttl=10.0, attempts=1, base_delay=0.0)
+    assert resilience.resolver_stats()["failures"] == 1
+
+
+def test_resolve_host_raises_after_all_attempts(monkeypatch, _no_real_sleep):
+    fake = _FakeResolver(fail_times=99)
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", fake)
+
+    with pytest.raises(socket.gaierror):
+        resilience.resolve_host("db.example", 5432, attempts=3, base_delay=0.0)
+
+    assert fake.calls == 3
+    assert len(_no_real_sleep) == 2
+    assert resilience.resolver_stats()["failures"] == 1
+
+
+def test_concurrent_callers_share_a_single_lookup(monkeypatch):
+    """Single-flight: a burst of connections must not stampede the resolver."""
+    entered = threading.Event()
+    release = threading.Event()
+    state = {"calls": 0}
+
+    def slow(host, port=None, *args, **kwargs):
+        state["calls"] += 1
+        entered.set()
+        release.wait(5.0)
+        return list(_FAKE_INFO)
+
+    monkeypatch.setattr(resilience.socket, "getaddrinfo", slow)
+
+    seen = []
+    threads = [
+        threading.Thread(
+            target=lambda: seen.append(resilience.resolve_host("db.example", 5432, ttl=60.0))
+        )
+        for _ in range(8)
+    ]
+    for t in threads:
+        t.start()
+    assert entered.wait(5.0), "no thread reached the resolver"
+    release.set()
+    for t in threads:
+        t.join(5.0)
+
+    assert state["calls"] == 1  # seven threads reused one thread's result
+    assert len(seen) == 8
+
+
+def test_resolve_host_rejects_an_empty_host():
+    with pytest.raises(ValueError):
+        resilience.resolve_host("", 5432)

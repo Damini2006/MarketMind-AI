@@ -48,16 +48,28 @@ services:
     # The default is unchanged: the real, gitignored backend/.env.
     env_file:
       - "${BACKEND_ENV_FILE:-./backend/.env}"
-    # Docker Desktop's embedded resolver (127.0.0.11 -> the host resolver) is
-    # the weak link behind the intermittent "could not translate host name ...
-    # Name or service not known" errors seen when reaching Neon from this
-    # container. Pin well-known public resolvers so the container resolves the
-    # Neon host directly instead of depending on that forwarder. This is a
-    # mitigation, not the only defence: the backend also retries DNS failures
-    # with backoff (see backend/app/resilience.py).
+    # Docker's embedded resolver (127.0.0.11 -> the upstreams below) is the weak
+    # link behind the intermittent "could not translate host name ... Temporary
+    # failure in name resolution" errors seen when reaching Neon from this
+    # container.
+    #
+    # Be precise about what `dns:` buys, because it is easy to over-read: for a
+    # container on a user-defined network Docker still writes 127.0.0.11 into
+    # /etc/resolv.conf and still resolves through the embedded resolver. `dns:`
+    # only replaces the upstream servers it forwards to — the container's
+    # resolv.conf reports these as its ExtServers. It does NOT bypass the
+    # embedded resolver. Two of these were already set when the failures
+    # recurred on 2026-10-09, so treat this as a small mitigation, not a fix.
+    #
+    # The fix is in the backend: the database host is resolved once per physical
+    # connection through a cached, retrying resolver and handed to libpq as a
+    # numeric hostaddr, so the connection path performs no DNS lookup of its
+    # own. See the resolver section of backend/app/resilience.py and _connect in
+    # backend/app/database.py.
     dns:
       - 1.1.1.1
       - 8.8.8.8
+      - 9.9.9.9
     volumes:
       - backend_uploads:/app/uploads
     healthcheck:
