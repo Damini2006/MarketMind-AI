@@ -1,0 +1,39 @@
+# What the Vercel CLI uploads before it builds.
+#
+# The CLI composes a deployment from the REPOSITORY ROOT — the project's Root
+# Directory (`frontend`) only decides where the build runs — so anything large
+# in the tree is uploaded first and can abort the deployment outright:
+#
+#     Uploading [====================] (1.5GB/1.5GB)
+#     Error: File size limit exceeded (100 MB)
+#
+# That 1.5 GB was the agent workspace (.freebuff, 750 MB), the Python backend
+# (405 MB) and a demo video: none of it is needed to build the frontend, and
+# none of it changes the build output. `node_modules` and `.git` are excluded by
+# the CLI already; they are listed anyway so the intent is explicit and a future
+# CLI change cannot silently start uploading them again.
+#
+# Keep this list to non-frontend and regenerated paths only — excluding
+# something under frontend/ that the build actually reads would produce a
+# deployment that serves a broken bundle.
+
+.freebuff
+backend
+ML
+uploads
+.git
+node_modules
+dist
+.vercel
+.venv
+.dockerignore
+__pycache__
+.pytest_cache
+
+# Binary artifacts and logs that live in the tree but have no business in a
+# deployment upload.
+*.mp4
+*.pkl
+*.pdf
+*.docx
+*.log
