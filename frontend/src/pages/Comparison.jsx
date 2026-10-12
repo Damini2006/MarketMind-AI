@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import api from '../services/api'
+import api, { getAllSales } from '../services/api'
 import { PageHeader, PageSkeleton } from '../components/ui.jsx'
 import {
   Minus, IndianRupee, ShoppingCart,
@@ -20,6 +20,15 @@ const toList = (data) => {
     }
   }
   return []}
+
+// A period picker hands over a calendar day ("2026-09-01"); the API hands over a
+// naive UTC timestamp ("2026-09-01T20:06:50.047369"). Compare their day parts so
+// a period means the same day to every viewer, whatever their timezone.
+const dayOf = (value) => (value ? String(value).slice(0, 10) : '')
+const inPeriod = (value, start, end) => {
+  const day = dayOf(value)
+  return day !== '' && day >= start && day <= end
+}
 
 function MetricCard({ label, period1, period2, icon: Icon, color, prefix = '' }) {
   const diff = period2 - period1
@@ -58,12 +67,15 @@ function MetricCard({ label, period1, period2, icon: Icon, color, prefix = '' })
   )
 }
 
-function TopProductsList({ products, label }) {
+function TopProductsList({ products, label, hint }) {
   return (
     <div>
       <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase mb-2">{label}</p>
       {products.length === 0 ? (
-        <p className="text-xs text-slate-400">No products</p>
+        <>
+          <p className="text-xs text-slate-400">No products</p>
+          {hint && <p className="text-[10px] text-slate-400 mt-0.5">{hint}</p>}
+        </>
       ) : (
         <div className="space-y-1.5">
           {products.map((p, i) => (
@@ -87,26 +99,33 @@ export default function Comparison() {
   const [invoices, setInvoices] = useState([])
   const [products, setProducts] = useState([])
 
-  // Default periods: This month vs Last month
+  // Default periods: this month vs last month, expressed as UTC calendar days.
+  //
+  // The API stores naive UTC timestamps and the pickers are plain dates, so the
+  // two have to be compared as days. Going through Date objects instead mixed
+  // three zones - the naive value read as the viewer's local time, the picked
+  // date as UTC midnight, and toISOString() converting a LOCAL month back to UTC
+  // - which moved every default boundary a day earlier for anyone east of UTC:
+  // in IST "last month" opened on 31 Aug rather than 1 Sept, pulling those sales
+  // into the comparison.
   const now = new Date()
-  const [period1Start, setPeriod1Start] = useState(() => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    return d.toISOString().slice(0, 10)
-  })
-  const [period1End, setPeriod1End] = useState(() => {
-    const d = new Date(now.getFullYear(), now.getMonth(), 0)
-    return d.toISOString().slice(0, 10)
-  })
-  const [period2Start, setPeriod2Start] = useState(() => {
-    const d = new Date(now.getFullYear(), now.getMonth(), 1)
-    return d.toISOString().slice(0, 10)
-  })
-  const [period2End, setPeriod2End] = useState(() => now.toISOString().slice(0, 10))
+  const utcYear = now.getUTCFullYear()
+  const utcMonth = now.getUTCMonth()
+  const utcDay = now.getUTCDate()
+  // Date.UTC normalises out-of-range parts, so month -1 and day 0 mean
+  // "December" and "the day before the 1st" without special-casing January.
+  const isoDay = (year, month, day) => new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10)
+  const dayOffset = (days) => isoDay(utcYear, utcMonth, utcDay - days)
+
+  const [period1Start, setPeriod1Start] = useState(() => isoDay(utcYear, utcMonth - 1, 1))
+  const [period1End, setPeriod1End] = useState(() => isoDay(utcYear, utcMonth, 0))
+  const [period2Start, setPeriod2Start] = useState(() => isoDay(utcYear, utcMonth, 1))
+  const [period2End, setPeriod2End] = useState(() => dayOffset(0))
 
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      api.get('/sales/'),
+      getAllSales(),
       api.get('/invoices/'),
       api.get('/inventory/products'),
     ])
@@ -122,33 +141,15 @@ export default function Comparison() {
     return () => { cancelled = true }
   }, [])
 
-  const period1Data = useMemo(() => {
-    const start = new Date(period1Start)
-    const end = new Date(period1End + 'T23:59:59')
-    const s = sales.filter(sale => {
-      const d = new Date(sale.sale_date)
-      return d >= start && d <= end
-    })
-    const inv = invoices.filter(inv => {
-      const d = new Date(inv.created_at || inv.due_date)
-      return d >= start && d <= end
-    })
-    return { sales: s, invoices: inv }
-  }, [sales, invoices, period1Start, period1End])
+  const period1Data = useMemo(() => ({
+    sales: sales.filter((sale) => inPeriod(sale.sale_date, period1Start, period1End)),
+    invoices: invoices.filter((inv) => inPeriod(inv.created_at || inv.due_date, period1Start, period1End)),
+  }), [sales, invoices, period1Start, period1End])
 
-  const period2Data = useMemo(() => {
-    const start = new Date(period2Start)
-    const end = new Date(period2End + 'T23:59:59')
-    const s = sales.filter(sale => {
-      const d = new Date(sale.sale_date)
-      return d >= start && d <= end
-    })
-    const inv = invoices.filter(inv => {
-      const d = new Date(inv.created_at || inv.due_date)
-      return d >= start && d <= end
-    })
-    return { sales: s, invoices: inv }
-  }, [sales, invoices, period2Start, period2End])
+  const period2Data = useMemo(() => ({
+    sales: sales.filter((sale) => inPeriod(sale.sale_date, period2Start, period2End)),
+    invoices: invoices.filter((inv) => inPeriod(inv.created_at || inv.due_date, period2Start, period2End)),
+  }), [sales, invoices, period2Start, period2End])
 
   const getTopProducts = useCallback((salesList) => {
     const qtyMap = {}
@@ -181,6 +182,23 @@ export default function Comparison() {
     const topProducts = getTopProducts(s)
     return { revenue, salesCount: s.length, uniqueCustomers, avgOrder, topProducts }
   }, [period2Data, getTopProducts])
+
+  // Where the data actually ends. The comparison opens on the current month,
+  // so a dataset that stops earlier (this demo set stops on 1 Sept) leaves the
+  // second column permanently empty - and a bare "No products" reads as a
+  // broken panel rather than as "there are no sales in this window".
+  const latestSaleDate = useMemo(() => {
+    const times = sales.map((s) => new Date(s.sale_date).getTime()).filter(Number.isFinite)
+    return times.length ? new Date(Math.max(...times)) : null
+  }, [sales])
+
+  const emptyPeriodHint = useCallback((start, end) => {
+    const fmt = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    const window = `${fmt(start)} to ${fmt(end)}`
+    return latestSaleDate
+      ? `No sales from ${window}. The most recent sale on record is ${fmt(latestSaleDate)}.`
+      : `No sales from ${window}.`
+  }, [latestSaleDate])
 
   if (loading) return <PageSkeleton variant="table" />
 
@@ -238,9 +256,9 @@ export default function Comparison() {
         <div className="flex items-center gap-2 mt-3 flex-wrap">
           <span className="text-[10px] text-slate-400">Quick:</span>
           {[
-            { label: 'This Month vs Last Month', p1s: new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10), p1e: new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10), p2s: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10), p2e: now.toISOString().slice(0, 10) },
-            { label: 'Last 7d vs Previous 7d', p1s: new Date(now.getTime() - 14 * 86400000).toISOString().slice(0, 10), p1e: new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10), p2s: new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10), p2e: now.toISOString().slice(0, 10) },
-            { label: 'Last 30d vs Previous 30d', p1s: new Date(now.getTime() - 60 * 86400000).toISOString().slice(0, 10), p1e: new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10), p2s: new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10), p2e: now.toISOString().slice(0, 10) },
+            { label: 'This Month vs Last Month', p1s: isoDay(utcYear, utcMonth - 1, 1), p1e: isoDay(utcYear, utcMonth, 0), p2s: isoDay(utcYear, utcMonth, 1), p2e: dayOffset(0) },
+            { label: 'Last 7d vs Previous 7d', p1s: dayOffset(14), p1e: dayOffset(7), p2s: dayOffset(7), p2e: dayOffset(0) },
+            { label: 'Last 30d vs Previous 30d', p1s: dayOffset(60), p1e: dayOffset(30), p2s: dayOffset(30), p2e: dayOffset(0) },
           ].map((preset, i) => (
             <button key={i} onClick={() => { setPeriod1Start(preset.p1s); setPeriod1End(preset.p1e); setPeriod2Start(preset.p2s); setPeriod2End(preset.p2e) }}
               className="px-2 py-1 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 transition-colors">
@@ -289,10 +307,10 @@ export default function Comparison() {
       {/* Top Products Side by Side */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="card p-4">
-          <TopProductsList products={stats1.topProducts} label="Top Products — Period 1" />
+          <TopProductsList products={stats1.topProducts} label="Top Products — Period 1" hint={emptyPeriodHint(period1Start, period1End)} />
         </div>
         <div className="card p-4">
-          <TopProductsList products={stats2.topProducts} label="Top Products — Period 2" />
+          <TopProductsList products={stats2.topProducts} label="Top Products — Period 2" hint={emptyPeriodHint(period2Start, period2End)} />
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import api from '../services/api'
+import api, { getAllSales } from '../services/api'
 import { Loading, PageHeader } from '../components/ui.jsx'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
@@ -117,7 +117,10 @@ export default function FunnelAnalysis() {
   const load = useCallback(() => {
     Promise.all([
       api.get('/customers/').catch(() => ({ data: [] })),
-      api.get('/sales/').catch(() => ({ data: [] })),
+      // getAllSales(), not api.get('/sales/'): this page's time ranges are
+      // applied in the browser, so one page of the newest 50 rows would silently
+      // define the funnel over a fraction of the history.
+      getAllSales().catch(() => ({ data: [] })),
       api.get('/inventory/products').catch(() => ({ data: [] })),
     ]).then(([c, s, p]) => {
       setCustomers(toList(c.data))

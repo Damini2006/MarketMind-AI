@@ -222,6 +222,37 @@ export const resetPasswordOTP = (email, otp, newPassword) =>
 
 // --- Sales ---
 export const getSales = () => api.get("/sales/");
+
+// Every sale, not only the first page.
+//
+// GET /sales/ is paginated server-side (50 rows by default, newest first) and
+// the analytics panels filter by period or time range in the browser. Asking for
+// the default page therefore hides the older rows those periods are built from:
+// Compare Periods and Funnel Analysis were deriving their numbers from the
+// newest 50 of 695 sales and presenting them as the whole picture. A truncated
+// set does not look broken - it looks like a real answer.
+//
+// The result keeps the shape of the single-page response, so callers (and the
+// toList() guards in the pages) need no change.
+const rowsOf = (data) =>
+  Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+
+export const getAllSales = async (pageSize = 200, maxRows = 20000) => {
+  const items = [];
+  let total = Infinity;
+
+  while (items.length < total && items.length < maxRows) {
+    const res = await api.get(`/sales/?limit=${pageSize}&offset=${items.length}`);
+    const rows = rowsOf(res.data);
+    if (rows.length === 0) break; // no progress: stop instead of spinning
+    items.push(...rows);
+    // The offset comes from what has actually arrived, so a page size the
+    // server clamps cannot make the walk skip rows.
+    total = Number(res.data?.total ?? items.length);
+  }
+
+  return { data: { items, total: items.length, limit: pageSize, offset: 0 } };
+};
 export const createSale = (data) => api.post("/sales/", data);
 export const uploadSalesCSV = (formData) =>
   api.post("/sales/upload-csv", formData, {
