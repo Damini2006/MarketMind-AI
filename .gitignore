@@ -62,3 +62,5 @@ WORK_REPORT*
 *_WORK_REPORT*
 ML/sales_forecasting/results/
 ML/datasets/
+.vercel
+.env*

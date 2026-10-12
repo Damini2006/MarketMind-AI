@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { avatarColorClass } from '../utils/avatar'
 import { STATIC_BASE_URL } from '../services/api'
 
@@ -19,15 +20,23 @@ function initials(name) {
  * otherwise colored initials. `user` is the auth user object.
  */
 export default function Avatar({ user, size = 'sm', className = '' }) {
-  const photoUrl = user?.avatar_url
-    ? `${STATIC_BASE_URL}${user.avatar_url}`
-    : null
+  // The stored avatar_url is a row in the database; the FILE it points at can be
+  // gone (a deploy without a volume mounted on the uploads directory), which
+  // makes the tag 404 and the browser draw a broken-image icon. Remembering which
+  // URL failed falls back to the initials instead — and because it is keyed by
+  // URL, uploading a new photo recovers on its own without an effect.
+  const [failedUrl, setFailedUrl] = useState(null)
+  const photoUrl =
+    user?.avatar_url && user.avatar_url !== failedUrl
+      ? `${STATIC_BASE_URL}${user.avatar_url}`
+      : null
 
   if (photoUrl) {
     return (
       <img
         src={photoUrl}
         alt={user?.full_name || 'avatar'}
+        onError={() => setFailedUrl(user.avatar_url)}
         className={`rounded-full object-cover shrink-0 overflow-hidden ${SIZE_CLASSES[size] || SIZE_CLASSES.sm} ${className}`}
       />
     )

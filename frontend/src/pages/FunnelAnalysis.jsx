@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import api, { getAllSales } from '../services/api'
+import { buildFunnel } from '../utils/funnel'
 import { Loading, PageHeader } from '../components/ui.jsx'
 import { exportToPDF, exportToExcel } from '../utils/exportUtils'
 import {
@@ -39,10 +40,26 @@ const SEGMENTS = [
   { key: 'category', label: 'By Product Category', icon: ShoppingCart },
 ]
 
+// ─── Stage styling ────────────────────────────────────────────────────
+// Colour and icon only. The stage definitions, their order and every rate live
+// in ../utils/funnel.js, where the chain is nested by construction and can be
+// tested without a DOM; this map keeps each stage's existing colour.
+const STAGE_STYLES = {
+  visitors: { color: '#6366f1', icon: Users },
+  first_purchase: { color: '#8b5cf6', icon: ShoppingCart },
+  repeat: { color: '#a855f7', icon: Repeat },
+  engaged: { color: '#ec4899', icon: Star },
+  promoter: { color: '#10b981', icon: Target },
+  high_value: { color: '#d946ef', icon: Crown },
+  vip: { color: '#f59e0b', icon: Zap },
+}
+
 // ─── Funnel Stage Card ────────────────────────────────────────────────
-function FunnelStageCard({ stage, index, total, maxCount }) {
+function FunnelStageCard({ stage, index, maxCount }) {
   const width = Math.max(15, (stage.count / maxCount) * 100)
-  const convRate = total > 0 ? ((stage.count / total) * 100).toFixed(1) : 0
+  // Computed once in the funnel module; a stage that is a subset of the one
+  // above it cannot produce a rate above 100%.
+  const convRate = stage.pctOfTotal
   const Icon = stage.icon
   return (
     <div className="relative">
@@ -141,60 +158,42 @@ export default function FunnelAnalysis() {
     return sales.filter(s => new Date(s.sale_date) >= cutoff)
   }, [sales, timeRange])
 
-  // Main funnel computation
-  const funnel = useMemo(() => {
-    const totalCustomers = customers.length
-    const customersWithOrders = customers.filter(c => filteredSales.some(s => s.customer_id === c.id)).length
-    const repeatBuyers = customers.filter(c => filteredSales.filter(s => s.customer_id === c.id).length >= 2).length
-    const highValue = customers.filter(c => {
-      const total = filteredSales.filter(s => s.customer_id === c.id).reduce((sum, s) => sum + (s.total_amount || 0), 0)
-      return total >= 5000
-    }).length
-    const vipCustomers = customers.filter(c => {
-      const total = filteredSales.filter(s => s.customer_id === c.id).reduce((sum, s) => sum + (s.total_amount || 0), 0)
-      return total >= 10000
-    }).length
-    const loyalCustomers = customers.filter(c => {
-      const orderCount = filteredSales.filter(s => s.customer_id === c.id).length
-      return orderCount >= 5
-    }).length
-    const promoters = customers.filter(c => {
-      const total = filteredSales.filter(s => s.customer_id === c.id).reduce((sum, s) => sum + (s.total_amount || 0), 0)
-      return total >= 2000 && filteredSales.filter(s => s.customer_id === c.id).length >= 3
-    }).length
+  // Main funnel computation.
+  //
+  // The stages, their order and every rate come from ../utils/funnel.js, which
+  // enforces the two properties this page depends on: each stage is a subset of
+  // the one above it, and no conversion can exceed 100%. This page used to give
+  // each stage its own independent threshold, so a customer with a single large
+  // order could make a spend stage larger than the repeat stage above it.
+  const funnel = useMemo(
+    () => buildFunnel(customers, filteredSales).stages.map((stage) => ({
+      ...stage,
+      ...STAGE_STYLES[stage.key],
+    })),
+    [customers, filteredSales],
+  )
 
-    const stages = [
-      { key: 'visitors', label: 'Total Visitors', count: totalCustomers, color: '#6366f1', icon: Users },
-      { key: 'first_purchase', label: 'First Purchase', count: customersWithOrders, color: '#8b5cf6', icon: ShoppingCart },
-      { key: 'repeat', label: 'Repeat Buyers (2+ orders)', count: repeatBuyers, color: '#a855f7', icon: Repeat },
-      { key: 'engaged', label: 'Engaged Customers (3+ orders)', count: loyalCustomers, color: '#ec4899', icon: Star },
-      { key: 'high_value', label: 'High Value (₹5000+)', count: highValue, color: '#d946ef', icon: Crown },
-      { key: 'vip', label: 'VIP (₹10000+)', count: vipCustomers, color: '#f59e0b', icon: Zap },
-      { key: 'promoter', label: 'Brand Promoters', count: promoters, color: '#10b981', icon: Target },
-    ]
-
-    // Calculate drop-offs
-    return stages.map((s, i) => ({
-      ...s,
-      dropoff: i > 0 ? stages[i - 1].count - s.count : 0,
-      dropoffPct: i > 0 && stages[i - 1].count > 0 ? (((stages[i - 1].count - s.count) / stages[i - 1].count) * 100).toFixed(1) : 0,
-    }))
-  }, [customers, filteredSales])
+  // Look stages up by key, never by position: the chain now orders each spend
+  // stage below the repeat-purchase stage it implies, so an index such as
+  // funnel[4] would quietly point at a different stage than it used to.
+  const stagesByKey = useMemo(
+    () => Object.fromEntries(funnel.map((stage) => [stage.key, stage])),
+    [funnel],
+  )
 
   const maxCount = funnel[0]?.count || 1
-  const totalCustomers = funnel[0]?.count || 1
+  const totalCustomers = funnel[0]?.count || 0
 
-  // Conversion metrics
-  const conversionMetrics = useMemo(() => {
-    return funnel.slice(1).map((stage, i) => ({
-      from: funnel[i].label,
-      to: stage.label,
-      rate: ((stage.count / (funnel[i].count || 1)) * 100).toFixed(1),
-      overall: ((stage.count / totalCustomers) * 100).toFixed(1),
-      dropoff: funnel[i].count - stage.count,
-      color: stage.color,
-    }))
-  }, [funnel, totalCustomers])
+  // Conversion metrics — stage-to-stage, plus the overall share of the funnel.
+  // Both are the funnel module's numbers rather than recomputed here.
+  const conversionMetrics = useMemo(() => funnel.slice(1).map((stage, i) => ({
+    from: funnel[i].label,
+    to: stage.label,
+    rate: stage.pctOfPrevious,
+    overall: stage.pctOfTotal,
+    dropoff: stage.dropoff,
+    color: stage.color,
+  })), [funnel])
 
   // Segment breakdown
   const segmentBreakdown = useMemo(() => {
@@ -210,7 +209,10 @@ export default function FunnelAnalysis() {
         if (cSales.length > 0) regionMap[region].purchased++
         if (cSales.length >= 2) regionMap[region].repeat++
         const total = cSales.reduce((sum, s) => sum + (s.total_amount || 0), 0)
-        if (total >= 5000) regionMap[region].highValue++
+        // Same definition as the High Value stage in ../utils/funnel.js: a spend
+        // threshold alone would count one-off large orders as high value here
+        // while the funnel no longer does.
+        if (cSales.length >= 3 && total >= 5000) regionMap[region].highValue++
       })
       const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
       return Object.entries(regionMap).map(([label, data], i) => ({
@@ -290,13 +292,13 @@ export default function FunnelAnalysis() {
 
   const handleExportPDF = () => {
     const headers = ['Stage', 'Count', 'Conversion Rate', 'Drop-off']
-    const rows = funnel.map(f => [f.label, f.count, `${((f.count / totalCustomers) * 100).toFixed(1)}%`, f.dropoff > 0 ? `-${f.dropoff} (${f.dropoffPct}%)` : '—'])
+    const rows = funnel.map(f => [f.label, f.count, `${f.pctOfTotal}%`, f.dropoff > 0 ? `-${f.dropoff} (${f.dropoffPct}%)` : '—'])
     exportToPDF({ title: 'Funnel Analysis Report', subtitle: 'Customer Journey Conversion', headers, rows, filename: 'funnel-analysis' })
   }
 
   const handleExportExcel = () => {
     const headers = ['Stage', 'Count', 'Conversion Rate', 'Drop-off']
-    const rows = funnel.map(f => [f.label, f.count, `${((f.count / totalCustomers) * 100).toFixed(1)}%`, f.dropoff > 0 ? `-${f.dropoff} (${f.dropoffPct}%)` : '—'])
+    const rows = funnel.map(f => [f.label, f.count, `${f.pctOfTotal}%`, f.dropoff > 0 ? `-${f.dropoff} (${f.dropoffPct}%)` : '—'])
     exportToExcel({ title: 'Funnel Analysis Report', headers, rows, filename: 'funnel-analysis' })
   }
 
@@ -349,18 +351,18 @@ export default function FunnelAnalysis() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="card text-center p-4">
           <p className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{totalCustomers.toLocaleString()}</p>
-          <p className="text-[10px] text-slate-500 uppercase mt-1">Total Visitors</p>
+          <p className="text-[10px] text-slate-500 uppercase mt-1">Total Customers</p>
         </div>
         <div className="card text-center p-4">
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{funnel[1]?.count?.toLocaleString() || 0}</p>
+          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{(stagesByKey.first_purchase?.count || 0).toLocaleString()}</p>
           <p className="text-[10px] text-slate-500 uppercase mt-1">Converted</p>
         </div>
         <div className="card text-center p-4">
-          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{totalCustomers > 0 ? ((funnel[1]?.count || 0) / totalCustomers * 100).toFixed(1) : 0}%</p>
+          <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{stagesByKey.first_purchase?.pctOfTotal || 0}%</p>
           <p className="text-[10px] text-slate-500 uppercase mt-1">Conversion Rate</p>
         </div>
         <div className="card text-center p-4">
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{funnel[4]?.count?.toLocaleString() || 0}</p>
+          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{(stagesByKey.high_value?.count || 0).toLocaleString()}</p>
           <p className="text-[10px] text-slate-500 uppercase mt-1">High Value</p>
         </div>
       </div>
@@ -377,7 +379,7 @@ export default function FunnelAnalysis() {
 
         <div className="space-y-4">
           {funnel.map((stage, i) => (
-            <FunnelStageCard key={stage.key} stage={stage} index={i} total={totalCustomers} maxCount={maxCount} />
+            <FunnelStageCard key={stage.key} stage={stage} index={i} maxCount={maxCount} />
           ))}
         </div>
       </div>

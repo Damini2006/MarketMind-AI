@@ -1,3 +1,7 @@
+# Imported at module level on purpose: an inline `import logging` inside a
+# function would make `logging` a local name there, so any other use of it later
+# in the same function (upload_avatar logs a failed write) would raise
+# UnboundLocalError instead of logging.
 import logging
 import os
 import secrets
@@ -12,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .. import models, schemas
 from ..cache import invalidate
+from ..core import storage
 from ..database import get_db
 from ..deps import get_current_user, require_roles
 from ..core.security import hash_password
@@ -22,13 +27,10 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 # Reuse the auth router's limiter so all rate limiting shares one store.
 from .auth import _check_rate_limit
 
-# Uploaded avatars live in backend/uploads/avatars and are served from /uploads
-# (users.py is backend/app/routers/ — go up three levels to reach backend/)
-UPLOAD_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "uploads",
-    "avatars",
-)
+# Uploaded avatars live in <uploads>/avatars and are served from
+# /uploads/avatars. The path is resolved per call through core/storage so
+# UPLOADS_DIR can move it onto a mounted volume — the same variable the container
+# entrypoint chowns, and the same tree app/main.py mounts at /uploads.
 ALLOWED_AVATAR_TYPES = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -78,22 +80,32 @@ async def upload_avatar(
     current_user = _fresh_user(db, current_user)
     invalidate(f"user:{current_user.id}")
 
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    avatars_dir = storage.avatars_dir()
 
     # Remove the previous avatar file (if any) to avoid orphaned files
     if current_user.avatar_url:
-        old_path = os.path.join(UPLOAD_DIR, os.path.basename(current_user.avatar_url))
+        old_path = os.path.join(avatars_dir, os.path.basename(current_user.avatar_url))
         if os.path.exists(old_path):
             try:
                 os.remove(old_path)
             except OSError as exc:
-                import logging
                 logging.warning(f"Failed to delete old avatar file: {exc}")
 
     ext = ALLOWED_AVATAR_TYPES[file.content_type]
     filename = f"u{current_user.id}_{uuid.uuid4().hex[:10]}{ext}"
-    with open(os.path.join(UPLOAD_DIR, filename), "wb") as f:
-        f.write(data)
+    try:
+        os.makedirs(avatars_dir, exist_ok=True)
+        with open(os.path.join(avatars_dir, filename), "wb") as f:
+            f.write(data)
+    except OSError as exc:
+        # Storage is a property of the deployment, not of the request: say what
+        # is actually wrong instead of returning a bare 500. The usual cause is a
+        # volume mounted root-owned — see DEPLOY.md, "Uploads survive redeploys".
+        logging.error("Avatar write failed under %s: %s", avatars_dir, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Avatar storage is not writable on this deployment.",
+        ) from exc
 
     current_user.avatar_url = f"/uploads/avatars/{filename}"
     db.commit()
@@ -111,12 +123,13 @@ def delete_avatar(
     current_user = _fresh_user(db, current_user)
     invalidate(f"user:{current_user.id}")
     if current_user.avatar_url:
-        old_path = os.path.join(UPLOAD_DIR, os.path.basename(current_user.avatar_url))
+        old_path = os.path.join(
+            storage.avatars_dir(), os.path.basename(current_user.avatar_url)
+        )
         if os.path.exists(old_path):
             try:
                 os.remove(old_path)
             except OSError as exc:
-                import logging
                 logging.warning(f"Failed to delete old avatar file: {exc}")
     current_user.avatar_url = None
     db.commit()
