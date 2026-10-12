@@ -1,0 +1,85 @@
+name: Post-deploy smoke (public site)
+
+# Every other gate in this repository looks at the working tree or a local
+# stack: pytest, the Vite build, the image build and the compose smoke test. None
+# of them can see the thing that actually broke here — the public URL serving a
+# build from a different commit, and /api paths being answered by the SPA
+# fallback with HTML. Both looked healthy from the outside: HTTP 200, a page that
+# renders, and no error anywhere in CI.
+#
+# This runs on the same push that triggers the hosting build, waits for the
+# promoted deployment to serve this commit's bundle, and fails loudly (with
+# ::error:: annotations) if it does not. It needs no secrets.
+#
+# Kept to the production branch: on any other branch the public site is not
+# supposed to change, so comparing it to that branch's build would be wrong.
+
+on:
+  push:
+    branches: [Rishika-Damini-Neelam]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-deploy-smoke-${{ github.ref }}
+  # A newer push supersedes an older check: the older one would be asserting
+  # against a bundle that is no longer the newest build.
+  cancel-in-progress: true
+
+env:
+  # Not hard-wired to one domain: set a repository variable to check another.
+  PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://frontend-xi-ashy-73.vercel.app' }}
+
+jobs:
+  public-site:
+    name: Public site serves this commit (bundle + API)
+    runs-on: ubuntu-latest
+    # Generous: most of it is the bundle check waiting for the deploy.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches ci.yml, so the bundle hashed here is the bundle the
+          # deployment builds.
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build the frontend
+        # Vite content-hashes the entry chunk, so this build's bundle name is an
+        # exact fingerprint of this commit's frontend source.
+        working-directory: frontend
+        run: npm run build
+
+      - name: Read this build's entry bundle
+        id: bundle
+        working-directory: frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$(grep -oE '/assets/index-[^\"]+\.js' dist/index.html | head -1)"
+          if [ -z "$bundle" ]; then
+            echo "::error::no entry bundle found in dist/index.html - the build output is not a Vite SPA shell"
+            exit 1
+          fi
+          echo "this build's entry bundle: $bundle"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke check the public deployment
+        # Fails if the live bundle is not this build, if the entry bundle is not
+        # actually fetchable, or if /api/sales/ is answered by the SPA fallback
+        # (HTML) rather than by the backend (JSON, 401 when anonymous).
+        run: |
+          python3 scripts/post_deploy_smoke.py \
+            --url "$PRODUCTION_URL" \
+            --expected-bundle "${{ steps.bundle.outputs.bundle }}" \
+            --timeout 420
