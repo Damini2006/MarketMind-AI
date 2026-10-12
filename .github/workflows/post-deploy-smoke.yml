@@ -9,7 +9,15 @@ name: Post-deploy smoke (public site)
 #
 # This runs on the same push that triggers the hosting build, waits for the
 # promoted deployment to serve this commit's bundle, and fails loudly (with
-# ::error:: annotations) if it does not. It needs no secrets.
+# ::error:: annotations) if it does not.
+#
+# The bundle and anonymous API checks need no secrets at all. The authenticated
+# page checks (Compare Periods, Funnel Analysis) do: they log in as a read-only
+# demo account whose credentials live in repository secrets, because production
+# does not seed the demo accounts and the raw endpoints they hit return every
+# tenant's data only to a signed-in user. Without those secrets the script skips
+# those checks with a ::warning:: annotation rather than failing the deploy —
+# visible in the run, never counted as a pass.
 #
 # Kept to the production branch: on any other branch the public site is not
 # supposed to change, so comparing it to that branch's build would be wrong.
@@ -31,6 +39,16 @@ concurrency:
 env:
   # Not hard-wired to one domain: set a repository variable to check another.
   PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://frontend-xi-ashy-73.vercel.app' }}
+  # Read-only demo credentials for the authenticated page checks. Set them as
+  # repository secrets, not variables: the password is a credential. They must
+  # belong to a RESTRICTED account (the script asserts a write endpoint answers
+  # 403) on a tenant that has data, since a page that loads and shows nothing is
+  # exactly what these checks are for.
+  #
+  # Empty here means "not configured yet": the script skips the authenticated
+  # checks with a warning. Setting only one of the two fails the run.
+  POST_DEPLOY_DEMO_EMAIL: ${{ secrets.POST_DEPLOY_DEMO_EMAIL }}
+  POST_DEPLOY_DEMO_PASSWORD: ${{ secrets.POST_DEPLOY_DEMO_PASSWORD }}
 
 jobs:
   public-site:
@@ -76,8 +94,10 @@ jobs:
 
       - name: Smoke check the public deployment
         # Fails if the live bundle is not this build, if the entry bundle is not
-        # actually fetchable, or if /api/sales/ is answered by the SPA fallback
-        # (HTML) rather than by the backend (JSON, 401 when anonymous).
+        # actually fetchable, if /api/sales/ is answered by the SPA fallback
+        # (HTML) rather than by the backend (JSON, 401 when anonymous), or — with
+        # the demo secrets set — if a read-only account cannot load the data
+        # behind Compare Periods and Funnel Analysis.
         run: |
           python3 scripts/post_deploy_smoke.py \
             --url "$PRODUCTION_URL" \

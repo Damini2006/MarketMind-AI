@@ -1,2 +1,9 @@
 *.md text
 backend/app/trained_models/*.pkl !text !filter !merge !diff
+
+# Shell scripts are executed inside Linux containers, where a CRLF shebang is a
+# hard failure ("bad interpreter"/"not found"). This repo is developed on Windows
+# with core.autocrlf=true, which would otherwise rewrite them on checkout.
+*.sh text eol=lf
+backend/docker-entrypoint.sh text eol=lf
+.gitattributes text eol=lf

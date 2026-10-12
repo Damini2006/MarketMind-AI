@@ -473,6 +473,8 @@ It is deliberately **not** the container healthcheck: login is rate limited to 1
 
 CI runs the same gate on every push — the `deploy-smoke` job in `.github/workflows/ci.yml` stands the whole stack up against a throwaway PostgreSQL using `docker-compose.ci.yml` (no secrets required) and tears it down afterwards.
 
+A push to the production branch runs a second, different gate: `.github/workflows/post-deploy-smoke.yml` checks the **public** deployment instead of a local stack — that the served bundle is this commit's build, that `/api/...` is answered by the API rather than the SPA fallback, and (with the `POST_DEPLOY_DEMO_EMAIL` / `POST_DEPLOY_DEMO_PASSWORD` repository secrets) that a read-only account can load the data behind Compare Periods and Funnel Analysis. See [DEPLOY.md](DEPLOY.md).
+
 ### AI models on a fresh clone
 
 The revenue forecast is the only AI feature that reads a model file, and that
@@ -548,7 +550,7 @@ This project is for educational purposes as part of the Infosys Springboard prog
 
 ---
 
-- **Live demo:** https://marketmind-ai-nrd.vercel.app
+- **Live demo:** https://frontend-xi-ashy-73.vercel.app
 
 <div align="center">
 

@@ -29,10 +29,15 @@ different origins. Everything below follows from that one constraint.
 These are new/changed and must be on the branch the hosts build from:
 
 ```
-backend/Dockerfile          # changed — the image now binds $PORT (default 8000)
-frontend/vercel.json        # new — static build + SPA rewrites
-scripts/verify_port.sh      # new — proves the $PORT contract locally
-DEPLOY.md                   # this file
+backend/Dockerfile              # changed — binds $PORT, and now starts via an entrypoint
+backend/docker-entrypoint.sh    # new — chowns a root-mounted uploads volume, then
+                                #       drops to appuser; no-op elsewhere
+backend/app/core/storage.py     # new — the uploads path (UPLOADS_DIR) + a startup
+                                #       write check, so a broken volume is visible
+.gitattributes                  # changed — keeps those shell scripts LF everywhere
+frontend/vercel.json            # new — static build + SPA rewrites
+scripts/verify_port.sh          # new — proves the $PORT contract locally
+DEPLOY.md                       # this file
 ```
 
 Neither host can see unpushed work. Railway, in particular, builds from GitHub
@@ -45,6 +50,12 @@ it and that existing files stop being read on 2026-12-01. The replacement is
 the `railway` npm package in the repo. For this app none of that is necessary:
 Railway auto-detects `backend/Dockerfile` once the service's **Root Directory**
 is set (step 3), and everything else is dashboard configuration.
+
+The same applies to the uploads volume in step 3: no file in the repo can declare
+one (a volume is attached to a service and mounted when a container starts, not
+baked into an image), so it is created once in the dashboard or with `railway
+volume add`. Everything that *can* be code — the mount path the app expects,
+`UPLOADS_DIR`, and the ownership fix the entrypoint performs — is in the repo.
 
 ## 2. Generate the secrets you will paste into Railway
 
@@ -96,24 +107,65 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
    is the classic cause of a 502 "Application failed to respond".
 7. Deploy. First build downloads the Python wheels, so expect several minutes.
 
-### Optional: persist uploaded avatars
+### Uploads survive redeploys — attach a volume
 
-Railway volumes survive deploys, unlike Render's free plan. If avatars matter:
+Avatars are the only state this API keeps outside the database, and a container
+filesystem is wiped on every deploy. Without a volume the `avatar_url` rows in
+Neon survive while the files they point at do not, so every avatar 404s after a
+redeploy — quietly, until someone opens their own profile.
 
-* Service → **Volumes** → add one, mount path **`/app/uploads`**.
+Railway → service → **Volumes** → *New volume*, mount path **`/app/uploads`**.
+With the CLI, the same thing:
 
-  That path is not a guess: the app derives it from its own file location
-  (`dirname(dirname(__file__))/uploads` in [`app/main.py`](backend/app/main.py),
-  avatars in [`app/routers/users.py`](backend/app/routers/users.py)), which is
-  `/app/uploads` inside the image, and it is the same path compose mounts.
+```bash
+railway volume add --service <service> --mount-path /app/uploads
+```
 
-* **Check it before trusting it.** The container runs as uid 1000 (`appuser`),
-  and a platform-created volume can arrive root-owned — in which case the app
-  starts fine (it only `makedirs(..., exist_ok=True)` on this path) but avatar
-  uploads fail with a permission error. Upload an avatar, redeploy, and confirm
-  it still loads. If writes are refused, drop the volume: avatars then reset on
-  every deploy, which is the Render-free behaviour anyway. Railway allows only
-  one volume per service, and no replicas with a volume attached.
+**Set `RAILWAY_RUN_UID=0` on the service as well.** Railway mounts volumes as
+root, and this image deliberately runs the application as a non-root user
+(`appuser`, uid 1000), which cannot write to a root-owned mount.
+`RAILWAY_RUN_UID=0` makes the container *start* as root, which is all
+[`docker-entrypoint.sh`](backend/docker-entrypoint.sh) needs: it chowns the mount
+to `appuser` and then execs the app through `gosu`, so the running application is
+never root. Railway's own advice for this is to run the entire service as root;
+this uses the same switch for one chown and one privilege drop.
+
+Four things worth knowing about the path and the volume:
+
+* **`/app/uploads` is the app's own path, not a guess.**
+  [`core/storage.py`](backend/app/core/storage.py) derives the default from its own
+  file location, which is `/app/uploads` inside the image, and that is the same
+  directory [`docker-compose.yml`](docker-compose.yml) mounts locally. If the
+  volume has to live somewhere else, set `UPLOADS_DIR` — the entrypoint chowns
+  the same variable, so app and entrypoint cannot drift apart.
+* **A volume is not an overlay.** Nothing already in the image at that path
+  appears on it, and build-time writes to it do not persist; the app creates the
+  tree itself at startup.
+* **One volume per service**, a service with a volume **cannot run replicas**,
+  and redeploys have a brief downtime instead of the usual zero-downtime
+  rollout. Size defaults to 0.5 GB on Free/Trial and 5 GB on Hobby (live
+  resizable on paid plans) — far more than avatars need.
+* **Writes are checked, not assumed.** `app/main.py` creates the tree and probes
+  a real write at startup, logging
+  `Uploads are NOT usable: <path>: <error>` when that fails, and
+  `POST /api/users/avatar` answers **503** ("Avatar storage is not writable on
+  this deployment.") rather than an opaque 500. That log line is the only place
+  the failure is visible — a missing `RAILWAY_RUN_UID=0` otherwise looks like a
+  perfectly healthy service whose avatars silently do not persist.
+
+Verify it before trusting it:
+
+```bash
+# 1. upload an avatar as a real account, then fetch the URL it returned
+curl -sI https://<something>.up.railway.app/uploads/avatars/<file>.png | head -1
+# HTTP/2 200
+# 2. redeploy the service, repeat step 1: it must still be 200
+railway volume files list /
+```
+
+A 404 on step 1 means the volume is mounted somewhere the app is not writing
+(`UPLOADS_DIR` mismatch); a failed *upload* means the mount is not writable and
+the startup log names why.
 
 ## 4. Vercel — the SPA
 
@@ -173,6 +225,57 @@ real one.
 
 Locally, the same gate passed **8/8** against the running stack, including the
 Neon round-trip.
+
+### The gate that keeps checking: post-deploy smoke
+
+[`scripts/post_deploy_smoke.py`](scripts/post_deploy_smoke.py), run by
+[`.github/workflows/post-deploy-smoke.yml`](.github/workflows/post-deploy-smoke.yml),
+checks the **public** URL on every push to the production branch — the one thing
+the manual run above cannot. It builds the frontend and compares the
+content-hashed entry bundle with the one the deployment serves, then probes
+`/api/sales/` to catch the SPA fallback answering API paths with HTML. Both were
+real failures here: one domain served a 23-hour-old build, and another answered
+`/api/...` with the SPA document while every status code looked healthy.
+
+It then logs in as a **read-only demo account** and asserts the data behind the
+two browser-computed analysis pages really loads, through the same `/api`
+rewrite the app uses:
+
+* **Compare Periods** — `/api/sales/`, `/api/invoices/`, `/api/inventory/products`
+* **Funnel Analysis** — `/api/customers/`, `/api/sales/`, `/api/inventory/products`
+
+Neither page has an endpoint of its own; both compute their analysis in the
+browser, so a non-empty list per path is what "the page works" means — a payload
+the frontend's own `toList()` would render as an empty page is a failure here.
+The account must also be *refused* (403) by a write endpoint it has no business
+calling, so credentials that turn out to belong to a second owner fail the run
+instead of passing quietly.
+
+Two **repository secrets** are needed for that part:
+
+| Secret | Value |
+|---|---|
+| `POST_DEPLOY_DEMO_EMAIL` | a restricted account — not an owner or admin — on a tenant **with data** |
+| `POST_DEPLOY_DEMO_PASSWORD` | its password |
+
+Production does not seed the demo accounts (`ENVIRONMENT=production` turns
+seeding off), so these have to be real credentials: invite a `sales_executive`
+into your own business and use that. Both are secrets rather than variables — the
+password is a credential. With neither set, the authenticated checks are
+**skipped** with a `::warning::` annotation on the run instead of failing the
+deploy (visible in the run, never counted as a pass); setting only one of the two
+fails the run, because that is a misconfigured secret rather than an absent one.
+
+To run it by hand against a deployment:
+
+```bash
+cd frontend && npm ci && npm run build
+bundle="$(grep -oE '/assets/index-[^\"]+\.js' dist/index.html | head -1)"
+
+POST_DEPLOY_DEMO_EMAIL=<the account> POST_DEPLOY_DEMO_PASSWORD=<its password> \
+python3 ../scripts/post_deploy_smoke.py \
+  --url https://<your-app>.vercel.app --expected-bundle "$bundle"
+```
 
 ## Cost and limits (worth knowing before a demo)
 
@@ -235,6 +338,8 @@ path, so its output has to be moved.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | no | default `180` (3h; the browser silently refreshes) |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | no | default `30` |
 | `SENDER_EMAIL` / `SENDER_PASSWORD` / `SMTP_SERVER` / `SMTP_PORT` | no | OTP reset emails only |
+| `UPLOADS_DIR` | no | absolute path served at `/uploads`; default `/app/uploads`. Set it only when the volume is mounted elsewhere — the container entrypoint reads the same variable |
+| `RAILWAY_RUN_UID` | yes on Railway | `0`, so the entrypoint can chown a root-mounted volume before dropping to `appuser`. See "Uploads survive redeploys" |
 
 `PORT` is injected by the host; the image honours it (see
 [`scripts/verify_port.sh`](scripts/verify_port.sh), which boots the real image

@@ -19,13 +19,18 @@ from .database import Base, DATABASE_URL, engine, SessionLocal
 from .migrate import ensure_business_id_columns
 from .seed_data import seed_if_empty
 from . import models
+from .core import storage
 
-# Directory that serves user uploads (profile photos, etc.)
-UPLOAD_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "uploads",
-)
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+# Directory that serves user uploads (profile photos, etc.).
+#
+# Resolved through core/storage, so UPLOADS_DIR can point it at a mounted volume
+# without a rebuild, and so this module and routers/users.py agree on one path
+# (the container entrypoint chowns the same variable). The check creates the tree
+# AND proves it is writable: a root-owned volume — which is how Railway mounts
+# one — looks fine here and only fails on the first upload, quietly, after the
+# deploy that caused it. The result is reported at the mount site below.
+UPLOAD_DIR = storage.uploads_root()
+UPLOADS_READY, UPLOADS_DETAIL = storage.ensure_uploads_ready()
 from .routers import (
     auth,
     customers,
@@ -191,7 +196,22 @@ threading.Thread(target=_keepalive, daemon=True).start()
 
 # Serve uploaded files (avatars) — must be mounted before routers that
 # define /api routes; StaticFiles only matches paths under /uploads.
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+if not UPLOADS_READY:
+    # Loud, once, at startup — this is the difference between "avatars 404 after
+    # every redeploy" and knowing why. The process still serves: an unwritable
+    # uploads directory breaks one feature, and taking the whole API down over it
+    # would be the worse failure. (StaticFiles stats its directory at
+    # construction time, so it is only mounted when that directory exists.)
+    log.error(
+        "Uploads are NOT usable: %s. New avatar uploads will fail, and nothing "
+        "is served from /uploads unless that directory exists. On Railway, mount "
+        "a volume at %s and set RAILWAY_RUN_UID=0 so the entrypoint can chown it "
+        "for the non-root app user — see DEPLOY.md, 'Uploads survive redeploys'.",
+        UPLOADS_DETAIL,
+        UPLOAD_DIR,
+    )
+if os.path.isdir(UPLOAD_DIR):
+    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Note: Routers already include their /api/ path prefix internally.
 # Including them directly prevents path doubling (e.g., /api/api/customers).
