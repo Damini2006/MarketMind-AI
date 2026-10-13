@@ -21,10 +21,21 @@ name: Post-deploy smoke (public site)
 #
 # Kept to the production branch: on any other branch the public site is not
 # supposed to change, so comparing it to that branch's build would be wrong.
+# A schedule is the one trigger that can fire there on its own: GitHub runs
+# scheduled workflows from the default branch only, and that is this branch, so
+# the build a scheduled run compares against is the deployed one.
 
 on:
   push:
     branches: [Rishika-Damini-Neelam]
+  # Daily, not hourly: this is drift detection, not monitoring. A hosting-side
+  # rollback, a CDN serving a stale bundle, or a demo credential that stopped
+  # working then shows up within a day, with no commit and nothing else to
+  # trigger it. A failure here means the deployment that was healthy yesterday
+  # no longer answers as this branch's build.
+  schedule:
+    # Off the hour: GitHub's scheduler queues the :00 runs first.
+    - cron: '23 6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -99,7 +110,16 @@ jobs:
         # the demo secrets set — if a read-only account cannot load the data
         # behind Compare Periods and Funnel Analysis.
         run: |
-          python3 scripts/post_deploy_smoke.py \
-            --url "$PRODUCTION_URL" \
-            --expected-bundle "${{ steps.bundle.outputs.bundle }}" \
+          args=(
+            --url "$PRODUCTION_URL"
+            --expected-bundle "${{ steps.bundle.outputs.bundle }}"
             --timeout 420
+          )
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            # On a push a missing secret is a warning: a deploy should not fail
+            # because credentials were never configured. A scheduled run is the
+            # opposite case - its whole job is to prove the checks still work,
+            # so skipping the authenticated half would leave it green and empty.
+            args+=(--require-demo-credentials)
+          fi
+          python3 scripts/post_deploy_smoke.py "${args[@]}"
