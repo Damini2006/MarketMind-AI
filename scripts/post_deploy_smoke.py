@@ -64,6 +64,11 @@ rather than an absent one. In production the demo accounts are not seeded
 (``ENVIRONMENT=production`` turns seeding off), so these must be real
 credentials for a restricted account that belongs to a tenant with data.
 
+``--require-demo-credentials`` turns that skip into a failure, for callers that
+run this with no deploy behind them. The scheduled daily run uses it: a schedule
+exists to prove the checks still work, so a run that skipped every authenticated
+check for want of a secret would be green and empty.
+
 The bundle match is REQUIRED, never inferred from the live page
 ----------------------------------------------------------------
 Inferring "the expected bundle" from the deployment would compare the
@@ -88,6 +93,10 @@ Configuration (flags override environment, environment overrides defaults)
     --demo-email       / POST_DEPLOY_DEMO_EMAIL      no default: unset skips the
                                                      authenticated page checks
     --demo-password    / POST_DEPLOY_DEMO_PASSWORD   no default
+    --require-demo-credentials                       default false: fail instead
+                                                     of skipping the
+                                                     authenticated checks when no
+                                                     demo credentials are set
     --min-rows                                       default 1: rows each page
                                                      data path must return
     --timeout                                        default 420s
@@ -460,7 +469,7 @@ def check_page_data(url: str, token: str, report: Report, min_rows: int) -> None
 
 def run(url: str, expected: str, api_paths: list[str], timeout: float, interval: float,
         verbose: bool, demo_email: str = None, demo_password: str = None,
-        min_rows: int = 1) -> int:
+        min_rows: int = 1, require_demo_credentials: bool = False) -> int:
     report = Report()
     print(f"Post-deploy smoke check against {url}")
     print(f"  this build's entry bundle: {expected}")
@@ -488,6 +497,13 @@ def run(url: str, expected: str, api_paths: list[str], timeout: float, interval:
             "demo credentials are complete",
             "only one of POST_DEPLOY_DEMO_EMAIL / POST_DEPLOY_DEMO_PASSWORD is set. "
             "Set both (repository secrets) or neither.",
+        )
+    elif require_demo_credentials:
+        report.fail(
+            "authenticated page checks have credentials",
+            "no demo credentials: set the POST_DEPLOY_DEMO_EMAIL and "
+            "POST_DEPLOY_DEMO_PASSWORD repository secrets. This run requires "
+            "them (--require-demo-credentials), so the checks cannot be skipped.",
         )
     else:
         report.skip(
@@ -518,6 +534,8 @@ def main(argv=None) -> int:
     parser.add_argument("--demo-password",
                         default=os.environ.get("POST_DEPLOY_DEMO_PASSWORD"),
                         help="demo account password (prefer the secret/env over this flag)")
+    parser.add_argument("--require-demo-credentials", action="store_true",
+                        help="fail instead of skipping when no demo credentials are set")
     parser.add_argument("--min-rows", type=int, default=1,
                         help="rows each page data path must return to count as real")
     parser.add_argument("--timeout", type=float, default=420.0,
@@ -539,7 +557,8 @@ def main(argv=None) -> int:
 
     try:
         return run(args.url, args.expected_bundle, api_paths, args.timeout, args.interval,
-                   args.verbose, args.demo_email, args.demo_password, args.min_rows)
+                   args.verbose, args.demo_email, args.demo_password, args.min_rows,
+                   args.require_demo_credentials)
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
