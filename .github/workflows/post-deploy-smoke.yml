@@ -78,8 +78,10 @@ env:
   # Roles a SCHEDULED run must be able to check. Deliberately not named
   # POST_DEPLOY_REQUIRE_ROLES: the script reads that name from the environment,
   # and a push must not start demanding credentials that are not wired yet.
-  # Keep this list in step with the secrets above that actually exist.
-  SMOKE_REQUIRED_ROLES: sales_executive
+  # Keep this list in step with the secrets above that actually exist: every role
+  # named here has an account wired, so a scheduled run that cannot check one of
+  # them is a real failure rather than a missing configuration.
+  SMOKE_REQUIRED_ROLES: business_owner,store_manager,sales_executive,admin
 
 jobs:
   public-site:
