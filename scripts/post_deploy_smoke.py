@@ -27,47 +27,63 @@ Amusing detail worth keeping: on the stale domain ``/api/health`` answered
 health-only check would have passed. That is why the default probe is a real
 data path — ``/api/sales/`` is the one that discriminates.
 
-Authenticated page checks: Compare Periods and Funnel Analysis
--------------------------------------------------------------
+Per-role access matrix: every role loads exactly its pages, and no more
+----------------------------------------------------------------------------
 The checks above are anonymous, which is most of what a deploy can get wrong.
-The rest is the app working for a signed-in user who is NOT an owner: a 401 or
-an empty payload still renders a page, so it fails silently. So when demo
-credentials are supplied (repository secrets — see below) this logs in as the
-read-only demo account and asserts that the data behind the two analysis pages
-really loads, over the public origin, through the same ``/api`` rewrite:
+The rest is the app working for the roles that are allowed in, and NOT working
+for the roles that are not: a 401, a 403 or an empty payload still paints a page
+that looks like it loaded, so all three fail silently.
 
-  * **Compare Periods** — ``frontend/src/pages/Comparison.jsx`` fetches
-    ``/api/sales/``, ``/api/invoices/`` and ``/api/inventory/products``.
-  * **Funnel Analysis** — ``frontend/src/pages/FunnelAnalysis.jsx`` fetches
-    ``/api/customers/``, ``/api/sales/`` and ``/api/inventory/products``.
+This logs in as one account per role and asserts that role's row of a matrix
+built from the two places that must agree:
 
-Neither page has an endpoint of its own: both compute their analysis in the
-browser, so what a deploy can break is the data they read. Each path must return
-a non-empty list — a payload the frontend's own ``toList()`` helper would render
-as an empty page is treated as a failure, because a page that loads and shows
-nothing looks exactly like a page whose data never arrived.
+  * the nav gate — ``ROLE_PAGES`` in ``frontend/src/components/Layout.jsx``,
+  * the enforcement — ``require_roles`` in ``backend/app/routers/*.py``.
 
-The read-only part is asserted too, not assumed: the account must be refused
-(403) by a write endpoint it has no business calling, so credentials that turn
-out to belong to a second owner fail loudly instead of passing quietly.
+For every page a role is granted, the data that page's own fetch reads must
+really load (a listed payload with rows, or a JSON payload for the analysis
+endpoints). For every page it is NOT granted, the check asserts the API refuses
+it with 403 — but only where the backend enforces that gate at all. The read
+endpoints behind the pages listed in FRONTEND_ONLY_PAGES accept any authenticated
+user, so those pages are gated by the menu alone and no 403 is asserted for them;
+the run names them out loud (``::notice::``) rather than implying a guarantee the
+backend never made. Which pages those are is not a judgement call: a page is
+frontend-gated only when none of the paths behind it is role-guarded, and the
+checker that keeps this file honest with the routers asserts exactly that.
 
-Credentials come from secrets and are never defaulted in this file:
+Writes are part of the row too, because that is where the roles mostly differ.
+Each write is probed with an EMPTY JSON body: the role guard runs before body
+validation, so a refused role gets 403 and an allowed one gets 422, and neither
+can create, update or delete a row. That is what makes this safe to run against
+production on a schedule — and it keeps the old "the credential really is
+unprivileged" assertion, generalised to every role.
 
-    POST_DEPLOY_DEMO_EMAIL / --demo-email
-    POST_DEPLOY_DEMO_PASSWORD / --demo-password
+An account that logs in with a role other than the one its slot names is a
+FAILURE, not an adaptation: the slot declares which expectations apply, so a
+second owner sitting in the store_manager slot would be judged by the wrong row.
 
-With neither set the authenticated checks are SKIPPED, with a ``::warning::``
-annotation on the run — the deploy is not failed for a secret that may simply
-not be configured yet, but a skipped check is never reported as a pass. Setting
-one without the other IS a failure, because that is a misconfigured secret
-rather than an absent one. In production the demo accounts are not seeded
-(``ENVIRONMENT=production`` turns seeding off), so these must be real
-credentials for a restricted account that belongs to a tenant with data.
+Credentials come from repository secrets, one slot per role, and are never
+defaulted in this file:
 
-``--require-demo-credentials`` turns that skip into a failure, for callers that
-run this with no deploy behind them. The scheduled daily run uses it: a schedule
-exists to prove the checks still work, so a run that skipped every authenticated
-check for want of a secret would be green and empty.
+    business_owner   POST_DEPLOY_OWNER_EMAIL / _PASSWORD
+    store_manager    POST_DEPLOY_STORE_MANAGER_EMAIL / _PASSWORD
+    sales_executive  POST_DEPLOY_SALES_EXECUTIVE_EMAIL / _PASSWORD
+    admin            POST_DEPLOY_ADMIN_EMAIL / _PASSWORD
+
+``POST_DEPLOY_DEMO_EMAIL`` / ``_PASSWORD`` is still honoured as the
+sales_executive slot, because that is what production already has wired.
+
+A role with neither variable set is SKIPPED with a ``::warning::`` annotation —
+never counted as a pass — so a half-configured deployment reports what it did
+not check. Setting one of the pair without the other IS a failure, because that
+is a misconfigured secret rather than an absent one. In production the demo
+accounts are not seeded (``ENVIRONMENT=production`` turns seeding off), so these
+must be real accounts, each on a tenant with data.
+
+``--require-roles a,b`` fails the run when a named role has no credentials. The
+scheduled daily run names the roles it has wired: a schedule exists to prove the
+checks still work, so a row that quietly vanished for want of a secret would
+leave it green and empty.
 
 The bundle match is REQUIRED, never inferred from the live page
 ----------------------------------------------------------------
@@ -90,13 +106,17 @@ Configuration (flags override environment, environment overrides defaults)
     --expected-bundle  / POST_DEPLOY_EXPECTED_BUNDLE required, no default
     --api-path         / POST_DEPLOY_API_PATH        default /api/sales/
                                                      (repeatable)
-    --demo-email       / POST_DEPLOY_DEMO_EMAIL      no default: unset skips the
-                                                     authenticated page checks
-    --demo-password    / POST_DEPLOY_DEMO_PASSWORD   no default
-    --require-demo-credentials                       default false: fail instead
-                                                     of skipping the
-                                                     authenticated checks when no
-                                                     demo credentials are set
+    --credentials-file                               JSON mapping role ->
+                                                     {email, password}; overrides
+                                                     the environment without
+                                                     putting a password on the
+                                                     command line
+    --require-roles                                  comma-separated roles that
+                                                     must have credentials: a
+                                                     named role with none fails
+                                                     the run instead of skipping
+    --demo-email       / POST_DEPLOY_DEMO_EMAIL      the sales_executive slot
+    --demo-password    / POST_DEPLOY_DEMO_PASSWORD   the sales_executive slot
     --min-rows                                       default 1: rows each page
                                                      data path must return
     --timeout                                        default 420s
@@ -107,6 +127,8 @@ Exits 0 only when every check passes. Each failure is printed as a
 instead of hiding in the log.
 """
 from __future__ import annotations
+
+from collections import namedtuple
 
 import argparse
 import json
@@ -122,34 +144,115 @@ DEFAULT_API_PATH = "/api/sales/"
 USER_AGENT = "marketmind-post-deploy-smoke/1.0"
 ENTRY_BUNDLE_RE = re.compile(r'src="(/assets/[^"]+\.js)"')
 
-# ── the two analysis pages, and the data they actually read ─────────────────
-# Same paths, in the same order, as the components fetch them. They are asserted
-# through the public origin, so the /api rewrite is exercised for authenticated
-# calls too — the anonymous /api/sales/ probe covers the same rewrite, but a
-# rewrite can be right for one path and wrong for another (a more specific rule
-# can shadow a broader one).
-PAGE_DATA_SOURCES = (
-    (
-        "Compare Periods",
-        ("/api/sales/", "/api/invoices/", "/api/inventory/products"),
+# ── the per-role access matrix ──────────────────────────────────────
+# Who may open which page, and what that has to mean at the API level.
+#
+# ``roles`` mirrors the frontend's ROLE_PAGES map (components/Layout.jsx) - the
+# menu and route gate. ``rows`` and ``json_ok`` are the paths the page's own
+# fetch reads: a granted page whose data will not load is a failure, not a pass,
+# because a 401, a 403 or an empty payload all still paint a page.
+#
+# ``denied`` is populated ONLY where the backend enforces the same gate
+# (require_roles in app/routers/*.py). There a role outside ``roles`` must be
+# refused with 403, which is the half of this matrix the API can actually prove.
+# Pages whose endpoints accept any authenticated user are frontend-gated only:
+# no 403 is asserted for them, and the run says so (see FRONTEND_ONLY_PAGES).
+ALL_ROLES = ("business_owner", "store_manager", "sales_executive", "admin")
+OWNER_MANAGER_ADMIN = ("business_owner", "store_manager", "admin")
+OWNER_ADMIN = ("business_owner", "admin")
+
+PageAccess = namedtuple("PageAccess", "path label roles rows json_ok denied", defaults=((), (), ()))
+
+PAGE_MATRIX = (
+    # Compare Periods computes in the browser from three list endpoints that any
+    # authenticated user may read, so the menu is its only gate.
+    PageAccess(
+        "/comparison", "Compare Periods", ("business_owner", "store_manager", "admin"),
+        rows=("/api/sales/", "/api/invoices/", "/api/inventory/products"),
     ),
-    (
-        "Funnel Analysis",
-        ("/api/customers/", "/api/sales/", "/api/inventory/products"),
+    # Funnel Analysis reads the same three; the menu grants it to owner and admin
+    # but not to store_manager, and the API does not enforce that either.
+    PageAccess(
+        "/funnel", "Funnel Analysis", ("business_owner", "admin"),
+        rows=("/api/customers/", "/api/sales/", "/api/inventory/products"),
+    ),
+    PageAccess(
+        "/forecasting", "Forecasting", OWNER_MANAGER_ADMIN,
+        json_ok=("/api/ai/forecast",), denied=("/api/ai/forecast",),
+    ),
+    PageAccess(
+        "/churn", "Churn", OWNER_MANAGER_ADMIN,
+        json_ok=("/api/ai/churn",), denied=("/api/ai/churn",),
+    ),
+    PageAccess(
+        "/anomalies", "Anomalies", OWNER_MANAGER_ADMIN,
+        json_ok=("/api/ai/anomalies",), denied=("/api/ai/anomalies",),
+    ),
+    # Categories and Suppliers are gated by the menu alone: categories.py and
+    # suppliers.py guard POST and DELETE with require_roles, but their LIST
+    # endpoints are get_current_user, so any signed-in role can read the data.
+    # Only the write is enforced, and that is asserted in WRITE_GUARDS instead.
+    PageAccess(
+        "/categories", "Categories", OWNER_MANAGER_ADMIN,
+        rows=("/api/categories/",),
+    ),
+    PageAccess(
+        "/suppliers", "Suppliers", OWNER_MANAGER_ADMIN,
+        rows=("/api/suppliers/",),
+    ),
+    # Activity reads /api/audit/logs (open) and /api/system/cache-stats, which is
+    # where its owner/manager/admin gate is actually enforced.
+    PageAccess(
+        "/activity", "Activity", OWNER_MANAGER_ADMIN,
+        json_ok=("/api/audit/logs",), denied=("/api/system/cache-stats",),
+    ),
+    # Team is the page whose own list endpoint is guarded, so both directions are
+    # provable: owner and admin read it, store_manager and sales_executive get 403.
+    PageAccess(
+        "/team", "Team", OWNER_ADMIN,
+        rows=("/api/users/",), denied=("/api/users/",),
     ),
 )
+
+# Pages the menu gates but the API does not, reported once per run so that "no
+# failures" is not read as "the API refuses those roles too".
+FRONTEND_ONLY_PAGES = tuple(p for p in PAGE_MATRIX if not p.denied)
+
+WriteGuard = namedtuple("WriteGuard", "action method path roles")
+
+# Each write is probed with an EMPTY JSON body. The role guard runs before body
+# validation, so a refused role gets 403 while an allowed one gets 422 - and
+# neither can create anything. Nothing here is a DELETE, and nothing here can
+# mutate a row with an empty body.
+WRITE_GUARDS = (
+    WriteGuard("add a product", "POST", "/api/inventory/products", OWNER_MANAGER_ADMIN),
+    WriteGuard("add a customer", "POST", "/api/customers/",
+               ("business_owner", "sales_executive", "admin")),
+    WriteGuard("raise an invoice", "POST", "/api/invoices/",
+               ("business_owner", "sales_executive", "admin")),
+    WriteGuard("add a category", "POST", "/api/categories/", OWNER_MANAGER_ADMIN),
+    WriteGuard("add a supplier", "POST", "/api/suppliers/", OWNER_MANAGER_ADMIN),
+    WriteGuard("invite a teammate", "POST", "/api/users/", OWNER_ADMIN),
+)
+
+# One account per role, from repository secrets. The original single-account
+# slot (POST_DEPLOY_DEMO_*) stays valid as the sales_executive one: it is what
+# production has wired, so renaming it would only invite breakage.
+ROLE_CREDENTIALS = {
+    "business_owner": ("POST_DEPLOY_OWNER_EMAIL", "POST_DEPLOY_OWNER_PASSWORD"),
+    "store_manager": ("POST_DEPLOY_STORE_MANAGER_EMAIL", "POST_DEPLOY_STORE_MANAGER_PASSWORD"),
+    "sales_executive": ("POST_DEPLOY_SALES_EXECUTIVE_EMAIL",
+                        "POST_DEPLOY_SALES_EXECUTIVE_PASSWORD"),
+    "admin": ("POST_DEPLOY_ADMIN_EMAIL", "POST_DEPLOY_ADMIN_PASSWORD"),
+}
+ROLE_CREDENTIAL_FALLBACKS = {
+    "sales_executive": ("POST_DEPLOY_DEMO_EMAIL", "POST_DEPLOY_DEMO_PASSWORD"),
+}
 
 # A list payload is either a bare array or one of these keys. This mirrors the
 # frontend's toList() helper, deliberately: a payload that helper would render as
 # an empty page must not be accepted here as "fine".
 ROWS_KEYS = ("items", "data", "results", "rows")
-
-# Where the read-only account must be refused. POST (writing) a product needs
-# business_owner/store_manager/admin (app/routers/inventory.py), and the empty
-# body cannot create anything even if that guard were wrong — so this proves the
-# credential is genuinely unprivileged without being able to mutate the tenant.
-READ_ONLY_PROBE_METHOD = "POST"
-READ_ONLY_PROBE_PATH = "/api/inventory/products"
 
 # Rate limited to 10 logins per IP per 300s (app/routers/auth.py). One run uses
 # one successful login; the retries only cover the window right after a deploy
@@ -384,92 +487,209 @@ def login(url: str, email: str, password: str, report: Report, verbose: bool):
     return None, None, last
 
 
-def check_demo_account(url: str, email: str, password: str, report: Report, verbose: bool):
-    """Log in as the demo account and assert it is authenticated AND restricted.
+def role_credentials(overrides=None):
+    """(role -> (email, password) | None), from the environment and overrides."""
+    overrides = overrides or {}
+    resolved = {}
+    for role, (email_var, password_var) in ROLE_CREDENTIALS.items():
+        pair = overrides.get(role) or {}
+        email = pair.get("email") or os.environ.get(email_var)
+        password = pair.get("password") or os.environ.get(password_var)
+        if not email and not password:
+            fallback = ROLE_CREDENTIAL_FALLBACKS.get(role)
+            if fallback:
+                email = os.environ.get(fallback[0])
+                password = os.environ.get(fallback[1])
+        resolved[role] = (email, password) if (email or password) else None
+    return resolved
 
-    Returns the token (or None), so the page checks can run even if the read-only
-    probe fails: a privileged credential is a configuration problem, but the data
-    is still worth checking.
+
+def role_check_names(role):
+    """Every check name this role's row reports, in the order it reports them."""
+    names = []
+    for page in PAGE_MATRIX:
+        if role in page.roles:
+            names += [f"{role} | {page.label} ({page.path}): {p} returns rows" for p in page.rows]
+            names += [f"{role} | {page.label} ({page.path}): {p} answers" for p in page.json_ok]
+        else:
+            names += [f"{role} | {page.label} ({page.path}) is refused: {p}" for p in page.denied]
+    for guard in WRITE_GUARDS:
+        if role in guard.roles:
+            names.append(f"{role} | {guard.action} is allowed: {guard.method} {guard.path}")
+        else:
+            names.append(f"{role} | {guard.action} is refused: {guard.method} {guard.path}")
+    return names
+
+
+def report_rows(name, res, report, min_rows):
+    """A page's list payload must really carry rows."""
+    if res.status is None:
+        report.fail(name, res.describe())
+        return
+    if res.status in (401, 403):
+        report.fail(
+            name,
+            f"{res.describe()}: this role cannot read this path, so its page would "
+            f"render empty for that role",
+        )
+        return
+    if not (200 <= res.status < 300):
+        report.fail(name, f"{res.describe()}: {res.text[:160]!r}")
+        return
+    payload = res.json
+    if payload is None:
+        report.fail(
+            name,
+            f"{res.describe()}: body is not JSON, so the page's fetch would throw. "
+            f"First bytes: {res.text[:120]!r}",
+        )
+        return
+    rows = list_rows(payload)
+    if rows is None:
+        report.fail(
+            name,
+            f"{res.describe()}: payload is not a list or a list envelope "
+            f"({sorted(ROWS_KEYS)}). First bytes: {res.text[:120]!r}",
+        )
+        return
+    if len(rows) < min_rows:
+        report.fail(
+            name,
+            f"{res.describe()}: {len(rows)} rows, expected at least {min_rows}. The page "
+            "loads but has nothing to show - check that this account belongs to a tenant "
+            "with data.",
+        )
+        return
+    report.ok(name, f"{len(rows)} rows")
+
+
+def report_json(name, res, label, report):
+    """An analysis endpoint must answer this role with JSON, not a refusal."""
+    if res.status is None:
+        report.fail(name, res.describe())
+        return
+    if res.status in (401, 403):
+        report.fail(
+            name,
+            f"{res.describe()}: this role is granted {label} by the menu but the API "
+            f"refuses its data, so the page cannot work for it",
+        )
+        return
+    if not (200 <= res.status < 300):
+        report.fail(name, f"{res.describe()}: {res.text[:160]!r}")
+        return
+    if res.json is None:
+        report.fail(
+            name,
+            f"{res.describe()}: body is not JSON; the page would throw. "
+            f"First bytes: {res.text[:120]!r}",
+        )
+        return
+    report.ok(name, res.describe())
+
+
+def check_role_reads(url, role, token, report, min_rows):
+    """Every page this role has, and every page it must be refused."""
+    base = url.rstrip("/")
+    for page in PAGE_MATRIX:
+        if role in page.roles:
+            for path in page.rows:
+                name = f"{role} | {page.label} ({page.path}): {path} returns rows"
+                report_rows(name, request(f"{base}{path}", token=token, timeout=60.0),
+                            report, min_rows)
+            for path in page.json_ok:
+                name = f"{role} | {page.label} ({page.path}): {path} answers"
+                report_json(name, request(f"{base}{path}", token=token, timeout=60.0),
+                            page.label, report)
+        else:
+            for path in page.denied:
+                name = f"{role} | {page.label} ({page.path}) is refused: {path}"
+                res = request(f"{base}{path}", token=token, timeout=30.0)
+                if res.status == 403:
+                    report.ok(name, f"{res.describe()} (this role has no {page.path})")
+                else:
+                    report.fail(
+                        name,
+                        f"{res.describe()}: expected 403. {role} must not reach the data "
+                        f"behind {page.path}, and a 2xx here means that gate is gone.",
+                    )
+
+
+def check_role_writes(url, role, token, report):
+    """Every write this role may make, and every write it must be refused.
+
+    The empty body is the point: a role guard runs before body validation, so an
+    allowed role stops at 422 and nothing is written, while a refused role never
+    gets that far. Both outcomes are asserted, so an over-restriction (a role
+    refused something it should be allowed) fails just as loudly as a hole.
     """
-    token, role, res = login(url, email, password, report, verbose)
+    base = url.rstrip("/")
+    for guard in WRITE_GUARDS:
+        res = request(f"{base}{guard.path}", method=guard.method, payload={}, token=token,
+                      timeout=30.0)
+        why = "empty body on purpose, so an allowed role stops at validation and writes nothing"
+        if role in guard.roles:
+            name = f"{role} | {guard.action} is allowed: {guard.method} {guard.path}"
+            if res.status == 403:
+                report.fail(
+                    name,
+                    f"403: this role IS allowed to {guard.action}, so this is an "
+                    f"over-restriction rather than a security win",
+                )
+            elif res.status is not None and 200 <= res.status < 300:
+                report.fail(
+                    name,
+                    f"{res.describe()}: an empty body was ACCEPTED. This probe expected "
+                    f"validation to refuse it and it may have written a row - check the "
+                    f"tenant before re-running against production",
+                )
+            else:
+                report.ok(name, f"{res.describe()} ({why})")
+        else:
+            name = f"{role} | {guard.action} is refused: {guard.method} {guard.path}"
+            if res.status == 403:
+                report.ok(name, f"{res.describe()}")
+            else:
+                report.fail(
+                    name,
+                    f"{res.describe()}: expected 403. {role} must not be able to {guard.action}, "
+                    f"and a 2xx or a 422 means the role guard let it through to validation.",
+                )
+
+
+def check_role(url, role, email, password, report, verbose, min_rows):
+    """One row of the matrix: log in as `role`, then assert exactly its access."""
+    name = f"{role} | an account exists and can log in"
+    token, actual, res = login(url, email, password, report, verbose)
     if not token:
         detail = res.describe()
         if res.status in (401, 403):
-            detail += (" — the deployed environment does not have this account (in "
-                       "production the demo accounts are not seeded), or the secret "
-                       "holds the wrong password")
+            detail += (" - either there is no account with this email in the deployment, or "
+                       "the secret holds the wrong password")
         elif res.status == 429:
             detail += " (rate limited: 10 logins per IP per 300s)"
-        report.fail("read-only demo account can log in", f"{email}: {detail}")
-        return None
-    report.ok("read-only demo account can log in", f"{email}, role={role}")
-
-    probe = request(f"{url.rstrip('/')}{READ_ONLY_PROBE_PATH}", method=READ_ONLY_PROBE_METHOD,
-                    payload={}, token=token, timeout=20.0)
-    name = "demo account is read-only (write refused)"
-    if probe.status == 403:
-        report.ok(name, f"{READ_ONLY_PROBE_METHOD} {READ_ONLY_PROBE_PATH} -> 403")
-    else:
+        report.fail(name, f"{email}: {detail}")
+        for skipped in role_check_names(role):
+            report.skip(skipped, "no session for this role")
+        return
+    if actual != role:
         report.fail(
-            name,
-            f"{READ_ONLY_PROBE_METHOD} {READ_ONLY_PROBE_PATH} -> {probe.describe()}; expected 403. "
-            "A 2xx or 422 means the role guard did not reject this account, so it is "
-            "not the unprivileged demo account these checks are meant to use. "
-            f"{probe.text[:120]!r}",
+            f"{role} | the account really has the {role} role",
+            f"{email} logged in as '{actual}'. Each slot declares which expectations apply, "
+            f"so another role's account here would be judged by the wrong row - use an "
+            f"account whose role is {role}.",
         )
-    return token
-
-
-def check_page_data(url: str, token: str, report: Report, min_rows: int) -> None:
-    """Every path the two analysis pages read must return real rows."""
-    base = url.rstrip("/")
-    for page, paths in PAGE_DATA_SOURCES:
-        for path in paths:
-            name = f"{page}: {path} returns rows"
-            res = request(f"{base}{path}", token=token, timeout=60.0)
-            if res.status is None:
-                report.fail(name, res.describe())
-                continue
-            if res.status in (401, 403):
-                report.fail(
-                    name,
-                    f"{res.describe()}: the demo account cannot read this path, so the "
-                    f"page would render empty for that role",
-                )
-                continue
-            if not (200 <= res.status < 300):
-                report.fail(name, f"{res.describe()}: {res.text[:160]!r}")
-                continue
-            payload = res.json
-            if payload is None:
-                report.fail(
-                    name,
-                    f"{res.describe()}: body is not JSON, so the page's fetch would "
-                    f"throw. First bytes: {res.text[:120]!r}",
-                )
-                continue
-            rows = list_rows(payload)
-            if rows is None:
-                report.fail(
-                    name,
-                    f"{res.describe()}: payload is not a list or a list envelope "
-                    f"({sorted(ROWS_KEYS)}). First bytes: {res.text[:120]!r}",
-                )
-                continue
-            if len(rows) < min_rows:
-                report.fail(
-                    name,
-                    f"{res.describe()}: {len(rows)} rows, expected at least {min_rows}. "
-                    "The page loads but has nothing to show — check that this account "
-                    "belongs to a tenant with data.",
-                )
-                continue
-            report.ok(name, f"{len(rows)} rows")
+        for skipped in role_check_names(role):
+            report.skip(skipped, f"the account in this slot has role '{actual}'")
+        return
+    report.ok(name, f"{email}, role={actual}")
+    check_role_reads(url, role, token, report, min_rows)
+    check_role_writes(url, role, token, report)
 
 
 def run(url: str, expected: str, api_paths: list[str], timeout: float, interval: float,
-        verbose: bool, demo_email: str = None, demo_password: str = None,
-        min_rows: int = 1, require_demo_credentials: bool = False) -> int:
+        verbose: bool, credentials: dict = None, min_rows: int = 1,
+        require_roles: tuple = ()) -> int:
     report = Report()
     print(f"Post-deploy smoke check against {url}")
     print(f"  this build's entry bundle: {expected}")
@@ -480,37 +700,55 @@ def run(url: str, expected: str, api_paths: list[str], timeout: float, interval:
     for api_path in api_paths:
         check_api(url, api_path, report)
 
-    # ── authenticated page checks ───────────────────────────────────────────
+    # ── the per-role access matrix ────────────────────────────────────────
     print()
-    if demo_email and demo_password:
-        token = check_demo_account(url, demo_email, demo_password, report, verbose)
-        if token:
-            check_page_data(url, token, report, min_rows)
+    print(f"Per-role access matrix: {len(PAGE_MATRIX)} pages, {len(WRITE_GUARDS)} guarded writes "
+          f"x {len(ALL_ROLES)} roles")
+    credentials = credentials or {}
+    if not any(credentials.values()):
+        advice = ("no credentials for any role: set POST_DEPLOY_<ROLE>_EMAIL and "
+                  "POST_DEPLOY_<ROLE>_PASSWORD (repository secrets) to run the matrix")
+        if require_roles:
+            report.fail(
+                "the per-role matrix has credentials",
+                f"--require-roles {'/'.join(require_roles)} was requested, but {advice}",
+            )
         else:
-            # Report every check that did not run rather than silently dropping
-            # them: "0 failures" must not be readable as "the pages work".
-            for page, paths in PAGE_DATA_SOURCES:
-                for path in paths:
-                    report.skip(f"{page}: {path} returns rows", "no demo session")
-    elif demo_email or demo_password:
-        report.fail(
-            "demo credentials are complete",
-            "only one of POST_DEPLOY_DEMO_EMAIL / POST_DEPLOY_DEMO_PASSWORD is set. "
-            "Set both (repository secrets) or neither.",
-        )
-    elif require_demo_credentials:
-        report.fail(
-            "authenticated page checks have credentials",
-            "no demo credentials: set the POST_DEPLOY_DEMO_EMAIL and "
-            "POST_DEPLOY_DEMO_PASSWORD repository secrets. This run requires "
-            "them (--require-demo-credentials), so the checks cannot be skipped.",
-        )
+            report.skip("authenticated checks (the per-role matrix)", advice)
     else:
-        report.skip(
-            "authenticated page checks (Compare Periods, Funnel Analysis)",
-            "no demo credentials: set the POST_DEPLOY_DEMO_EMAIL and "
-            "POST_DEPLOY_DEMO_PASSWORD repository secrets to run them",
-        )
+        for role in ALL_ROLES:
+            email_var, password_var = ROLE_CREDENTIALS[role]
+            pair = credentials.get(role)
+            if pair is None:
+                if role in require_roles:
+                    report.fail(
+                        f"{role} | credentials are configured for this role",
+                        f"--require-roles names {role}, so this run may not skip it. Set "
+                        f"{email_var} and {password_var}.",
+                    )
+                else:
+                    report.skip(
+                        f"{role} | the whole row",
+                        f"no credentials: set {email_var} and {password_var}, then list the "
+                        f"role in --require-roles so a run that cannot check it stops passing",
+                    )
+                continue
+            email, password = pair
+            if not (email and password):
+                report.fail(
+                    f"{role} | credentials are complete",
+                    f"only one of {email_var} and {password_var} is set. Set both "
+                    f"(repository secrets) or neither.",
+                )
+                continue
+            check_role(url, role, email, password, report, verbose, min_rows)
+
+    if FRONTEND_ONLY_PAGES:
+        listed = ", ".join(f"{p.path} ({p.label})" for p in FRONTEND_ONLY_PAGES)
+        print()
+        print(f"  note: the API serves these pages to any signed-in user, so the menu is their "
+              f"only gate and no 403 is asserted for them: {listed}")
+        print(f"::notice title=post-deploy smoke: pages the API does not gate::{listed}")
 
     return report.summary()
 
@@ -534,8 +772,14 @@ def main(argv=None) -> int:
     parser.add_argument("--demo-password",
                         default=os.environ.get("POST_DEPLOY_DEMO_PASSWORD"),
                         help="demo account password (prefer the secret/env over this flag)")
-    parser.add_argument("--require-demo-credentials", action="store_true",
-                        help="fail instead of skipping when no demo credentials are set")
+    parser.add_argument("--credentials-file",
+                        default=os.environ.get("POST_DEPLOY_CREDENTIALS_FILE"),
+                        help="JSON mapping role -> {email, password}; overrides the environment "
+                             "without putting a password in the command line")
+    parser.add_argument("--require-roles",
+                        default=os.environ.get("POST_DEPLOY_REQUIRE_ROLES"),
+                        help="comma-separated roles that must have credentials: a named role "
+                             "with none fails the run instead of being skipped")
     parser.add_argument("--min-rows", type=int, default=1,
                         help="rows each page data path must return to count as real")
     parser.add_argument("--timeout", type=float, default=420.0,
@@ -555,10 +799,34 @@ def main(argv=None) -> int:
         os.environ.get("POST_DEPLOY_API_PATH", DEFAULT_API_PATH)
     ]
 
+    overrides = {}
+    if args.demo_email or args.demo_password:
+        overrides["sales_executive"] = {"email": args.demo_email, "password": args.demo_password}
+    if args.credentials_file:
+        try:
+            with open(args.credentials_file, encoding="utf-8") as fh:
+                loaded = json.load(fh)
+        except (OSError, ValueError) as exc:
+            parser.error(f"--credentials-file {args.credentials_file}: {exc}")
+        if not isinstance(loaded, dict):
+            parser.error("--credentials-file must hold a JSON object keyed by role")
+        for role, pair in loaded.items():
+            if role not in ROLE_CREDENTIALS:
+                parser.error(f"--credentials-file names an unknown role {role!r}; known roles "
+                             f"are {', '.join(ROLE_CREDENTIALS)}")
+            if not isinstance(pair, dict) or not pair.get("email") or not pair.get("password"):
+                parser.error(f"--credentials-file: {role} needs both an email and a password")
+            overrides[role] = pair
+
+    require_roles = tuple(r.strip() for r in (args.require_roles or "").split(",") if r.strip())
+    for role in require_roles:
+        if role not in ROLE_CREDENTIALS:
+            parser.error(f"--require-roles names an unknown role {role!r}; known roles are "
+                         f"{', '.join(ROLE_CREDENTIALS)}")
+
     try:
         return run(args.url, args.expected_bundle, api_paths, args.timeout, args.interval,
-                   args.verbose, args.demo_email, args.demo_password, args.min_rows,
-                   args.require_demo_credentials)
+                   args.verbose, role_credentials(overrides), args.min_rows, require_roles)
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130
