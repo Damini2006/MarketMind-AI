@@ -11,13 +11,15 @@ name: Post-deploy smoke (public site)
 # promoted deployment to serve this commit's bundle, and fails loudly (with
 # ::error:: annotations) if it does not.
 #
-# The bundle and anonymous API checks need no secrets at all. The authenticated
-# page checks (Compare Periods, Funnel Analysis) do: they log in as a read-only
-# demo account whose credentials live in repository secrets, because production
-# does not seed the demo accounts and the raw endpoints they hit return every
-# tenant's data only to a signed-in user. Without those secrets the script skips
-# those checks with a ::warning:: annotation rather than failing the deploy —
-# visible in the run, never counted as a pass.
+# The bundle and anonymous API checks need no secrets at all. The per-role
+# access matrix does: it logs in as one account per role and asserts that role's
+# row — the pages it may load, the pages it must be refused, and the writes it
+# may or may not make. Those accounts live in repository secrets, because
+# production does not seed the demo accounts and every endpoint in the matrix
+# returns a tenant's data only to a signed-in user. A role without credentials is
+# skipped with a ::warning:: annotation (visible in the run, never counted as a
+# pass); a scheduled run instead names the roles it must be able to check, so a
+# row that quietly vanished cannot leave the run green and empty.
 #
 # Kept to the production branch: on any other branch the public site is not
 # supposed to change, so comparing it to that branch's build would be wrong.
@@ -50,16 +52,34 @@ concurrency:
 env:
   # Not hard-wired to one domain: set a repository variable to check another.
   PRODUCTION_URL: ${{ vars.PRODUCTION_URL || 'https://frontend-xi-ashy-73.vercel.app' }}
-  # Read-only demo credentials for the authenticated page checks. Set them as
-  # repository secrets, not variables: the password is a credential. They must
-  # belong to a RESTRICTED account (the script asserts a write endpoint answers
-  # 403) on a tenant that has data, since a page that loads and shows nothing is
-  # exactly what these checks are for.
+  # One account per role in the access matrix. Set these as repository secrets,
+  # not variables: the password is a credential. Each account must belong to a
+  # tenant with data, since a page that loads and shows nothing is exactly what
+  # these checks are for, and each one is used ONLY for the role it is named
+  # after — the script fails the run if the account turns out to have another
+  # role, rather than judging it by the wrong row.
   #
-  # Empty here means "not configured yet": the script skips the authenticated
-  # checks with a warning. Setting only one of the two fails the run.
+  # Empty means "not configured yet": that role's row is skipped with a warning.
+  # Setting only one of a pair fails the run, because that is a misconfigured
+  # secret rather than an absent one.
+  #
+  # POST_DEPLOY_DEMO_* is the original single-account slot and is still read as
+  # the sales_executive one, so nothing already wired had to be renamed.
   POST_DEPLOY_DEMO_EMAIL: ${{ secrets.POST_DEPLOY_DEMO_EMAIL }}
   POST_DEPLOY_DEMO_PASSWORD: ${{ secrets.POST_DEPLOY_DEMO_PASSWORD }}
+  POST_DEPLOY_SALES_EXECUTIVE_EMAIL: ${{ secrets.POST_DEPLOY_SALES_EXECUTIVE_EMAIL }}
+  POST_DEPLOY_SALES_EXECUTIVE_PASSWORD: ${{ secrets.POST_DEPLOY_SALES_EXECUTIVE_PASSWORD }}
+  POST_DEPLOY_STORE_MANAGER_EMAIL: ${{ secrets.POST_DEPLOY_STORE_MANAGER_EMAIL }}
+  POST_DEPLOY_STORE_MANAGER_PASSWORD: ${{ secrets.POST_DEPLOY_STORE_MANAGER_PASSWORD }}
+  POST_DEPLOY_ADMIN_EMAIL: ${{ secrets.POST_DEPLOY_ADMIN_EMAIL }}
+  POST_DEPLOY_ADMIN_PASSWORD: ${{ secrets.POST_DEPLOY_ADMIN_PASSWORD }}
+  POST_DEPLOY_OWNER_EMAIL: ${{ secrets.POST_DEPLOY_OWNER_EMAIL }}
+  POST_DEPLOY_OWNER_PASSWORD: ${{ secrets.POST_DEPLOY_OWNER_PASSWORD }}
+  # Roles a SCHEDULED run must be able to check. Deliberately not named
+  # POST_DEPLOY_REQUIRE_ROLES: the script reads that name from the environment,
+  # and a push must not start demanding credentials that are not wired yet.
+  # Keep this list in step with the secrets above that actually exist.
+  SMOKE_REQUIRED_ROLES: sales_executive
 
 jobs:
   public-site:
@@ -106,9 +126,10 @@ jobs:
       - name: Smoke check the public deployment
         # Fails if the live bundle is not this build, if the entry bundle is not
         # actually fetchable, if /api/sales/ is answered by the SPA fallback
-        # (HTML) rather than by the backend (JSON, 401 when anonymous), or — with
-        # the demo secrets set — if a read-only account cannot load the data
-        # behind Compare Periods and Funnel Analysis.
+        # (HTML) rather than by the backend (JSON, 401 when anonymous), or - for
+        # every role that has credentials - if that role can load a page it has
+        # no business loading, is refused one it should have, or is refused a
+        # write it is entitled to make.
         run: |
           args=(
             --url "$PRODUCTION_URL"
@@ -118,8 +139,9 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             # On a push a missing secret is a warning: a deploy should not fail
             # because credentials were never configured. A scheduled run is the
-            # opposite case - its whole job is to prove the checks still work,
-            # so skipping the authenticated half would leave it green and empty.
-            args+=(--require-demo-credentials)
+            # opposite case - its whole job is to prove the checks still work, so
+            # a role named here that has no credentials fails it instead of
+            # letting that row vanish from a run that still reports success.
+            args+=(--require-roles "$SMOKE_REQUIRED_ROLES")
           fi
           python3 scripts/post_deploy_smoke.py "${args[@]}"
