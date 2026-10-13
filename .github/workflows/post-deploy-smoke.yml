@@ -36,9 +36,6 @@ on:
   schedule:
     # Off the hour: GitHub's scheduler queues the :00 runs first.
     - cron: '23 6 * * *'
-    # TEMPORARY: every 5 minutes, only to observe that a scheduled run fires.
-    # Removed in the commit that follows.
-    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
