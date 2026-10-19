@@ -9,7 +9,11 @@ name: Post-deploy smoke (public site)
 #
 # This runs on the same push that triggers the hosting build, waits for the
 # promoted deployment to serve this commit's bundle, and fails loudly (with
-# ::error:: annotations) if it does not.
+# ::error:: annotations) if it does not. It also probes every retired hostname
+# declared in frontend/vercel.json and fails if one serves a build instead of
+# redirecting to the canonical origin: a pinned alias serving a stale bundle is
+# invisible from the canonical host, and that is how a two-day-old build was
+# served here.
 #
 # The bundle and anonymous API checks need no secrets at all. The per-role
 # access matrix does: it logs in as one account per role and asserts that role's
@@ -128,14 +132,16 @@ jobs:
       - name: Smoke check the public deployment
         # Fails if the live bundle is not this build, if the entry bundle is not
         # actually fetchable, if /api/sales/ is answered by the SPA fallback
-        # (HTML) rather than by the backend (JSON, 401 when anonymous), or - for
-        # every role that has credentials - if that role can load a page it has
-        # no business loading, is refused one it should have, or is refused a
-        # write it is entitled to make.
+        # (HTML) rather than by the backend (JSON, 401 when anonymous), if any
+        # retired hostname answers 200 with a build instead of redirecting to
+        # the canonical origin, or - for every role that has credentials - if
+        # that role can load a page it has no business loading, is refused one
+        # it should have, or is refused a write it is entitled to make.
         run: |
           args=(
             --url "$PRODUCTION_URL"
             --expected-bundle "${{ steps.bundle.outputs.bundle }}"
+            --retired-hosts-file frontend/vercel.json
             --timeout 420
           )
           if [ "${{ github.event_name }}" = "schedule" ]; then

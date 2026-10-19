@@ -100,12 +100,25 @@ Because a deployment takes a moment to be promoted after a push, the bundle
 check polls until it matches or ``--timeout`` elapses, then fails with what it
 actually saw.
 
+Retired hostnames must redirect, not answer
+-------------------------------------------
+The canonical host can be healthy while an old ``*.vercel.app`` alias still
+resolves and serves a build from a different commit. ``frontend/vercel.json``
+declares the retired hostnames and where they must send readers; this gate
+probes each one and fails when it answers 200 with a page instead of a 3xx to
+the canonical origin, or when the 3xx lands anywhere else. A pinned alias
+serving a stale bundle looks alive from the outside, which is exactly why it is
+probed here rather than assumed.
+
 Configuration (flags override environment, environment overrides defaults)
 -------------------------------------------------------------------------
     --url              / POST_DEPLOY_URL             default the production site
     --expected-bundle  / POST_DEPLOY_EXPECTED_BUNDLE required, no default
     --api-path         / POST_DEPLOY_API_PATH        default /api/sales/
                                                      (repeatable)
+    --retired-hosts-file / POST_DEPLOY_RETIRED_HOSTS_FILE
+                                                     default
+                                                     frontend/vercel.json
     --credentials-file                               JSON mapping role ->
                                                      {email, password}; overrides
                                                      the environment without
@@ -131,6 +144,7 @@ from __future__ import annotations
 from collections import namedtuple
 
 import argparse
+import http.client
 import json
 import os
 import re
@@ -138,11 +152,28 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 DEFAULT_URL = "https://frontend-xi-ashy-73.vercel.app"
 DEFAULT_API_PATH = "/api/sales/"
 USER_AGENT = "marketmind-post-deploy-smoke/1.0"
 ENTRY_BUNDLE_RE = re.compile(r'src="(/assets/[^"]+\.js)"')
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_RETIRED_HOSTS_FILE = os.path.join(REPO_ROOT, "frontend", "vercel.json")
+
+
+def _origin(url: str) -> str:
+    parts = urlsplit(url)
+    return f"{parts.scheme.lower()}://{parts.netloc.lower()}"
+
+
+def _rel(path: str) -> str:
+    """A repo-relative path for messages, without raising for an outside path."""
+    try:
+        return os.path.relpath(path, REPO_ROOT)
+    except ValueError:
+        return path
 
 # ── the per-role access matrix ──────────────────────────────────────
 # Who may open which page, and what that has to mean at the API level.
@@ -456,6 +487,102 @@ def check_api(url: str, api_path: str, report: Report) -> None:
     report.ok(name, f"{res.describe()}{note}")
 
 
+def probe_redirect(url: str, timeout: float = 20.0):
+    """GET `url` without following redirects: (status, location, error).
+
+    Following the redirect would hide the thing this check exists to see - that
+    the retired host issued one at all. A raw connection reports the first
+    response verbatim, so a 3xx stays a 3xx and a stale 200 stays a 200.
+    """
+    parts = urlsplit(url)
+    conn = http.client.HTTPSConnection(parts.netloc, timeout=timeout)
+    path = parts.path or "/"
+    if parts.query:
+        path = f"{path}?{parts.query}"
+    try:
+        conn.request("GET", path, headers={"User-Agent": USER_AGENT})
+        resp = conn.getresponse()
+        return resp.status, (resp.getheader("Location") or ""), None
+    except Exception as exc:  # noqa: BLE001 - DNS, TLS and timeouts all mean "unreachable"
+        return None, "", f"{type(exc).__name__}: {exc}"
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def retired_hosts_from(path: str):
+    """(host, destination) pairs the hosting config redirects away from."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            config = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{path}: {exc}") from exc
+    pairs = []
+    for rule in config.get("redirects") or []:
+        destination = rule.get("destination", "")
+        for entry in rule.get("has") or []:
+            if entry.get("type") == "host" and entry.get("value"):
+                pairs.append((entry["value"], destination))
+    return pairs
+
+
+def check_retired_hosts(canonical_url: str, hosts_file: str, report: Report) -> None:
+    """Every retired hostname must 3xx to the canonical origin, never serve a build.
+
+    A retired Vercel alias is pinned to one deployment. If it was never
+    repointed after the redirect rule shipped, it answers 200 with an old bundle
+    and looks healthy while serving a build from a different commit - the exact
+    two-day-old stale-host incident this gate exists for. So here a 2xx is a
+    FAILURE, not a pass: the host is retired and must not answer at all.
+    """
+    canonical = _origin(canonical_url)
+    name_base = "retired hostnames redirect to the canonical origin"
+    try:
+        hosts = retired_hosts_from(hosts_file)
+    except ValueError as exc:
+        report.fail(name_base, f"cannot read the redirect rules: {exc}")
+        return
+    if not hosts:
+        report.fail(
+            name_base,
+            f"{_rel(hosts_file)} declares no host redirects, so there is nothing to probe. "
+            "Add the retired-host redirect rules (DEPLOY.md) or this check is vacuous.",
+        )
+        return
+    for host, destination in hosts:
+        name = f"retired host {host} redirects to {canonical}"
+        status, location, error = probe_redirect(f"https://{host}/")
+        if error is not None:
+            report.fail(name, f"unreachable ({error})")
+            continue
+        if status is not None and 300 <= status < 400:
+            origin = _origin(location) if location else ""
+            if origin == canonical:
+                report.ok(name, f"HTTP {status} -> {location}")
+            else:
+                report.fail(
+                    name,
+                    f"HTTP {status} -> {location or '<no Location header>'}, expected a redirect "
+                    f"to {canonical}. {host} is retired, so it must not answer anywhere else "
+                    f"(its rule in {_rel(hosts_file)} points at "
+                    f"{destination or '<no destination>'}).",
+                )
+            continue
+        if status is not None and 200 <= status < 300:
+            report.fail(
+                name,
+                f"HTTP {status} served a page instead of redirecting to {canonical}: this alias "
+                f"is pinned to a deployment that predates the redirect rule, so it is serving a "
+                f"stale build on a retired hostname. Repoint it at the current production "
+                f"deployment (vercel alias set <newest-production-deployment> {host}) - see "
+                f"DEPLOY.md.",
+            )
+            continue
+        report.fail(name, f"HTTP {status}: expected a 3xx redirect to {canonical}")
+
+
 def login(url: str, email: str, password: str, report: Report, verbose: bool):
     """Authenticate as the demo account. Returns (token, role, last response).
 
@@ -689,7 +816,7 @@ def check_role(url, role, email, password, report, verbose, min_rows):
 
 def run(url: str, expected: str, api_paths: list[str], timeout: float, interval: float,
         verbose: bool, credentials: dict = None, min_rows: int = 1,
-        require_roles: tuple = ()) -> int:
+        require_roles: tuple = (), retired_hosts_file: str = DEFAULT_RETIRED_HOSTS_FILE) -> int:
     report = Report()
     print(f"Post-deploy smoke check against {url}")
     print(f"  this build's entry bundle: {expected}")
@@ -699,6 +826,11 @@ def run(url: str, expected: str, api_paths: list[str], timeout: float, interval:
     check_entry_asset(url, expected, report)
     for api_path in api_paths:
         check_api(url, api_path, report)
+
+    # The canonical host can be perfect while a retired alias still serves an old
+    # build, so the old names are probed too.
+    print()
+    check_retired_hosts(url, retired_hosts_file, report)
 
     # ── the per-role access matrix ────────────────────────────────────────
     print()
@@ -766,6 +898,11 @@ def main(argv=None) -> int:
     parser.add_argument("--api-path", action="append", dest="api_paths", default=None,
                         metavar="PATH",
                         help="API path that must answer JSON (repeatable)")
+    parser.add_argument("--retired-hosts-file",
+                        default=os.environ.get("POST_DEPLOY_RETIRED_HOSTS_FILE",
+                                               DEFAULT_RETIRED_HOSTS_FILE),
+                        help="hosting config whose redirect rules name the retired hostnames to "
+                             "probe; each must 3xx to the canonical origin, not serve a build")
     parser.add_argument("--demo-email",
                         default=os.environ.get("POST_DEPLOY_DEMO_EMAIL"),
                         help="read-only demo account; unset skips the authenticated checks")
@@ -826,7 +963,8 @@ def main(argv=None) -> int:
 
     try:
         return run(args.url, args.expected_bundle, api_paths, args.timeout, args.interval,
-                   args.verbose, role_credentials(overrides), args.min_rows, require_roles)
+                   args.verbose, role_credentials(overrides), args.min_rows, require_roles,
+                   args.retired_hosts_file)
     except KeyboardInterrupt:
         print("\ninterrupted", file=sys.stderr)
         return 130

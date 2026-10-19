@@ -3,6 +3,20 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "marketmind-ai-nrd.vercel.app" }],
+      "destination": "https://frontend-xi-ashy-73.vercel.app/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "frontend-damini2006s-projects.vercel.app" }],
+      "destination": "https://frontend-xi-ashy-73.vercel.app/$1",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*/",

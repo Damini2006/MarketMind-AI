@@ -8,6 +8,14 @@ on:
 
 jobs:
   backend-tests:
+    env:
+      # The host the post-deploy smoke gate probes, as configured for this
+      # repository (Settings → Variables → PRODUCTION_URL). Empty when it is not
+      # set, in which case the workflow's own fallback is what the gate uses.
+      # Passed through so tests/test_deploy_docs_consistency.py can fail this job
+      # when the variable, the gate and the README stop agreeing on one URL —
+      # nothing else in the repository compares them.
+      PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
     defaults:
